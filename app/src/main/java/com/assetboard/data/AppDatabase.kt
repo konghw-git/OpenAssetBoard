@@ -135,17 +135,26 @@ interface LedgerDao {
 }
 
 @Database(
-    entities = [AccountGroup::class, Account::class, Snapshot::class, Valuation::class, SnapshotItem::class, MoneyFlow::class],
+    entities = [
+        AccountGroup::class, Account::class, Snapshot::class, Valuation::class, SnapshotItem::class, MoneyFlow::class,
+        TodoList::class, TodoSection::class, Todo::class, ChecklistItem::class, DiaryEntry::class, DiaryDraft::class,
+        Holiday::class, HolidayYear::class, AppMeta::class,
+    ],
     version = AppDatabase.SCHEMA_VERSION,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): LedgerDao
+    abstract fun todoDao(): TodoDao
+    abstract fun diaryDao(): DiaryDao
+    abstract fun metaDao(): MetaDao
 
     companion object {
-        const val SCHEMA_VERSION = 1
+        const val SCHEMA_VERSION = 2
 
         fun build(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "asset-board.db").build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "asset-board.db")
+                .addMigrations(Migrations.MIGRATION_1_2)
+                .build()
     }
 }

@@ -4,7 +4,7 @@ import com.assetboard.data.Account
 import com.assetboard.data.MoneyFlow
 
 /** A rule violation with a message fit to show the user as is. */
-class LedgerException(message: String) : Exception(message)
+open class LedgerException(message: String) : Exception(message)
 
 fun ensure(condition: Boolean, message: () -> String) {
     if (!condition) throw LedgerException(message())

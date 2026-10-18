@@ -1,6 +1,5 @@
 package com.assetboard.data
 
-import androidx.room.withTransaction
 import com.assetboard.domain.LedgerData
 import com.assetboard.domain.Rules
 import com.assetboard.domain.ensure
@@ -33,12 +32,13 @@ data class AccountDraft(
 data class StocktakeEntry(val accountId: String, val displayValue: Long)
 
 /**
- * Every write goes through here: validated, wrapped in one transaction, then [onChanged] fires
- * (it refreshes the home-screen widget). Amounts passed in are display values; the liability sign
- * is applied here and nowhere else.
+ * Every write goes through here: validated, wrapped in one transaction under the [WriteGate],
+ * then [onChanged] fires (it refreshes the home-screen widget). Amounts passed in are display
+ * values; the liability sign is applied here and nowhere else.
  */
 class LedgerRepository(
     private val db: AppDatabase,
+    private val gate: WriteGate,
     scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
     private val onChanged: () -> Unit = {},
@@ -57,7 +57,7 @@ class LedgerRepository(
     )
 
     private suspend fun <T> write(block: suspend () -> T): T {
-        val result = db.withTransaction { block() }
+        val result = gate.write { block() }
         onChanged()
         return result
     }
