@@ -4,8 +4,8 @@
 worth, allocation, periodic stocktakes, investment flows with cumulative P&L). **Todo** is a
 Things-style task manager (inbox / today / upcoming / someday / logbook, lists with sections,
 repeats, reliable reminders, a home-screen widget). **Diary** is one plain-text entry per day with
-the lunar calendar, holidays and weather attached. Everything stays on the phone; backups are JSON
-files in a folder you pick.
+the lunar calendar, holidays and weather attached. Everything stays on the phone; the backup is one
+JSON file in a folder you pick (`asset-board-backup.json`), overwritten by every backup.
 
 Design notes and the calculation rules live in the Obsidian notes
 `2026-10-18 资产看板 App - 需求对齐与数据模型.md` (assets; section 9 is mirrored by `LedgerTest.kt`
@@ -35,8 +35,9 @@ the phone). The debug build uses a separate package (`com.assetboard.debug`) so 
 the real install. Never sign with a different key: Android would refuse the upgrade, and uninstalling
 wipes the local database.
 
-Before upgrading, export a backup in the old version; after `adb install -r`, export again and run
-`scripts/compare-backups.py before.json after.json`: the ledger part must be identical.
+Before upgrading, export a backup in the old version and copy `asset-board-backup.json` aside as
+`before.json` (the next backup overwrites it); after `adb install -r`, export again and run
+`scripts/compare-backups.py before.json asset-board-backup.json`: the ledger part must be identical.
 
 ## Layout
 

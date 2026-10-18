@@ -170,9 +170,13 @@ class RestoreTest {
         f.now += 1_000
         val copy = f.backup.preRestoreCopies().single()
         assertFalse(copy.inBackupFolder)
+        // A timestamped copy from an older version goes away with the next one.
+        val legacy = File(f.context.filesDir, "prerestore/asset-board-prerestore-20260101-000000-000.json").apply { writeText("{}") }
         f.run { f.backup.restore(copy.uri) }
+        assertFalse(legacy.exists())
         assertEquals(before, counts())
-        assertEquals(2, f.backup.preRestoreCopies().size)
+        // One copy, overwritten: it now holds the data from before the second restore.
+        assertEquals(1, f.backup.preRestoreCopies().size)
     }
 
     @Test fun r6_roundTripKeepsEverythingButTheEpoch() = f.run {

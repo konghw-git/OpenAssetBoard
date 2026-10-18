@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.assetboard.AppContainer
-import com.assetboard.data.BackupKind
 import com.assetboard.data.BackupPreview
 import com.assetboard.data.PreRestoreCopy
 import com.assetboard.domain.Dates
@@ -78,16 +77,6 @@ fun RestoreConfirm(vm: RestoreViewModel) {
     )
 }
 
-/** "yyyyMMdd-HHmmss-SSS" from the file name, shown as a date. */
-private fun copyTime(name: String): String {
-    val stamp = name.removePrefix(BackupKind.PRE_RESTORE.prefix).removeSuffix(".json")
-    return runCatching {
-        val d = stamp.substring(0, 8)
-        val t = stamp.substring(9, 15)
-        "${d.substring(0, 4)}-${d.substring(4, 6)}-${d.substring(6, 8)} ${t.substring(0, 2)}:${t.substring(2, 4)}:${t.substring(4, 6)}"
-    }.getOrDefault(stamp)
-}
-
 @Composable
 fun PreRestoreScreen(onBack: () -> Unit) {
     val container = LocalContainer.current
@@ -115,7 +104,7 @@ fun PreRestoreScreen(onBack: () -> Unit) {
         ) {
             item {
                 Text(
-                    "每次恢复备份之前，当时的全部数据都会自动另存一份。点一下即可回到那时；这次恢复同样会先另存，所以可以来回切换。",
+                    "每次恢复备份之前，当时的全部数据会自动另存一份，新的覆盖旧的，只留最近一次。点一下即可回到那时；这次恢复同样会先另存，所以可以来回切换。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp),
                 )
             }
@@ -126,8 +115,8 @@ fun PreRestoreScreen(onBack: () -> Unit) {
             items(list.orEmpty(), key = { it.uri.toString() }) { c ->
                 SectionCard {
                     ListRow(
-                        title = copyTime(c.name),
-                        subtitle = if (c.inBackupFolder) "在备份目录" else "在 app 私有目录（保留最近 5 份）",
+                        title = "保存于 " + Dates.dateTime(c.savedAt),
+                        subtitle = if (c.inBackupFolder) "在备份目录" else "在 app 私有目录",
                         leading = { Icon(Icons.Outlined.History, null, tint = cs.primary) },
                         onClick = { vm.inspect(c.uri) },
                     )

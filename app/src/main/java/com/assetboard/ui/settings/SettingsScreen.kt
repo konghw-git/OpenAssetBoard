@@ -88,7 +88,7 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(container: AppContainer) : RestoreViewModel(container) {
     val message = MutableStateFlow<String?>(null)
 
-    fun backupNow() = action { message.value = "已备份：" + container.backup.backupNow(BackupKind.MANUAL) }
+    fun backupNow() = action { message.value = "已备份，覆盖了 " + container.backup.backupNow(BackupKind.MANUAL) }
 
     fun updateHolidays() = action {
         container.holidays.updateOnline()
@@ -199,7 +199,7 @@ fun SettingsScreen(
                     onClick = onPreRestore,
                 )
                 Text(
-                    "备份包含资产、待办（含回收站和日志）、日记和草稿。每天自动备份一次，保留最近 10 份。手机厂商的后台限制可能让自动备份推迟，改完数据后建议手动点一次「立即备份」。",
+                    "备份包含资产、待办（含回收站和日志）、日记和草稿。每天自动备份一次，和手动备份一样写进同一个文件 asset-board-backup.json，新的覆盖旧的，目录里不会越积越多。手机厂商的后台限制可能让自动备份推迟，改完数据后建议手动点一次「立即备份」。",
                     style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant,
                     modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),

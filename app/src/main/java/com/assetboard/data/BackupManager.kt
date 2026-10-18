@@ -18,9 +18,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Format 2 adds the todo and diary tables; a format-1 file reads with them empty. Device-local
@@ -45,7 +42,19 @@ data class BackupFile(
     val diaryDrafts: List<DiaryDraft> = emptyList(),
 )
 
-enum class BackupKind(val prefix: String) { AUTO("asset-board-auto-"), MANUAL("asset-board-"), PRE_RESTORE("asset-board-prerestore-") }
+/**
+ * Each kind is one file that every new backup overwrites: automatic and manual backups share one,
+ * the copy saved before a restore has its own.
+ */
+enum class BackupKind(val fileName: String) {
+    AUTO("asset-board-backup.json"),
+    MANUAL("asset-board-backup.json"),
+    PRE_RESTORE("asset-board-prerestore.json"),
+}
+
+/** Timestamped files from versions that kept a new file per backup; removed after the next one. */
+private val legacyBackup = Regex("""asset-board-(auto-)?\d{8}-\d{6}-\d{3}\.json""")
+private val legacyPreRestore = Regex("""asset-board-prerestore-\d{8}-\d{6}-\d{3}\.json""")
 
 /** What the confirmation dialog says before overwriting. */
 data class BackupPreview(
@@ -59,7 +68,7 @@ data class BackupPreview(
 )
 
 /** A saved copy of the data as it was right before a restore. */
-data class PreRestoreCopy(val name: String, val uri: Uri, val inBackupFolder: Boolean)
+data class PreRestoreCopy(val name: String, val uri: Uri, val inBackupFolder: Boolean, val savedAt: Long)
 
 /** Side effects of a committed restore: alarms, notifications, widgets. */
 interface RestoreEffects {
@@ -68,7 +77,8 @@ interface RestoreEffects {
 }
 
 /**
- * Full JSON export into a user-picked folder (survives uninstall), and full-overwrite restore.
+ * Full JSON export into a user-picked folder (survives uninstall), always into the same file so
+ * the folder never fills up, and full-overwrite restore.
  * Merging is deliberately unsupported. The restore is the coordinator of the write gate: see
  * [restore].
  */
@@ -119,22 +129,39 @@ class BackupManager(
         val tree = settings.backupTreeUri.value ?: throw LedgerException("请先选择备份目录")
         val dir = runCatching { DocumentFile.fromTreeUri(context, Uri.parse(tree)) }.getOrNull()
             ?.takeIf { it.canWrite() } ?: throw LedgerException("备份目录不可写，请重新选择")
-        val name = kind.prefix + stamp() + ".json"
-        val text = exportJson()
-        val doc = dir.createFile("application/json", name) ?: throw LedgerException("无法在备份目录创建文件")
-        context.contentResolver.openOutputStream(doc.uri, "wt")?.use { it.write(text.toByteArray()) }
-            ?: throw LedgerException("无法写入备份文件")
-        if (kind == BackupKind.AUTO) prune(dir, BackupKind.AUTO, KEEP_AUTO)
+        val name = replaceInFolder(dir, kind.fileName, exportJson())
+        val legacy = if (kind == BackupKind.PRE_RESTORE) legacyPreRestore else legacyBackup
+        dir.listFiles().filter { f -> f.name?.let(legacy::matches) == true }.forEach { runCatching { it.delete() } }
         if (kind != BackupKind.PRE_RESTORE) settings.setLastBackupAt(clock())
-        doc.name ?: name
+        name
     }
 
-    private fun prune(dir: DocumentFile, kind: BackupKind, keep: Int) {
-        dir.listFiles()
-            .filter { it.name?.startsWith(kind.prefix) == true }
-            .sortedByDescending { it.name }
-            .drop(keep)
-            .forEach { it.delete() }
+    /**
+     * Writes [text] as [name], replacing the old file only once the new one is complete: into a
+     * side file first, then renamed over. Providers that cannot rename get the file rewritten in
+     * place.
+     */
+    private fun replaceInFolder(dir: DocumentFile, name: String, text: String): String {
+        val partName = name.removeSuffix(".json") + ".partial.json"
+        dir.findFile(partName)?.delete()
+        val part = dir.createFile("application/json", partName) ?: throw LedgerException("无法在备份目录创建文件")
+        try {
+            writeDoc(part.uri, text)
+        } catch (e: Exception) {
+            part.delete()
+            throw e
+        }
+        dir.findFile(name)?.delete()
+        if (runCatching { part.renameTo(name) }.getOrDefault(false)) return part.name ?: name
+        val doc = dir.findFile(name) ?: dir.createFile("application/json", name) ?: throw LedgerException("无法在备份目录创建文件")
+        writeDoc(doc.uri, text)
+        part.delete()
+        return doc.name ?: name
+    }
+
+    private fun writeDoc(uri: Uri, text: String) {
+        context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) }
+            ?: throw LedgerException("无法写入备份文件")
     }
 
     private fun read(uri: Uri): String =
@@ -324,36 +351,36 @@ class BackupManager(
             backupNow(BackupKind.PRE_RESTORE)
         } else {
             val dir = localCopies.apply { mkdirs() }
-            val f = File(dir, BackupKind.PRE_RESTORE.prefix + stamp() + ".json")
+            val f = File(dir, BackupKind.PRE_RESTORE.fileName)
+            val part = File(dir, f.name + ".partial")
             try {
-                f.writeText(exportJson())
+                part.writeText(exportJson())
+                if (!part.renameTo(f)) throw IllegalStateException("重命名失败")
             } catch (e: Exception) {
-                f.delete()
+                part.delete()
                 throw LedgerException("无法保存恢复前副本：" + (e.message ?: ""))
             }
-            dir.listFiles()?.sortedByDescending { it.name }?.drop(KEEP_LOCAL_COPIES)?.forEach { it.delete() }
+            dir.listFiles()?.filter { legacyPreRestore.matches(it.name) }?.forEach { it.delete() }
             f.absolutePath
         }
 
-    /** Copies in the backup folder and in private storage, newest first. */
+    /** The copy in the backup folder and the one in private storage, newest first. */
     suspend fun preRestoreCopies(): List<PreRestoreCopy> = withContext(Dispatchers.IO) {
-        val local = localCopies.listFiles().orEmpty().map { PreRestoreCopy(it.name, Uri.fromFile(it), inBackupFolder = false) }
+        fun isCopy(name: String?) = name == BackupKind.PRE_RESTORE.fileName || name?.let(legacyPreRestore::matches) == true
+        val local = localCopies.listFiles().orEmpty().filter { isCopy(it.name) }
+            .map { PreRestoreCopy(it.name, Uri.fromFile(it), inBackupFolder = false, savedAt = it.lastModified()) }
         val folder = settings.backupTreeUri.value?.let { tree ->
             runCatching {
                 DocumentFile.fromTreeUri(context, Uri.parse(tree))?.listFiles().orEmpty()
-                    .filter { it.name?.startsWith(BackupKind.PRE_RESTORE.prefix) == true }
-                    .map { PreRestoreCopy(it.name!!, it.uri, inBackupFolder = true) }
+                    .filter { isCopy(it.name) }
+                    .map { PreRestoreCopy(it.name!!, it.uri, inBackupFolder = true, savedAt = it.lastModified()) }
             }.getOrNull()
         }.orEmpty()
-        (local + folder).sortedByDescending { it.name.removePrefix(BackupKind.PRE_RESTORE.prefix) }
+        (local + folder).sortedByDescending { it.savedAt }
     }
-
-    private fun stamp(): String = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date(clock()))
 
     companion object {
         const val FORMAT_VERSION = 2
-        const val KEEP_AUTO = 10
-        const val KEEP_LOCAL_COPIES = 5
     }
 }
 
