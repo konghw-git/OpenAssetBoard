@@ -5,7 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
 import com.assetboard.data.FlowKind
@@ -45,7 +48,7 @@ class ScreenshotTest {
     private fun demoContainer(): AppContainer {
         val c = AppContainer(ApplicationProvider.getApplicationContext())
         val repo = c.repository
-        runBlocking {
+        runBlocking(c.gate.bound()) {
             repo.seedFromSuishouji()
             val now = System.currentTimeMillis()
             val start = now - 200 * day
@@ -96,6 +99,19 @@ class ScreenshotTest {
     @Test fun overview() {
         val c = demoContainer()
         shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+    }
+
+    /** Picking a group in the allocation card, then tapping the ring, shows the total again. */
+    @Test fun allocationReturnsToTotal() {
+        val c = demoContainer()
+        shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        compose.onAllNodesWithText("储蓄账户")[0].performClick()
+        compose.onNodeWithText("点圆环看总资产").assertExists().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("点圆环看总资产").assertDoesNotExist()
+        compose.onAllNodesWithText("投资账户")[0].performClick()
+        compose.onAllNodesWithText("投资账户")[0].performClick()
+        compose.onNodeWithText("点圆环看总资产").assertDoesNotExist()
     }
 
     @Test fun overviewDark() {
