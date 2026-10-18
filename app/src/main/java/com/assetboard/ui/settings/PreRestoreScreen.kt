@@ -65,7 +65,9 @@ fun RestoreConfirm(vm: RestoreViewModel) {
     val text = if (p.formatVersion == 1) {
         "此备份来自旧版本，不含待办和日记。恢复后将清空当前 ${p.currentTodos} 条待办、${p.currentDiaries} 篇日记。\n\n恢复前会自动另存一份当前数据，可以在「恢复前副本」里一键还原。"
     } else {
-        "备份于 ${Dates.dateTime(p.exportedAt)}：${p.accounts} 个账户、${p.todos} 条待办、${p.diaries} 篇日记。\n\n当前的全部数据会被替换。恢复前会自动另存一份当前数据。"
+        "备份于 ${Dates.dateTime(p.exportedAt)}：${p.accounts} 个账户、${p.todos} 条待办、${p.diaries} 篇日记。" +
+            (if (p.formatVersion < 3) "这份备份来自旧版本，不含每日指标，恢复后打卡记录会清空。" else "") +
+            "\n\n当前的全部数据会被替换。恢复前会自动另存一份当前数据。"
     }
     ConfirmDialog(
         title = "用这份备份覆盖全部数据？",

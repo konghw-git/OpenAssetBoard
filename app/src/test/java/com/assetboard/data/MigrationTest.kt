@@ -108,7 +108,7 @@ class MigrationTest {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2)
+            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3)
             .allowMainThreadQueries()
             .build()
         try {
@@ -122,5 +122,25 @@ class MigrationTest {
         } finally {
             db.close()
         }
+    }
+
+    @Test fun migrationTwoToThreeAddsHabitsAndKeepsEverything() {
+        val tables = ledgerTables + listOf("todo_lists", "todos", "diary_entries")
+        val before = helper.createDatabase(name, 1).use { db ->
+            seedV1(db)
+            ledgerTables.associateWith { db.dump(it) }
+        }
+        helper.runMigrationsAndValidate(name, 2, true, Migrations.MIGRATION_1_2).use { db ->
+            db.put("todo_lists", "id" to "l1", "name" to "清单", "notes" to "", "deadline" to null, "sort_order" to 0, "archived_at" to null, "created_at" to 1L, "deleted_at" to null, "delete_batch" to null)
+            db.put("diary_entries", "id" to "d1", "date" to "2026-10-20", "body" to "正文", "body_rev" to 1L, "weather_code" to null, "temp_min" to null, "temp_max" to null, "city" to null, "lat" to null, "lon" to null, "weather_at" to null, "weather_rev" to 0L, "created_at" to 1L, "updated_at" to 1L, "deleted_at" to null, "delete_batch" to null)
+        }
+        val mid = helper.runMigrationsAndValidate(name, 2, false).use { db -> tables.associateWith { db.dump(it) } }
+        val after = helper.runMigrationsAndValidate(name, 3, true, Migrations.MIGRATION_2_3).use { db ->
+            db.put("habit_checks", "date" to "2026-10-20", "habit" to "workout", "checked_at" to 1L)
+            assertEquals(1, db.dump("habit_checks").size)
+            tables.associateWith { db.dump(it) }
+        }
+        for (t in tables) assertEquals("table $t", mid[t], after[t])
+        for (t in ledgerTables) assertEquals("table $t", before[t], after[t])
     }
 }

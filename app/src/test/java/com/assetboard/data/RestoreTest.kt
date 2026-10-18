@@ -54,6 +54,7 @@ class RestoreTest {
         f.todos.setRepeat(rep, RepeatRule(RepeatType.DAILY))
         f.todos.complete(rep, f.todos.todo(rep)!!.stateSeq)
         f.todos.delete(f.todos.create(TodoDraft("进回收站")))
+        f.habits.toggle(com.assetboard.domain.Habit.WORKOUT)
         val s = DiarySession(f.diary, date("2026-10-20"), f.scope + f.gate.bound(), clock = { f.now })
         s.open(null)
         s.onInput("今天写了日记")
@@ -73,7 +74,7 @@ class RestoreTest {
         seed()
         val v2 = codec.parseToJsonElement(f.backup.exportJson()).jsonObject
         val v1 = JsonObject(
-            v2.filterKeys { it !in setOf("todoLists", "todoSections", "todos", "checklistItems", "diaryEntries", "diaryDrafts") }
+            v2.filterKeys { it !in setOf("todoLists", "todoSections", "todos", "checklistItems", "diaryEntries", "diaryDrafts", "habitChecks") }
                 .mapValues { (k, v) -> if (k == "formatVersion") kotlinx.serialization.json.JsonPrimitive(1) else v },
         )
         val uri = file("v1.json", v1.toString())
@@ -189,6 +190,7 @@ class RestoreTest {
         assertEquals(original, again)
         assertTrue(again.todos.any { it.deletedAt != null })
         assertTrue(again.todos.any { it.kind == TodoKind.COMPLETION })
+        assertEquals(listOf("workout"), again.habitChecks.map { it.habit })
         assertEquals(epoch + 1, f.gate.epochNow())
         assertFalse(exported.contains(WriteGate.KEY_EPOCH))
     }
@@ -203,6 +205,7 @@ class RestoreTest {
             flows = b.flows.sortedBy { it.id }, todoLists = b.todoLists.sortedBy { it.id }, todoSections = b.todoSections.sortedBy { it.id },
             todos = b.todos.sortedBy { it.id }, checklistItems = b.checklistItems.sortedBy { it.id },
             diaryEntries = b.diaryEntries.sortedBy { it.id }, diaryDrafts = b.diaryDrafts.sortedBy { it.id },
+            habitChecks = b.habitChecks.sortedBy { it.date + it.habit },
         )
     }
 

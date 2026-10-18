@@ -20,7 +20,8 @@ import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
- * Format 2 adds the todo and diary tables; a format-1 file reads with them empty. Device-local
+ * Format 2 adds the todo and diary tables, format 3 the daily habit checks; older files read
+ * with the newer tables empty. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -40,6 +41,7 @@ data class BackupFile(
     val checklistItems: List<ChecklistItem> = emptyList(),
     val diaryEntries: List<DiaryEntry> = emptyList(),
     val diaryDrafts: List<DiaryDraft> = emptyList(),
+    val habitChecks: List<HabitCheck> = emptyList(),
 )
 
 /**
@@ -119,6 +121,7 @@ class BackupManager(
                 checklistItems = todo.allChecklist(),
                 diaryEntries = d.all(),
                 diaryDrafts = d.allDrafts(),
+                habitChecks = db.habitDao().all(),
             )
         }
         return json.encodeToString(BackupFile.serializer(), file)
@@ -201,6 +204,11 @@ class BackupManager(
         unique(file.valuations, { it.id }, "估值")
         unique(file.flows, { it.id }, "流水")
         unique(file.snapshotItems, { it.snapshotId to it.accountId }, "盘点明细")
+        unique(file.habitChecks, { it.date to it.habit }, "每日指标")
+        for (h in file.habitChecks) {
+            ensure(com.assetboard.domain.Habit.of(h.habit) != null) { "备份里有未知的每日指标「${h.habit}」" }
+            ensure(runCatching { java.time.LocalDate.parse(h.date) }.isSuccess) { "备份里有日期无效的每日指标" }
+        }
         val groupIds = file.groups.map { it.id }.toSet()
         val byId = file.accounts.associateBy { it.id }
         val snapshotIds = file.snapshots.map { it.id }.toSet()
@@ -279,6 +287,7 @@ class BackupManager(
         todo.clearSections()
         todo.clearLists()
         d.clear()
+        db.habitDao().clear()
         dao.insertGroups(file.groups)
         dao.insertAccounts(file.accounts)
         dao.insertSnapshots(file.snapshots)
@@ -292,6 +301,7 @@ class BackupManager(
         todo.insertChecklistItems(file.checklistItems)
         d.insertAll(file.diaryEntries)
         d.insertDrafts(file.diaryDrafts)
+        db.habitDao().insertAll(file.habitChecks)
     }
 
     // ------------------------------------------------------------ the coordinator's private write channel
@@ -380,7 +390,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 2
+        const val FORMAT_VERSION = 3
     }
 }
 

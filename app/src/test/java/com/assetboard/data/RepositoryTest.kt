@@ -205,7 +205,7 @@ class RepositoryTest {
         val g = group()
         repo.createAccount(AccountDraft(g, "a"), 0, 100_00, null)
         val backup = backupManager()
-        val json = backup.exportJson().replace("\"formatVersion\":2", "\"formatVersion\":99")
+        val json = backup.exportJson().replace("\"formatVersion\":${BackupManager.FORMAT_VERSION}", "\"formatVersion\":99")
         val file = File(context.cacheDir, "bad.json").apply { writeText(json) }
         expectRule { backup.restore(Uri.fromFile(file)) }
         assertEquals(1, repo.loadOnce().accounts.size)
