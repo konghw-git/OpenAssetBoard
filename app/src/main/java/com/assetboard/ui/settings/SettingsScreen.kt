@@ -215,7 +215,7 @@ fun SettingsScreen(
                     onClick = onGuide,
                 )
                 RowDivider(startIndent = 68.dp)
-                SwitchRow(Icons.Outlined.Alarm, palette.group(2), "所有提醒走闹钟通道", "深度休眠时也准时；状态栏会显示闹钟图标", allAlarms) {
+                SwitchRow(Icons.Outlined.Alarm, palette.group(2), "所有提醒走闹钟通道", "深度休眠时也准时\n状态栏会显示闹钟图标", allAlarms) {
                     settings.setBool(settings.allRemindersAsAlarms, it)
                     container.appScope.launch { runCatching { container.reminders.syncAll(fromBoot = false) } }
                 }

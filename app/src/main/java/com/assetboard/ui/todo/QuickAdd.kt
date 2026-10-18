@@ -77,14 +77,15 @@ data class QuickAddDefaults(val listId: String? = null, val plan: LocalDate? = n
 /**
  * The quick-add form: title focused on open, date shortcuts, then deadline, reminder, list and
  * the important flag. Enter saves and clears the title, keeping the choices, for entering several
- * in a row. [inline] is the in-page version: one row of choices, and Enter on an empty title
- * calls [onEmptyDone] to close it.
+ * in a row. [onSave] reports back whether the todo was written; only then is the title cleared,
+ * so a failed save keeps what was typed. [inline] is the in-page version: one row of choices,
+ * and Enter on an empty title calls [onEmptyDone] to close it.
  */
 @Composable
 fun QuickAddForm(
     lists: List<TodoList>,
     defaults: QuickAddDefaults,
-    onSave: (TodoDraft) -> Unit,
+    onSave: (draft: TodoDraft, onResult: (saved: Boolean) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
     inline: Boolean = false,
     onEmptyDone: () -> Unit = {},
@@ -99,6 +100,7 @@ fun QuickAddForm(
     var important by rememberSaveable { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var added by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) {
@@ -112,10 +114,12 @@ fun QuickAddForm(
     val cs = MaterialTheme.colorScheme
 
     fun save() {
-        if (title.isBlank()) return
+        if (title.isBlank() || saving) return
+        val submitted = title
+        saving = true
         onSave(
             TodoDraft(
-                title = title.trim(),
+                title = submitted.trim(),
                 listId = listId,
                 planDate = planDate,
                 remindTime = remind?.let(LocalTime::parse),
@@ -123,9 +127,14 @@ fun QuickAddForm(
                 deadline = deadline?.let(LocalDate::parse),
                 important = important,
             ),
-        )
-        added = title.trim()
-        title = ""
+        ) { saved ->
+            saving = false
+            if (saved) {
+                added = submitted.trim()
+                // Typing went on while saving: keep the new text.
+                if (title == submitted) title = ""
+            }
+        }
     }
 
     val side = if (inline) 14.dp else 20.dp
@@ -145,7 +154,7 @@ fun QuickAddForm(
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 )
             }
-            val ready = title.isNotBlank()
+            val ready = title.isNotBlank() && !saving
             val scale by animateFloatAsState(if (ready) 1f else 0.86f, spring(dampingRatio = 0.5f), label = "send")
             Box(
                 Modifier

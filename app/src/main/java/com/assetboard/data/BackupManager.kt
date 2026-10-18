@@ -141,11 +141,14 @@ class BackupManager(
 
     /**
      * Writes [text] as [name], replacing the old file only once the new one is complete: into a
-     * side file first, then renamed over. Providers that cannot rename get the file rewritten in
-     * place.
+     * side file first, then renamed over, with the old file moved aside until that worked.
+     * Providers that cannot rename get the file rewritten in place. Whatever fails, either the
+     * old file or the complete side file is left behind.
      */
-    private fun replaceInFolder(dir: DocumentFile, name: String, text: String): String {
-        val partName = name.removeSuffix(".json") + ".partial.json"
+    internal fun replaceInFolder(dir: DocumentFile, name: String, text: String): String {
+        val base = name.removeSuffix(".json")
+        val partName = "$base.partial.json"
+        val asideName = "$base.previous.json"
         dir.findFile(partName)?.delete()
         val part = dir.createFile("application/json", partName) ?: throw LedgerException("无法在备份目录创建文件")
         try {
@@ -154,11 +157,29 @@ class BackupManager(
             part.delete()
             throw e
         }
-        dir.findFile(name)?.delete()
-        if (runCatching { part.renameTo(name) }.getOrDefault(false)) return part.name ?: name
-        val doc = dir.findFile(name) ?: dir.createFile("application/json", name) ?: throw LedgerException("无法在备份目录创建文件")
-        writeDoc(doc.uri, text)
+        fun rename(doc: DocumentFile, to: String) = runCatching { doc.renameTo(to) }.getOrDefault(false)
+        val old = dir.findFile(name)
+        if (old == null) {
+            if (rename(part, name)) return part.name ?: name
+        } else {
+            dir.findFile(asideName)?.delete()
+            if (rename(old, asideName)) {
+                if (rename(part, name)) {
+                    old.delete()
+                    return part.name ?: name
+                }
+                rename(old, name)
+            }
+        }
+        val doc = dir.findFile(name) ?: dir.createFile("application/json", name)
+            ?: throw LedgerException("无法在备份目录创建文件，新备份暂存为 $partName")
+        try {
+            writeDoc(doc.uri, text)
+        } catch (e: Exception) {
+            throw LedgerException("无法写入备份文件，新备份暂存为 $partName")
+        }
         part.delete()
+        dir.findFile(asideName)?.delete()
         return doc.name ?: name
     }
 
@@ -218,8 +239,18 @@ class BackupManager(
             ensure(v.accountId in byId) { "有估值指向不存在的账户" }
             ensure(v.snapshotId == null || v.snapshotId in snapshotIds) { "有估值指向不存在的盘点" }
         }
+        val snapshotAt = file.snapshots.associate { it.id to it.at }
+        val valuationById = file.valuations.associateBy { it.id }
+        for (v in file.valuations) {
+            // A stocktake's own valuations move with it and always sit at its instant.
+            ensure(v.snapshotId == null || v.at == snapshotAt[v.snapshotId]) { "有估值与所属盘点的时间不一致" }
+        }
         for (i in file.snapshotItems) {
             ensure(i.snapshotId in snapshotIds && i.accountId in byId && i.valuationId in valuationIds) { "有盘点明细的引用不完整" }
+            val v = valuationById.getValue(i.valuationId)
+            ensure(v.accountId == i.accountId) { "有盘点明细引用了其他账户的估值" }
+            ensure(v.at == snapshotAt[i.snapshotId]) { "有盘点明细引用了其他时间的估值" }
+            ensure(v.snapshotId == null || v.snapshotId == i.snapshotId) { "有盘点明细引用了其他盘点的估值" }
         }
         for (f in file.flows) Rules.checkFlow(f, f.fromAccountId?.let(byId::get), f.toAccountId?.let(byId::get))
         TodoInvariants.checkAll(file.todoLists, file.todoSections, file.todos, file.checklistItems, file.diaryEntries, file.diaryDrafts, calendar())
@@ -232,24 +263,30 @@ class BackupManager(
      * 2. validate the whole file; 3. save a copy of the current data;
      * 4. one transaction: wipe, insert, bump the epoch;
      * 5. only after the commit: alarms, notifications, widgets; 6. unfreeze, whatever happened.
+     * Once the transaction committed, the screens are rebuilt even if the restore is cancelled,
+     * and the reminders are marked for rebuilding until the effects have run.
      * Returns where the pre-restore copy went.
      */
     suspend fun restore(uri: Uri): String = withContext(Dispatchers.IO) {
         val text = read(uri)
         gate.freeze()
-        var oldIds: List<String>? = null
-        val saved = try {
+        var committed = false
+        try {
             flushDiaryEditors()
             val file = parse(text)
             validate(file)
             val savedTo = savePreRestoreCopy()
-            oldIds = db.todoDao().allTodos().map { it.id }
+            val oldIds = db.todoDao().allTodos().map { it.id }
             val epoch = db.withTransaction {
                 overwrite(file)
                 if (failInsideRestoreTransaction) throw IllegalStateException("模拟写入失败")
                 gate.bumpEpochInTransaction()
             }
             gate.epochCommitted(epoch)
+            committed = true
+            // Set before the effects and cleared after them: a cancellation or crash in between
+            // still gets the reminders rebuilt on the next app start.
+            settings.setRescheduleNeeded(true)
             try {
                 effects.afterRestore(oldIds)
                 settings.setRescheduleNeeded(false)
@@ -257,17 +294,16 @@ class BackupManager(
                 throw e
             } catch (e: Exception) {
                 // The data is restored; reminders are rebuilt on the next app start.
-                settings.setRescheduleNeeded(true)
             }
             savedTo
         } catch (e: Exception) {
-            gate.invalidateCache()
+            if (!committed) gate.invalidateCache()
             throw e
         } finally {
             gate.unfreeze()
+            // Screens bound to the old epoch could not save anything; they are rebuilt either way.
+            if (committed) onRestored()
         }
-        onRestored()
-        saved
     }
 
     private suspend fun overwrite(file: BackupFile) {

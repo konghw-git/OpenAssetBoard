@@ -310,7 +310,7 @@ fun FlowEditScreen(accountId: String?, flowId: String?, initialKind: String?, on
             items = options,
             label = { it?.name ?: "外部（app 之外）" },
             subtitle = { it?.purpose ?: if (it == null) "工资、消费等 app 不记录的去处" else null },
-            leading = { a -> if (a != null) AccountAvatar(a.name, extra.group(groupColor(a)), size = 32.dp) },
+            leading = { a -> if (a != null) AccountAvatar(a, extra.group(groupColor(a)), size = 32.dp) },
             onPick = { a ->
                 if (side == "from") vm.fromId = a?.id else vm.toId = a?.id
                 picking = null

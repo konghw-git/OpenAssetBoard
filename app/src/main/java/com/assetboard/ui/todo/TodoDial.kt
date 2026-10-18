@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -79,6 +80,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.assetboard.data.TodoData
@@ -219,7 +221,7 @@ private fun SegmentLabel(v: TodoView, d: TodoData?, today: LocalDate, fill: Floa
             if (v != TodoView.LOGBOOK) {
                 Spacer(Modifier.width(3.dp))
                 AnimatedContent(n, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "count") {
-                    Text(it.toString(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = fg)
+                    Text(it.toString(), fontSize = ringSp(13f), fontWeight = FontWeight.Bold, color = fg)
                 }
             }
             if (overdue) {
@@ -227,9 +229,24 @@ private fun SegmentLabel(v: TodoView, d: TodoData?, today: LocalDate, fill: Floa
                 Box(Modifier.size(6.dp).clip(CircleShape).background(if (fill > 0.5f) Color.White else cs.error))
             }
         }
-        Text(v.label, fontSize = 11.sp, color = lerp(cs.onSurfaceVariant, Color.White.copy(alpha = 0.9f), fill), maxLines = 1)
+        Text(ringLabel(v), fontSize = ringSp(11f), color = lerp(cs.onSurfaceVariant, Color.White.copy(alpha = 0.9f), fill), maxLines = 1, softWrap = false)
     }
 }
+
+/**
+ * The ring turns, so a label passes the sides where only the band's depth is left for it: two
+ * characters at most. The full name stays in the segment's content description.
+ */
+private fun ringLabel(v: TodoView): String = if (v == TodoView.SOMEDAY) "以后" else v.label
+
+/** Text inside the ring's fixed geometry follows the system font size only up to 1.15×. */
+@Composable
+private fun ringSp(value: Float): TextUnit {
+    val scale = LocalDensity.current.fontScale
+    return (value * minOf(scale, MAX_RING_FONT_SCALE) / scale).sp
+}
+
+private const val MAX_RING_FONT_SCALE = 1.15f
 
 /**
  * The middle of the ring: the new-todo button, in the same gradient as the other tabs' main

@@ -14,6 +14,7 @@ import com.assetboard.ui.ActionViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -60,9 +61,17 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     val askLocation = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
 
+    /**
+     * A day the user tried to go to while the open day's text could neither be saved nor drafted:
+     * the page asks before that text is dropped.
+     */
+    val unsavedLeave = MutableStateFlow<LocalDate?>(null)
+
     /** The day the current session was opened on, if it was opened as "today". */
     private var openedAsToday: LocalDate? = null
     private var statusJob: Job? = null
+    private var leaving: Job? = null
+    private var loading: Job? = null
     private var autoWeatherTried = mutableSetOf<String>()
 
     /** Saves outlive the screen: the app scope plus the epoch bound for this screen. */
@@ -98,19 +107,55 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         open(LocalDate.now())
     }
 
-    fun open(d: LocalDate) {
-        val old = _session.value
-        if (old != null) {
-            // Leaving a day saves it first (D4); the save lands even if this screen goes away.
-            saveScope.launch { old.saveNow(); old.close() }
+    fun open(d: LocalDate) = leaveThenOpen(d, dropUnsaved = false)
+
+    /** The user copied the text that cannot be saved and goes to [d] anyway. */
+    fun dropUnsavedAndOpen(d: LocalDate) {
+        unsavedLeave.value = null
+        leaveThenOpen(d, dropUnsaved = true)
+    }
+
+    /**
+     * Leaving a day saves it first (D4), and the old session stays on screen until that landed:
+     * text that could not even go into a draft is never dropped without asking.
+     */
+    private fun leaveThenOpen(d: LocalDate, dropUnsaved: Boolean) {
+        val old = _session.value ?: return show(d)
+        leaving?.cancel()
+        leaving = viewModelScope.launch {
+            // On the save scope, so the save lands even if this screen goes away meanwhile.
+            val saved = saveScope.async { saveBeforeLeaving(old) }.await()
+            when {
+                saved || dropUnsaved -> {
+                    old.close()
+                    show(d)
+                }
+                old.status.value == DiarySession.Status.UNSAVED -> unsavedLeave.value = d
+                // A restore holds the gate; it collects this text itself.
+                else -> messages.emit("正在恢复数据，请稍后再切换日期")
+            }
         }
+    }
+
+    /** True once nothing of [s] can be lost: the body is saved, or the text went into a draft. */
+    private suspend fun saveBeforeLeaving(s: DiarySession): Boolean {
+        // Typing can go on during a save; a few rounds catch up with it.
+        repeat(3) {
+            if (!s.saveNow()) return s.status.value == DiarySession.Status.ENDED
+            if (!s.dirty) return true
+        }
+        return !s.dirty
+    }
+
+    private fun show(d: LocalDate) {
         _date.value = d
         pastMidnight.value = false
         weather.value = WeatherUi.Idle
         openedAsToday = d.takeIf { it == LocalDate.now() }
         _session.value = null
         statusJob?.cancel()
-        launchBound {
+        loading?.cancel()
+        loading = launchBound {
             val e = diary.entryOn(d)
             val s = DiarySession(diary, d, saveScope, onCreated = { id -> fetchWeather(id, null) })
             s.open(e)
@@ -175,17 +220,24 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         fetchWeather(id, place)
     }
 
-    /** Never blocks the body: a separate request, discarded if a newer one started meanwhile. */
+    /**
+     * Never blocks the body: a separate request, discarded if a newer one started meanwhile. The
+     * day comes from the entry, never from the page, which may have moved on while locating.
+     */
     private fun fetchWeather(entryId: String, manual: Place?) {
         val settings = container.settings
         if (!settings.weatherAllowed) return
         launchBound {
-            weather.value = WeatherUi.Loading
+            var day: LocalDate? = null
+            // Only a page still on that day shows the progress; the result lands in its entry anyway.
+            fun show(ui: WeatherUi) { if (day == null || _date.value == day) weather.value = ui }
             try {
                 val rev = diary.beginWeather(entryId)
-                val e = diary.entry(entryId)
+                val e = diary.entry(entryId) ?: return@launchBound
+                val date = LocalDate.parse(e.date).also { day = it }
+                show(WeatherUi.Loading)
                 val place = manual
-                    ?: e?.takeIf { it.lat != null && it.lon != null && it.city != null }?.let { Place(it.lat!!, it.lon!!, it.city) }
+                    ?: e.takeIf { it.lat != null && it.lon != null && it.city != null }?.let { Place(it.lat!!, it.lon!!, it.city) }
                     ?: run {
                         // Ask for the location permission once; after that, fall back quietly.
                         if (!container.weather.hasLocationPermission() && settings.long(KEY_LOCATION_ASKED) == 0L) {
@@ -195,17 +247,17 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
                         container.weather.locate()
                     }
                 if (place == null) {
-                    weather.value = WeatherUi.NeedCity
+                    show(WeatherUi.NeedCity)
                     return@launchBound
                 }
-                val w = container.weather.daily(place, _date.value)
+                val w = container.weather.daily(place, date)
                     ?: WeatherResult(null, null, null, place.city, place.lat, place.lon)
                 diary.writeWeather(entryId, rev, w)
-                weather.value = if (w.code == null) WeatherUi.Failed else WeatherUi.Idle
+                show(if (w.code == null) WeatherUi.Failed else WeatherUi.Idle)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                weather.value = WeatherUi.Failed
+                show(WeatherUi.Failed)
             }
         }
     }

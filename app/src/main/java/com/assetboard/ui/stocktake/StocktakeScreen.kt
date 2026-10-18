@@ -360,7 +360,7 @@ private fun StockRowItem(r: StockRow, onInput: (String, String) -> Unit) {
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AccountAvatar(r.account.name, extra.group(r.group?.colorIndex ?: 0), muted = !r.included)
+        AccountAvatar(r.account, extra.group(r.group?.colorIndex ?: 0), muted = !r.included)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(r.account.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)

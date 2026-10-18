@@ -1,5 +1,11 @@
 package com.assetboard.ui
 
+import com.assetboard.ui.theme.AppTheme
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.runtime.collectAsState
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
@@ -125,6 +131,34 @@ class ScreenshotTest {
     @Test fun overviewUnfolded() {
         val c = demoContainer()
         shot("03-overview-unfolded", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+    }
+
+    /** Every seeded account's tile, light and dark, to check that no two look alike. */
+    @Test fun accountIcons() = accountIcons(dark = false)
+
+    @Test fun accountIconsDark() = accountIcons(dark = true)
+
+    private fun accountIcons(dark: Boolean) {
+        val c = demoContainer()
+        run {
+            shot(if (dark) "04b-account-icons-dark" else "04a-account-icons", c, dark) {
+                val l = c.repository.ledger.collectAsState().value
+                androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                    androidx.compose.foundation.layout.FlowRow(
+                        Modifier.padding(16.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp),
+                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp),
+                    ) {
+                        l?.accounts.orEmpty().forEach { a ->
+                            androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, modifier = Modifier.width(80.dp)) {
+                                com.assetboard.ui.components.AccountAvatar(a, AppTheme.extra.group(l!!.groupById[a.groupId]?.colorIndex ?: 0), size = 48.dp)
+                                androidx.compose.material3.Text(a.name, maxLines = 1, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @Test fun stocktake() {

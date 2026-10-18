@@ -46,6 +46,8 @@ class ReminderScheduler(private val context: Context, private val container: App
     private val settings = container.settings
     private val json = Json { ignoreUnknownKeys = true }
     private val lock = Mutex()
+    // Declared before [_missed]: its initializer reads the persisted list through this.
+    private val missedSerializer = ListSerializer(MissedReminder.serializer())
 
     private val _missed = MutableStateFlow(loadMissed())
     val missed: StateFlow<List<MissedReminder>> = _missed.asStateFlow()
@@ -259,8 +261,6 @@ class ReminderScheduler(private val context: Context, private val container: App
     }
 
     // ------------------------------------------------------------ missed reminders
-
-    private val missedSerializer = ListSerializer(MissedReminder.serializer())
 
     private fun loadMissed(): List<MissedReminder> =
         settings.string(KEY_MISSED)?.let { runCatching { json.decodeFromString(missedSerializer, it) }.getOrNull() }.orEmpty()

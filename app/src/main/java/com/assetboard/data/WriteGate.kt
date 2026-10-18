@@ -89,7 +89,10 @@ class WriteGate(
 
     // ------------------------------------------------------------ restore side
 
-    /** Stops new writes, then waits for the running ones. Only [RestoreCoordinator] calls this. */
+    /**
+     * Stops new writes, then waits for the running ones. Only [RestoreCoordinator] calls this.
+     * Cancelled while waiting, it unfreezes again: the caller never got the gate to release.
+     */
     internal suspend fun freeze() {
         val wait: CompletableDeferred<Unit>
         synchronized(lock) {
@@ -99,7 +102,12 @@ class WriteGate(
             drained = wait
         }
         _frozen.value = true
-        wait.await()
+        try {
+            wait.await()
+        } catch (e: Throwable) {
+            unfreeze()
+            throw e
+        }
     }
 
     internal fun unfreeze() {

@@ -504,7 +504,7 @@ fun AccountRow(r: AccountRowUi, onClick: () -> Unit) {
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AccountAvatar(r.account.name, extra.group(r.colorIndex), muted = muted)
+        AccountAvatar(r.account, extra.group(r.colorIndex), muted = muted)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(

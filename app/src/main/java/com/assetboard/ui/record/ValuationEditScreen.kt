@@ -159,7 +159,7 @@ fun ValuationEditScreen(accountId: String, valuationId: String?, onBack: () -> U
                 ListRow(
                     title = a.name,
                     subtitle = a.purpose,
-                    leading = { AccountAvatar(a.name, extra.group(vm.groupColor)) },
+                    leading = { AccountAvatar(a, extra.group(vm.groupColor)) },
                     chevron = false,
                     trailing = {
                         when {

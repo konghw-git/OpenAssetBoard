@@ -30,6 +30,7 @@ import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.theme.AssetBoardTheme
 import com.assetboard.ui.todo.QuickAddDefaults
 import com.assetboard.ui.todo.QuickAddForm
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -58,13 +59,17 @@ class QuickAddActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxWidth().imePadding().clickable(remember { MutableInteractionSource() }, indication = null) {},
                         ) {
                             Column {
-                                QuickAddForm(lists, QuickAddDefaults(), onSave = { draft ->
+                                QuickAddForm(lists, QuickAddDefaults(), onSave = { draft, onResult ->
                                     lifecycleScope.launch(epoch) {
                                         try {
                                             container.todos.create(draft)
+                                            onResult(true)
                                             Toast.makeText(this@QuickAddActivity, "已添加「${draft.title}」", Toast.LENGTH_SHORT).show()
-                                        } catch (e: LedgerException) {
-                                            Toast.makeText(this@QuickAddActivity, e.message, Toast.LENGTH_SHORT).show()
+                                        } catch (e: CancellationException) {
+                                            throw e
+                                        } catch (e: Exception) {
+                                            onResult(false)
+                                            Toast.makeText(this@QuickAddActivity, (e as? LedgerException)?.message ?: "添加失败，内容已保留", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 })

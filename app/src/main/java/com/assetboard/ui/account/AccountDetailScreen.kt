@@ -272,7 +272,7 @@ private fun HeaderCard(d: AccountDetail) {
     var showInfo by rememberSaveable { mutableStateOf(false) }
     SectionCard(contentPadding = PaddingValues(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            AccountAvatar(d.account.name, color, size = 48.dp, muted = d.account.isDisabled)
+            AccountAvatar(d.account, color, size = 48.dp, muted = d.account.isDisabled)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(d.account.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)

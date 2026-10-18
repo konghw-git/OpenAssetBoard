@@ -1,6 +1,7 @@
 package com.assetboard.reminder
 
 import android.app.NotificationManager
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -21,6 +22,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +41,9 @@ import java.lang.ref.WeakReference
  * notification (no service ringing yet), it takes the ringing over from the notification channel.
  */
 class AlarmActivity : ComponentActivity() {
+    /** The alarm on screen; replaced when a second alarm reuses this single instance. */
+    private var shown by mutableStateOf<Pair<ReminderToken, String>?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= 27) {
@@ -48,22 +55,39 @@ class AlarmActivity : ComponentActivity() {
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         current = WeakReference(this)
-        val token = ReminderToken.from(intent) ?: run { finish(); return }
-        val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
-        if (intent.getBooleanExtra(EXTRA_FROM_BOOT, false) && savedInstanceState == null) {
-            getSystemService(NotificationManager::class.java).cancel(Notifier.notificationId(token.id))
-            RingService.start(this, token, title)
-        }
+        if (!show(intent, takeOverRinging = savedInstanceState == null)) return
         val container = ReminderScheduler.container(this)
         fun act(action: String) {
+            // The token on screen at the moment of the tap, not the one the page opened with.
+            val token = shown?.first ?: return
             container.appScope.launch { ReminderActionReceiver.handle(applicationContext, action, token) }
             finish()
         }
         setContent {
             AssetBoardTheme(container.settings.themeMode.value, upIsRed = true) {
-                AlarmContent(title, onDone = { act(ReminderActionReceiver.COMPLETE) }, onSnooze = { act(ReminderActionReceiver.SNOOZE_10) }, onStop = { act(ReminderActionReceiver.STOP) })
+                AlarmContent(shown?.second.orEmpty(), onDone = { act(ReminderActionReceiver.COMPLETE) }, onSnooze = { act(ReminderActionReceiver.SNOOZE_10) }, onStop = { act(ReminderActionReceiver.STOP) })
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // A second alarm while this one is still up: the page now belongs to the new todo.
+        if (ReminderToken.from(intent) == null) return
+        setIntent(intent)
+        show(intent, takeOverRinging = true)
+    }
+
+    /** Binds the page to [intent]'s todo; false (and finishing) when it carries none. */
+    private fun show(intent: Intent, takeOverRinging: Boolean): Boolean {
+        val token = ReminderToken.from(intent) ?: run { finish(); return false }
+        val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+        if (intent.getBooleanExtra(EXTRA_FROM_BOOT, false) && takeOverRinging) {
+            getSystemService(NotificationManager::class.java).cancel(Notifier.notificationId(token.id))
+            RingService.start(this, token, title)
+        }
+        shown = token to title
+        return true
     }
 
     override fun onDestroy() {

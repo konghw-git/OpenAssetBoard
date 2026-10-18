@@ -14,6 +14,7 @@ import com.assetboard.data.UndoOutcome
 import com.assetboard.domain.Habit
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.ActionViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,9 +85,17 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
 
     fun reorder(ids: List<String>) = action { repo.reorder(ids) }
 
-    fun quickAdd(draft: TodoDraft, onDone: (String) -> Unit = {}) = action {
-        val id = repo.create(draft)
-        onDone(id)
+    /** [onResult] hears whether the todo was written; a failure also shows the error. */
+    fun quickAdd(draft: TodoDraft, onResult: (saved: Boolean) -> Unit = {}) = action {
+        try {
+            repo.create(draft)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            onResult(false)
+            throw e
+        }
+        onResult(true)
     }
 
     fun createList(name: String, onCreated: (String) -> Unit) = action { onCreated(repo.createList(name)) }

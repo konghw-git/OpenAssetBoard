@@ -99,6 +99,8 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -130,24 +132,27 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
     val confirmRecord = MutableStateFlow(false)
     private val title = MutableStateFlow<String?>(null)
     private val notes = MutableStateFlow<String?>(null)
+    /** One text write at a time, each writing the latest text, so an older one never lands last. */
+    private val textLock = Mutex()
 
     init {
-        launchBound { title.debounce(600).collect { v -> if (v != null && v.isNotBlank()) runCatching { repo.setTitle(id, v) } } }
-        launchBound { notes.debounce(600).collect { v -> if (v != null) runCatching { repo.setNotes(id, v) } } }
+        launchBound { title.debounce(600).collect { runCatching { commitText() } } }
+        launchBound { notes.debounce(600).collect { runCatching { commitText() } } }
     }
 
     fun editTitle(v: String) { title.value = v }
     fun editNotes(v: String) { notes.value = v }
 
+    /** Writes the typed title and notes now; the repository skips what is already saved. */
+    private suspend fun commitText() = textLock.withLock {
+        title.value?.let { if (it.isNotBlank()) repo.setTitle(id, it) }
+        notes.value?.let { repo.setNotes(id, it) }
+    }
+
     /** Leaving the page: write pending text now, on the app scope so it outlives the screen. */
     fun flush(container: AppContainer) {
-        val t = title.value
-        val n = notes.value
-        if (t == null && n == null) return
-        container.appScope.launch(epoch) {
-            runCatching { if (t != null && t.isNotBlank()) repo.setTitle(id, t) }
-            runCatching { if (n != null) repo.setNotes(id, n) }
-        }
+        if (title.value == null && notes.value == null) return
+        container.appScope.launch(epoch) { runCatching { commitText() } }
     }
 
     fun setPlan(date: LocalDate?, time: LocalTime?) = action { repo.setPlan(id, date, time) }
@@ -162,8 +167,11 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
     fun editItem(itemId: String, text: String) = action { repo.setChecklistText(itemId, text) }
     fun deleteItem(itemId: String) = action { repo.deleteChecklistItem(itemId) }
 
+    // Completing and skipping copy the title into the record and fix the undo revision, so the
+    // typed text goes in first.
     fun complete() = action {
         val t = state.value.todo ?: return@action
+        commitText()
         repo.complete(t.id, t.stateSeq)
         events.tryEmit(if (t.kind == TodoKind.REPEAT_SOURCE) "本期已完成，已排到下一期" else "已完成")
     }
@@ -174,6 +182,7 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
 
     fun skip() = action {
         val t = state.value.todo ?: return@action
+        commitText()
         repo.skip(t.id, t.stateSeq)
         events.tryEmit("已跳过本期")
     }
@@ -396,7 +405,7 @@ private fun Schedule(t: Todo, today: LocalDate, editable: Boolean, onDialog: (St
             RowDivider(58.dp)
             ListRow(
                 title = "强提醒",
-                subtitle = "到点全屏响铃，锁屏上也会亮，最长响 5 分钟",
+                subtitle = "到点全屏响铃，锁屏也会亮，最长 5 分钟",
                 leading = { Icon(Icons.Outlined.Alarm, null, tint = cs.primary) },
                 trailing = { Switch(t.strongRemind, { vm.setStrong(it) }, enabled = editable) },
                 chevron = false,

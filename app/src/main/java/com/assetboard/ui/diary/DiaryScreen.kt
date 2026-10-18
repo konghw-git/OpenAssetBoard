@@ -164,6 +164,8 @@ fun DiaryScreen(
     val snackbar = remember { SnackbarHostState() }
     var askDelete by remember { mutableStateOf(false) }
     var jump by remember { mutableStateOf(false) }
+    val unsavedLeave by vm.unsavedLeave.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     ErrorDialog(error) { vm.error.value = null }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
     LaunchedEffect(pickedDate) {
@@ -289,6 +291,18 @@ fun DiaryScreen(
     }
     if (jump) {
         DatePickDialog(initial = date, onDismiss = { jump = false }, onPick = { jump = false; vm.open(it) })
+    }
+    unsavedLeave?.let { target ->
+        ConfirmDialog(
+            "这一天的内容没能保存", "正文和草稿都写不进去，离开就会丢失。可以先把全文复制到剪贴板，再离开。", "复制并离开",
+            onConfirm = {
+                session?.let { s ->
+                    context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("日记", s.text.value))
+                }
+                vm.dropUnsavedAndOpen(target)
+            },
+            onDismiss = { vm.unsavedLeave.value = null },
+        )
     }
 }
 

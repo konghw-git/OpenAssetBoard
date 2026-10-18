@@ -1,5 +1,6 @@
 package com.assetboard.ui.todo
 
+import androidx.compose.ui.text.style.LineBreak
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -281,7 +282,7 @@ fun TodoHomeScreen(
             visible = composer,
             lists = d?.lists?.filter { it.archivedAt == null }.orEmpty(),
             defaults = QuickAddDefaults(listId = list?.id, plan = if (view == TodoView.TODAY) today else null, someday = view == TodoView.SOMEDAY),
-            onSave = { vm.quickAdd(it) },
+            onSave = vm::quickAdd,
             onClose = ::closeComposer,
         )
     }
@@ -583,7 +584,7 @@ private fun ListCards(d: TodoData?, selected: String, onSelect: (String) -> Unit
  * the hub or Back closes it. The view's defaults reset it when the view changes.
  */
 @Composable
-private fun InlineComposer(visible: Boolean, lists: List<TodoList>, defaults: QuickAddDefaults, onSave: (com.assetboard.data.TodoDraft) -> Unit, onClose: () -> Unit) {
+private fun InlineComposer(visible: Boolean, lists: List<TodoList>, defaults: QuickAddDefaults, onSave: (com.assetboard.data.TodoDraft, (Boolean) -> Unit) -> Unit, onClose: () -> Unit) {
     AnimatedVisibility(
         visible,
         enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 500f)) + fadeIn(),
@@ -823,7 +824,7 @@ fun ReminderBanners(vm: TodoViewModel, onGuide: () -> Unit) {
             }
         }
         if (!exactOn && Build.VERSION.SDK_INT >= 31) {
-            Banner("精确闹钟权限已关闭，提醒可能推迟最多 10 分钟", "去开启") {
+            Banner("精确闹钟权限已关闭，提醒最多可能晚 10 分钟", "去开启") {
                 context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + context.packageName)))
             }
         }
@@ -848,7 +849,7 @@ fun ReminderBanners(vm: TodoViewModel, onGuide: () -> Unit) {
         }
         val guideSeen by container.settings.reminderGuideSeen.collectAsStateWithLifecycle()
         if (!guideSeen && (data?.todos?.any { it.remindTime != null } == true)) {
-            Banner("想让提醒准时响？按引导检查一遍 vivo 的后台设置", "开始", warning = false) { onGuide() }
+            Banner("想让提醒准时响？按引导检查 vivo 后台设置", "开始", warning = false) { onGuide() }
         }
     }
 }
@@ -861,7 +862,8 @@ private fun Banner(text: String, action: String, warning: Boolean = true, onClic
         Row(Modifier.padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(tint))
             Spacer(Modifier.width(10.dp))
-            Text(text, style = MaterialTheme.typography.bodySmall, color = cs.onSurface, modifier = Modifier.weight(1f))
+            // Balanced lines: a wrap never leaves one character alone on the second line.
+            Text(text, style = MaterialTheme.typography.bodySmall.copy(lineBreak = LineBreak.Heading), color = cs.onSurface, modifier = Modifier.weight(1f))
             TextButton(onClick = onClick) { Text(action, color = tint) }
         }
     }

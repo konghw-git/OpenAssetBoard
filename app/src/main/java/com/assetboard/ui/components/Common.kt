@@ -83,23 +83,6 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, trailing: @Compo
     }
 }
 
-/** Rounded square with the account's first character, tinted by its group color. */
-@Composable
-fun AccountAvatar(name: String, color: Color, modifier: Modifier = Modifier, size: Dp = 40.dp, muted: Boolean = false) {
-    val c = if (muted) MaterialTheme.colorScheme.onSurfaceVariant else color
-    Box(
-        modifier = modifier.size(size).clip(RoundedCornerShape(size * 0.32f)).background(c.copy(alpha = 0.14f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = name.trim().take(1).ifEmpty { "?" },
-            color = c,
-            fontWeight = FontWeight.Bold,
-            fontSize = (size.value * 0.42f).sp,
-        )
-    }
-}
-
 @Composable
 fun MoneyText(
     cents: Long,
