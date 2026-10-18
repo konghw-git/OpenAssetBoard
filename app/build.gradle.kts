@@ -24,8 +24,8 @@ android {
         applicationId = "com.assetboard"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "0.3.0"
     }
 
     signingConfigs {
@@ -61,7 +61,12 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+
+    // MigrationTestHelper reads the exported Room schemas from the app's assets under Robolectric;
+    // debug builds carry them, release builds do not.
+    sourceSets.getByName("debug").assets.srcDir("$projectDir/schemas")
 
     testOptions {
         unitTests {
@@ -118,11 +123,13 @@ dependencies {
     implementation(libs.glance.material3)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.documentfile)
+    implementation(libs.lunar)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.room.testing)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.roborazzi)
