@@ -4,20 +4,39 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +46,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -37,7 +57,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,20 +76,23 @@ import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.ErrorDialog
+import com.assetboard.ui.components.IconTile
 import com.assetboard.ui.components.ListRow
 import com.assetboard.ui.components.RowDivider
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
+import com.assetboard.ui.theme.AppTheme
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
-class SettingsViewModel(private val container: AppContainer) : ActionViewModel() {
+class SettingsViewModel(container: AppContainer) : RestoreViewModel(container) {
     val message = MutableStateFlow<String?>(null)
 
     fun backupNow() = action { message.value = "已备份：" + container.backup.backupNow(BackupKind.MANUAL) }
 
-    fun restore(uri: Uri) = action {
-        val saved = container.backup.restore(uri)
-        message.value = "已恢复。恢复前的数据另存为 $saved"
+    fun updateHolidays() = action {
+        container.holidays.updateOnline()
+        message.value = "节假日数据已检查"
     }
 }
 
@@ -75,7 +103,13 @@ private fun readableTree(uri: String): String {
 }
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onGroups: () -> Unit) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onGroups: () -> Unit,
+    onTrash: () -> Unit = {},
+    onPreRestore: () -> Unit = {},
+    onGuide: () -> Unit = {},
+) {
     val container = LocalContainer.current
     val settings = container.settings
     val vm: SettingsViewModel = viewModel { SettingsViewModel(container) }
@@ -86,9 +120,17 @@ fun SettingsScreen(onBack: () -> Unit, onGroups: () -> Unit) {
     val lastBackup by settings.lastBackupAt.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val networkOn by settings.networkEnabled.collectAsStateWithLifecycle()
+    val weatherOn by settings.weatherEnabled.collectAsStateWithLifecycle()
+    val holidayOn by settings.holidayUpdateEnabled.collectAsStateWithLifecycle()
+    val allAlarms by settings.allRemindersAsAlarms.collectAsStateWithLifecycle()
+    val diaryOn by settings.diaryReminderEnabled.collectAsStateWithLifecycle()
+    val diaryAt by settings.diaryReminderMinutes.collectAsStateWithLifecycle()
+    val holidayYears = container.holidays.table.collectAsStateWithLifecycle().value.years
+    var pickDiaryTime by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
-    var pendingRestore by rememberSaveable { mutableStateOf<String?>(null) }
     ErrorDialog(error) { vm.error.value = null }
+    RestoreConfirm(vm)
     LaunchedEffect(message) {
         message?.let {
             snackbar.showSnackbar(it)
@@ -105,9 +147,10 @@ fun SettingsScreen(onBack: () -> Unit, onGroups: () -> Unit) {
         }
     }
     val pickBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) pendingRestore = uri.toString()
+        if (uri != null) vm.inspect(uri)
     }
     val cs = MaterialTheme.colorScheme
+    val palette = AppTheme.extra
 
     Scaffold(
         containerColor = cs.background,
@@ -124,30 +167,105 @@ fun SettingsScreen(onBack: () -> Unit, onGroups: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            AboutCard(BuildConfigInfo.versionName(context), lastBackup, onBackup = { if (tree == null) pickTree.launch(null) else vm.backupNow() })
+
             SectionCard {
                 SectionHeader("备份")
                 ListRow(
                     title = "备份目录",
                     subtitle = tree?.let(::readableTree) ?: "未设置。建议选「文档」下新建的文件夹，卸载 app 后仍保留",
-                    leading = { Icon(Icons.Outlined.Folder, null, tint = cs.primary) },
+                    leading = { IconTile(Icons.Outlined.Folder, palette.group(1)) },
                     onClick = { pickTree.launch(null) },
                 )
-                RowDivider(startIndent = 58.dp)
+                RowDivider(startIndent = 68.dp)
                 ListRow(
                     title = "立即备份",
                     subtitle = lastBackup?.let { "上次备份 " + Dates.dateTime(it) } ?: "还没有备份过",
-                    leading = { Icon(Icons.Outlined.Backup, null, tint = cs.primary) },
+                    leading = { IconTile(Icons.Outlined.Backup, palette.group(0)) },
                     onClick = { if (tree == null) pickTree.launch(null) else vm.backupNow() },
                 )
-                RowDivider(startIndent = 58.dp)
+                RowDivider(startIndent = 68.dp)
                 ListRow(
                     title = "从备份恢复",
                     subtitle = "整库覆盖，恢复前自动另存当前数据",
-                    leading = { Icon(Icons.Outlined.Restore, null, tint = cs.primary) },
+                    leading = { IconTile(Icons.Outlined.Restore, palette.group(2)) },
                     onClick = { pickBackup.launch(arrayOf("application/json", "application/octet-stream", "text/plain")) },
                 )
+                RowDivider(startIndent = 68.dp)
+                ListRow(
+                    title = "恢复前副本",
+                    subtitle = "每次恢复前自动另存的数据，点一下就能回去",
+                    leading = { IconTile(Icons.Outlined.Layers, palette.group(4)) },
+                    onClick = onPreRestore,
+                )
                 Text(
-                    "每天自动备份一次，保留最近 10 份。手机厂商的后台限制可能让自动备份推迟，改完数据后建议手动点一次「立即备份」。",
+                    "备份包含资产、待办（含回收站和日志）、日记和草稿。每天自动备份一次，保留最近 10 份。手机厂商的后台限制可能让自动备份推迟，改完数据后建议手动点一次「立即备份」。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
+                )
+            }
+
+            SectionCard {
+                SectionHeader("待办与日记")
+                ListRow(
+                    title = "提醒设置检查",
+                    subtitle = "通知、精确闹钟、全屏、vivo 自启动与后台",
+                    leading = { IconTile(Icons.Outlined.NotificationsActive, palette.group(3)) },
+                    onClick = onGuide,
+                )
+                RowDivider(startIndent = 68.dp)
+                SwitchRow(Icons.Outlined.Alarm, palette.group(2), "所有提醒走闹钟通道", "深度休眠时也准时；状态栏会显示闹钟图标", allAlarms) {
+                    settings.setBool(settings.allRemindersAsAlarms, it)
+                    container.appScope.launch { runCatching { container.reminders.syncAll(fromBoot = false) } }
+                }
+                RowDivider(startIndent = 68.dp)
+                SwitchRow(Icons.Outlined.EditNote, palette.group(5), "每晚提醒写日记", "今天已经写过就不提醒", diaryOn) {
+                    settings.setBool(settings.diaryReminderEnabled, it)
+                    container.reminders.scheduleDiaryReminder()
+                }
+                if (diaryOn) {
+                    ListRow(
+                        title = "提醒时间",
+                        leading = { Spacer(Modifier.width(34.dp)) },
+                        trailing = { Text("%02d:%02d".format(diaryAt / 60, diaryAt % 60), color = cs.onSurfaceVariant) },
+                        onClick = { pickDiaryTime = true },
+                    )
+                }
+                RowDivider(startIndent = 68.dp)
+                ListRow(
+                    title = "回收站",
+                    subtitle = "删除的待办、清单和日记保留 30 天",
+                    leading = { IconTile(Icons.Outlined.Delete, Color(0xFF8A8F98)) },
+                    onClick = onTrash,
+                )
+            }
+
+            SectionCard {
+                SectionHeader("联网")
+                SwitchRow(Icons.Outlined.Public, palette.group(1), "允许联网", "关闭后不发起任何网络请求：节假日用内置数据，不显示天气", networkOn) {
+                    settings.setBool(settings.networkEnabled, it)
+                }
+                if (networkOn) {
+                    RowDivider(startIndent = 68.dp)
+                    SwitchRow(Icons.Outlined.WbSunny, palette.group(2), "日记天气", "写日记时用大致位置取当天天气（Open-Meteo）", weatherOn) {
+                        settings.setBool(settings.weatherEnabled, it)
+                    }
+                    RowDivider(startIndent = 68.dp)
+                    SwitchRow(Icons.Outlined.Event, palette.group(3), "节假日自动更新", "每年 11 月起每周检查一次新一年的放假安排，只下载不上传", holidayOn) {
+                        settings.setBool(settings.holidayUpdateEnabled, it)
+                    }
+                    if (holidayOn) {
+                        ListRow(
+                            title = "立即检查节假日",
+                            subtitle = holidayYears.takeIf { it.isNotEmpty() }?.let { "已有 " + it.sorted().joinToString("、") + " 年" },
+                            leading = { Spacer(Modifier.width(34.dp)) },
+                            onClick = vm::updateHolidays,
+                        )
+                    }
+                }
+                Text(
+                    "资产、待办、日记的内容永远不会离开手机。",
                     style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant,
                     modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
@@ -159,7 +277,7 @@ fun SettingsScreen(onBack: () -> Unit, onGroups: () -> Unit) {
                 ListRow(
                     title = "分组管理",
                     subtitle = "名称、颜色、顺序、资产 / 负债属性",
-                    leading = { Icon(Icons.Outlined.Category, null, tint = cs.primary) },
+                    leading = { IconTile(Icons.Outlined.Category, palette.group(4)) },
                     onClick = onGroups,
                 )
             }
@@ -167,13 +285,21 @@ fun SettingsScreen(onBack: () -> Unit, onGroups: () -> Unit) {
             SectionCard(contentPadding = PaddingValues(bottom = 16.dp)) {
                 SectionHeader("外观")
                 Column(Modifier.padding(horizontal = 20.dp)) {
-                    Text("主题", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                        IconTile(Icons.Outlined.Palette, palette.group(6), size = 28.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text("主题", style = MaterialTheme.typography.bodyMedium)
+                    }
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         ThemeMode.entries.forEachIndexed { i, m ->
                             SegmentedButton(selected = theme == m, onClick = { settings.setThemeMode(m) }, shape = SegmentedButtonDefaults.itemShape(i, ThemeMode.entries.size)) { Text(m.label) }
                         }
                     }
-                    Text("涨跌颜色", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)) {
+                        IconTile(Icons.AutoMirrored.Outlined.TrendingUp, palette.group(3), size = 28.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text("涨跌颜色", style = MaterialTheme.typography.bodyMedium)
+                    }
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         listOf(true to "红涨绿跌", false to "绿涨红跌").forEachIndexed { i, (v, label) ->
                             SegmentedButton(selected = upIsRed == v, onClick = { settings.setUpIsRed(v) }, shape = SegmentedButtonDefaults.itemShape(i, 2)) { Text(label) }
@@ -182,23 +308,66 @@ fun SettingsScreen(onBack: () -> Unit, onGroups: () -> Unit) {
                 }
             }
 
-            Text(
-                "资产看板 ${BuildConfigInfo.versionName(context)} · 数据只保存在本机",
-                style = MaterialTheme.typography.bodySmall,
-                color = cs.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp),
-            )
         }
     }
 
-    pendingRestore?.let { uri ->
-        ConfirmDialog(
-            title = "用这份备份覆盖全部数据？",
-            text = "当前的所有账户和记录会被替换。恢复前会自动另存一份当前数据。",
-            confirmLabel = "覆盖恢复",
-            destructive = true,
-            onConfirm = { pendingRestore = null; vm.restore(Uri.parse(uri)) },
-            onDismiss = { pendingRestore = null },
+    if (pickDiaryTime) {
+        com.assetboard.ui.todo.TimePickDialog(
+            initial = java.time.LocalTime.of(diaryAt / 60, diaryAt % 60),
+            onDismiss = { pickDiaryTime = false },
+            onPick = {
+                pickDiaryTime = false
+                settings.setDiaryReminderMinutes(it.hour * 60 + it.minute)
+                container.reminders.scheduleDiaryReminder()
+            },
+        )
+    }
+}
+
+@Composable
+private fun SwitchRow(icon: ImageVector, color: Color, title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+    ListRow(
+        title = title,
+        subtitle = subtitle,
+        leading = { IconTile(icon, color) },
+        trailing = { Switch(checked, onChange) },
+        onClick = { onChange(!checked) },
+        chevron = false,
+    )
+}
+
+/** The app at a glance: name, version, and the backup state with a one-tap backup. */
+@Composable
+private fun AboutCard(version: String, lastBackup: Long?, onBackup: () -> Unit) {
+    val extra = AppTheme.extra
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.extraLarge)
+            .background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd)))
+            .padding(20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(extra.onHero.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Outlined.Bolt, null, tint = extra.onHero, modifier = Modifier.size(30.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text("强者之路", style = MaterialTheme.typography.titleLarge, color = extra.onHero)
+            Text("$version · 数据只保存在本机", style = MaterialTheme.typography.bodySmall, color = extra.onHeroMuted)
+            Text(
+                lastBackup?.let { "上次备份 " + Dates.relative(it) + " " + Dates.time(it) } ?: "还没有备份过",
+                style = MaterialTheme.typography.bodySmall, color = extra.onHeroMuted,
+            )
+        }
+        Text(
+            "备份",
+            style = MaterialTheme.typography.labelLarge,
+            color = extra.heroStart,
+            modifier = Modifier.clip(RoundedCornerShape(50)).background(extra.onHero).clickable(onClick = onBackup).padding(horizontal = 16.dp, vertical = 8.dp),
         )
     }
 }

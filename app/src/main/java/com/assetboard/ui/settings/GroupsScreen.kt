@@ -59,7 +59,7 @@ import com.assetboard.ui.components.RowDivider
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.theme.AppTheme
 
-class GroupsViewModel(private val container: AppContainer) : ActionViewModel() {
+class GroupsViewModel(private val container: AppContainer) : ActionViewModel(container) {
     private val repo = container.repository
     fun save(id: String?, name: String, liability: Boolean, color: Int, onDone: () -> Unit) = action(onDone) {
         if (id == null) repo.createGroup(name, liability, color) else repo.updateGroup(id, name, liability, color)

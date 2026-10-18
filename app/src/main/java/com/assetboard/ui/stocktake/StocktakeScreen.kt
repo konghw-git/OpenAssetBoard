@@ -112,7 +112,7 @@ data class StocktakeUi(
 
 data class DeleteImpact(val name: String, val before: Long, val after: Long)
 
-class StocktakeViewModel(private val container: AppContainer, private val snapshotId: String?) : ActionViewModel() {
+class StocktakeViewModel(private val container: AppContainer, private val snapshotId: String?) : ActionViewModel(container) {
     private val repo = container.repository
     private val _ui = MutableStateFlow(StocktakeUi(editing = snapshotId != null))
     val ui = _ui.asStateFlow()

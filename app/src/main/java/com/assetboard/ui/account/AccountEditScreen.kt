@@ -77,7 +77,7 @@ class AccountEditViewModel(
     private val container: AppContainer,
     val accountId: String?,
     initialGroupId: String?,
-) : ActionViewModel() {
+) : ActionViewModel(container) {
     private val repo = container.repository
 
     var loaded by mutableStateOf(false)

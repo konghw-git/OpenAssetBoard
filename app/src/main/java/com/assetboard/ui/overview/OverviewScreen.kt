@@ -1,6 +1,27 @@
 package com.assetboard.ui.overview
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import com.assetboard.ui.components.animatedCents
+import com.assetboard.ui.components.appear
+import com.assetboard.ui.components.pressScale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +39,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -28,9 +49,10 @@ import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +74,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.CircleShape
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -79,6 +103,9 @@ import com.assetboard.ui.components.Pill
 import com.assetboard.ui.components.RowDivider
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
+import com.assetboard.ui.components.HeaderAction
+import com.assetboard.ui.components.PrimaryActionButton
+import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.Sparkline
 import com.assetboard.ui.theme.AppTheme
 import com.assetboard.ui.theme.NumberStyle
@@ -149,7 +176,7 @@ fun buildOverview(l: LedgerData, now: Long = System.currentTimeMillis()): Overvi
     )
 }
 
-class OverviewViewModel(private val container: AppContainer) : ActionViewModel() {
+class OverviewViewModel(private val container: AppContainer) : ActionViewModel(container) {
     val state: StateFlow<OverviewState?> = container.repository.ledger
         .map { it?.let { l -> buildOverview(l) } }
         .flowOn(Dispatchers.Default)
@@ -177,25 +204,22 @@ fun OverviewScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text("我的资产") },
-                actions = {
-                    IconButton(onClick = onTrend) { Icon(Icons.AutoMirrored.Filled.ShowChart, "净值趋势") }
-                    IconButton(onClick = { onAddAccount(null) }) { Icon(Icons.Default.Add, "新建账户") }
-                    IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "设置") }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
+            val accounts = state?.groups?.sumOf { it.rows.size } ?: 0
+            val today = java.time.LocalDate.now()
+            TabHeader(
+                "我的资产",
+                "${today.monthValue}月${today.dayOfMonth}日 ${com.assetboard.domain.todo.Recurrence.weekName(today.dayOfWeek)}" +
+                    if (accounts > 0) " · $accounts 个账户" else "",
+            ) {
+                HeaderAction(Icons.AutoMirrored.Filled.ShowChart, "净值趋势", onTrend)
+                HeaderAction(Icons.Default.Add, "新建账户", { onAddAccount(null) })
+                HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
+            }
         },
+        floatingActionButtonPosition = FabPosition.Center,
         floatingActionButton = {
             if (state?.hasAccounts == true) {
-                ExtendedFloatingActionButton(
-                    onClick = onStocktake,
-                    icon = { Icon(Icons.Default.Checklist, null) },
-                    text = { Text("盘点") },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                )
+                PrimaryActionButton(Icons.Rounded.Checklist, "盘点", onStocktake, Modifier.padding(bottom = 12.dp))
             }
         },
     ) { padding ->
@@ -207,8 +231,8 @@ fun OverviewScreen(
                 if (maxWidth >= 600.dp) {
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         LazyColumn(Modifier.weight(1.1f), contentPadding = PaddingValues(start = 16.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            item { Hero(s) }
-                            accountSections(s, onOpenAccount, onAddAccount)
+                            item { Box(Modifier.appear(0)) { Hero(s) } }
+                            accountSections(s, onOpenAccount, onAddAccount, first = 1)
                         }
                         Column(
                             Modifier.weight(0.9f).verticalScroll(rememberScrollState()).padding(end = 16.dp, bottom = 96.dp),
@@ -222,12 +246,12 @@ fun OverviewScreen(
                 } else {
                     LazyColumn(
                         Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        item { Hero(s) }
-                        if (s.allocation.isNotEmpty()) item { AllocationCard(s) }
-                        accountSections(s, onOpenAccount, onAddAccount)
+                        item { Box(Modifier.appear(0)) { Hero(s) } }
+                        if (s.allocation.isNotEmpty()) item { Box(Modifier.appear(1)) { AllocationCard(s) } }
+                        accountSections(s, onOpenAccount, onAddAccount, first = 2)
                     }
                 }
             }
@@ -235,51 +259,91 @@ fun OverviewScreen(
     }
 }
 
-private fun LazyListScope.accountSections(s: OverviewState, onOpenAccount: (String) -> Unit, onAddAccount: (String?) -> Unit) {
-    items(s.groups, key = { it.group.id }) { g -> GroupCard(g, onOpenAccount, onAddAccount) }
+private fun LazyListScope.accountSections(s: OverviewState, onOpenAccount: (String) -> Unit, onAddAccount: (String?) -> Unit, first: Int) {
+    val assets = s.totals.assets
+    itemsIndexed(s.groups, key = { _, g -> g.group.id }) { i, g ->
+        Box(Modifier.appear(first + i)) { GroupCard(g, assets, onOpenAccount, onAddAccount) }
+    }
     if (s.disabled.isNotEmpty()) item(key = "disabled") { DisabledCard(s.disabled, onOpenAccount) }
 }
 
+/**
+ * The net worth card: a slow aurora drifting over the gradient, a light sheen every few seconds,
+ * amounts that count up, and the sparkline drawing itself in.
+ */
 @Composable
 private fun Hero(s: OverviewState) {
     val extra = AppTheme.extra
+    val motion = rememberInfiniteTransition(label = "hero")
+    val drift by motion.animateFloat(0f, 1f, infiniteRepeatable(tween(14_000, easing = LinearEasing), RepeatMode.Reverse), label = "drift")
+    val sheen by motion.animateFloat(-0.6f, 1.6f, infiniteRepeatable(tween(7_000, delayMillis = 0, easing = LinearEasing)), label = "sheen")
+    val source = remember { MutableInteractionSource() }
+    val net = animatedCents(s.totals.netWorth)
     Box(
         Modifier
             .fillMaxWidth()
+            .pressScale(source, 0.985f)
+            .shadow(18.dp, MaterialTheme.shapes.extraLarge, ambientColor = extra.heroStart, spotColor = extra.heroStart)
             .clip(MaterialTheme.shapes.extraLarge)
             .background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd)))
+            .drawBehind {
+                val w = size.width
+                val h = size.height
+                // Two soft lights that wander across the card.
+                val a = Offset(w * (0.15f + 0.7f * drift), h * (0.2f + 0.3f * kotlin.math.sin(drift * 3.14f)))
+                val b = Offset(w * (0.9f - 0.6f * drift), h * (0.95f - 0.4f * drift))
+                drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent), a, w * 0.55f), w * 0.55f, a)
+                drawCircle(Brush.radialGradient(listOf(Color(0xFF8FE3C8).copy(alpha = 0.18f), Color.Transparent), b, w * 0.5f), w * 0.5f, b)
+                // The sheen: a narrow diagonal band crossing once per cycle; mostly off-card.
+                val x = w * sheen
+                drawRect(
+                    Brush.linearGradient(
+                        listOf(Color.Transparent, Color.White.copy(alpha = 0.10f), Color.Transparent),
+                        start = Offset(x - w * 0.25f, 0f), end = Offset(x + w * 0.05f, h),
+                    ),
+                )
+            }
+            .clickable(interactionSource = source, indication = null) {}
             .padding(22.dp),
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("净资产", color = extra.onHeroMuted, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                 s.history.lastOrNull()?.let {
-                    Text("上次盘点 · ${Dates.relative(it.snapshot.at)}", color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        "上次盘点 · ${Dates.relative(it.snapshot.at)}",
+                        color = extra.onHero,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(extra.onHero.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
                 }
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("¥", color = extra.onHero, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 5.dp, end = 4.dp))
                 Text(
-                    Money.format(s.totals.netWorth),
+                    Money.format(net),
                     color = extra.onHero,
                     style = MaterialTheme.typography.displaySmall,
                     maxLines = 1,
                 )
             }
             s.changeSinceLast?.takeIf { it != 0L }?.let { c ->
-                Text(
-                    "较上次盘点 ${Money.format(c, signed = true)}",
-                    color = extra.onHero,
-                    style = MaterialTheme.typography.labelMedium.merge(NumberStyle),
-                    modifier = Modifier
-                        .padding(top = 6.dp)
-                        .clip(MaterialTheme.shapes.small)
+                val up = c > 0
+                Row(
+                    Modifier
+                        .padding(top = 8.dp)
+                        .clip(RoundedCornerShape(50))
                         .background(extra.onHero.copy(alpha = 0.14f))
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                )
+                        .padding(start = 6.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(if (up) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, null, tint = extra.onHero, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("较上次盘点 ${Money.format(c, signed = true)}", color = extra.onHero, style = MaterialTheme.typography.labelMedium.merge(NumberStyle))
+                }
             }
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 HeroStat("总资产", s.totals.assets, Modifier.weight(1f))
                 HeroStat("总负债", -s.totals.liabilities, Modifier.weight(1f))
@@ -287,10 +351,36 @@ private fun Hero(s: OverviewState) {
                     Sparkline(
                         values = s.history.takeLast(24).map { it.netWorth },
                         color = extra.onHero,
-                        modifier = Modifier.width(88.dp).height(36.dp),
+                        modifier = Modifier.width(96.dp).height(40.dp),
+                        animate = true,
                     )
                 }
             }
+            // Liabilities are carried negative.
+            val debts = -s.totals.liabilities
+            if (s.totals.assets > 0 && debts > 0) {
+                Spacer(Modifier.height(16.dp))
+                DebtRatio(s.totals.assets, debts)
+            }
+        }
+    }
+}
+
+/** A thin bar: how much of the assets the debts eat, filling in on first show. */
+@Composable
+private fun DebtRatio(assets: Long, liabilities: Long) {
+    val extra = AppTheme.extra
+    val ratio = (liabilities.toDouble() / assets.toDouble()).toFloat().coerceIn(0f, 1f)
+    val shown = remember { Animatable(0f) }
+    LaunchedEffect(ratio) { shown.animateTo(ratio, tween(1_100, delayMillis = 250, easing = FastOutSlowInEasing)) }
+    Column {
+        Row {
+            Text("负债率", color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+            Text(Money.percent(liabilities, assets), color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall.merge(NumberStyle))
+        }
+        Spacer(Modifier.height(6.dp))
+        Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(50)).background(extra.onHero.copy(alpha = 0.16f))) {
+            Box(Modifier.fillMaxWidth(shown.value).height(6.dp).clip(RoundedCornerShape(50)).background(Brush.horizontalGradient(listOf(extra.onHero.copy(alpha = 0.55f), extra.onHero))))
         }
     }
 }
@@ -298,9 +388,10 @@ private fun Hero(s: OverviewState) {
 @Composable
 private fun HeroStat(label: String, cents: Long, modifier: Modifier) {
     val extra = AppTheme.extra
+    val shown = animatedCents(cents)
     Column(modifier) {
         Text(label, color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium)
-        MoneyText(cents, color = extra.onHero, style = MaterialTheme.typography.titleMedium)
+        MoneyText(shown, color = extra.onHero, style = MaterialTheme.typography.titleMedium)
     }
 }
 
@@ -310,19 +401,22 @@ private fun AllocationCard(s: OverviewState) {
     val extra = AppTheme.extra
     val total = s.allocation.sumOf { it.value }
     var highlighted by rememberSaveable { mutableIntStateOf(-1) }
-    SectionCard(contentPadding = PaddingValues(20.dp)) {
+    // Tapping the ring or anywhere outside a legend row goes back to the total.
+    val reset = remember { MutableInteractionSource() }
+    SectionCard(Modifier.clickable(interactionSource = reset, indication = null) { highlighted = -1 }, contentPadding = PaddingValues(20.dp)) {
         Text("资产配置", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             DonutChart(
                 slices = s.allocation.map { DonutSlice(it.value.toFloat(), extra.group(it.group.colorIndex)) },
-                modifier = Modifier.size(132.dp),
+                modifier = Modifier.size(132.dp).clip(CircleShape).clickable { highlighted = -1 },
                 highlighted = highlighted.takeIf { it >= 0 },
             ) {
                 val h = s.allocation.getOrNull(highlighted)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(h?.group?.name ?: "总资产", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(Money.compact(h?.value ?: total), style = MaterialTheme.typography.titleSmall.merge(NumberStyle))
+                    if (h != null) Text("点圆环看总资产", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
             Spacer(Modifier.width(20.dp))
@@ -349,14 +443,15 @@ private fun AllocationCard(s: OverviewState) {
 }
 
 @Composable
-private fun GroupCard(g: GroupUi, onOpenAccount: (String) -> Unit, onAddAccount: (String?) -> Unit) {
+private fun GroupCard(g: GroupUi, totalAssets: Long, onOpenAccount: (String) -> Unit, onAddAccount: (String?) -> Unit) {
     val extra = AppTheme.extra
+    val color = extra.group(g.group.colorIndex)
     SectionCard {
         Row(
             Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Dot(extra.group(g.group.colorIndex), 8.dp)
+            Dot(color, 8.dp)
             Spacer(Modifier.width(8.dp))
             Text(g.group.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             Text(
@@ -364,6 +459,15 @@ private fun GroupCard(g: GroupUi, onOpenAccount: (String) -> Unit, onAddAccount:
                 style = MaterialTheme.typography.labelLarge.merge(NumberStyle),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        // The group's share of all assets, as a thin bar that fills in.
+        if (!g.group.isLiability && totalAssets > 0 && g.subtotal > 0) {
+            val share = (g.subtotal.toDouble() / totalAssets).toFloat().coerceIn(0f, 1f)
+            val shown = remember { Animatable(0f) }
+            LaunchedEffect(share) { shown.animateTo(share, tween(900, delayMillis = 200, easing = FastOutSlowInEasing)) }
+            Box(Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 6.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.12f))) {
+                Box(Modifier.fillMaxWidth(shown.value).height(4.dp).clip(RoundedCornerShape(50)).background(Brush.horizontalGradient(listOf(color.copy(alpha = 0.6f), color))))
+            }
         }
         if (g.rows.isEmpty()) {
             ListRow(

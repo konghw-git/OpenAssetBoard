@@ -63,7 +63,7 @@ class ValuationEditViewModel(
     private val container: AppContainer,
     private val accountId: String,
     private val valuationId: String?,
-) : ActionViewModel() {
+) : ActionViewModel(container) {
     private val repo = container.repository
 
     var loaded by mutableStateOf(false)

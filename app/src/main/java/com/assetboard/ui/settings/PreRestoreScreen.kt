@@ -1,0 +1,138 @@
+package com.assetboard.ui.settings
+
+import android.net.Uri
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.AppContainer
+import com.assetboard.data.BackupKind
+import com.assetboard.data.BackupPreview
+import com.assetboard.data.PreRestoreCopy
+import com.assetboard.domain.Dates
+import com.assetboard.ui.ActionViewModel
+import com.assetboard.ui.LocalContainer
+import com.assetboard.ui.components.ConfirmDialog
+import com.assetboard.ui.components.ErrorDialog
+import com.assetboard.ui.components.ListRow
+import com.assetboard.ui.components.SectionCard
+import kotlinx.coroutines.flow.MutableStateFlow
+
+/** Inspect, confirm, restore: shared by "restore from backup" and the pre-restore copies. */
+open class RestoreViewModel(protected val container: AppContainer) : ActionViewModel(container) {
+    val pending = MutableStateFlow<Pair<Uri, BackupPreview>?>(null)
+
+    fun inspect(uri: Uri) = action { pending.value = uri to container.backup.inspect(uri) }
+
+    fun confirm() {
+        val (uri, _) = pending.value ?: return
+        pending.value = null
+        action {
+            val saved = container.backup.restore(uri)
+            container.announce("已恢复。恢复前的数据另存为 ${saved.substringAfterLast('/')}")
+        }
+    }
+}
+
+class PreRestoreViewModel(container: AppContainer) : RestoreViewModel(container) {
+    val copies = MutableStateFlow<List<PreRestoreCopy>?>(null)
+
+    fun load() = action { copies.value = container.backup.preRestoreCopies() }
+}
+
+@Composable
+fun RestoreConfirm(vm: RestoreViewModel) {
+    val pending by vm.pending.collectAsStateWithLifecycle()
+    val (_, p) = pending ?: return
+    val text = if (p.formatVersion == 1) {
+        "此备份来自旧版本，不含待办和日记。恢复后将清空当前 ${p.currentTodos} 条待办、${p.currentDiaries} 篇日记。\n\n恢复前会自动另存一份当前数据，可以在「恢复前副本」里一键还原。"
+    } else {
+        "备份于 ${Dates.dateTime(p.exportedAt)}：${p.accounts} 个账户、${p.todos} 条待办、${p.diaries} 篇日记。\n\n当前的全部数据会被替换。恢复前会自动另存一份当前数据。"
+    }
+    ConfirmDialog(
+        title = "用这份备份覆盖全部数据？",
+        text = text,
+        confirmLabel = "覆盖恢复",
+        destructive = true,
+        onConfirm = vm::confirm,
+        onDismiss = { vm.pending.value = null },
+    )
+}
+
+/** "yyyyMMdd-HHmmss-SSS" from the file name, shown as a date. */
+private fun copyTime(name: String): String {
+    val stamp = name.removePrefix(BackupKind.PRE_RESTORE.prefix).removeSuffix(".json")
+    return runCatching {
+        val d = stamp.substring(0, 8)
+        val t = stamp.substring(9, 15)
+        "${d.substring(0, 4)}-${d.substring(4, 6)}-${d.substring(6, 8)} ${t.substring(0, 2)}:${t.substring(2, 4)}:${t.substring(4, 6)}"
+    }.getOrDefault(stamp)
+}
+
+@Composable
+fun PreRestoreScreen(onBack: () -> Unit) {
+    val container = LocalContainer.current
+    val vm: PreRestoreViewModel = viewModel { PreRestoreViewModel(container) }
+    val copies by vm.copies.collectAsStateWithLifecycle()
+    val error by vm.error.collectAsStateWithLifecycle()
+    ErrorDialog(error) { vm.error.value = null }
+    LaunchedEffect(Unit) { vm.load() }
+    RestoreConfirm(vm)
+    val cs = MaterialTheme.colorScheme
+    Scaffold(
+        containerColor = cs.background,
+        topBar = {
+            TopAppBar(
+                title = { Text("恢复前副本") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+            )
+        },
+    ) { padding ->
+        LazyColumn(
+            Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                Text(
+                    "每次恢复备份之前，当时的全部数据都会自动另存一份。点一下即可回到那时；这次恢复同样会先另存，所以可以来回切换。",
+                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp),
+                )
+            }
+            val list = copies
+            if (list != null && list.isEmpty()) {
+                item { Text("还没有恢复前副本", color = cs.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
+            }
+            items(list.orEmpty(), key = { it.uri.toString() }) { c ->
+                SectionCard {
+                    ListRow(
+                        title = copyTime(c.name),
+                        subtitle = if (c.inBackupFolder) "在备份目录" else "在 app 私有目录（保留最近 5 份）",
+                        leading = { Icon(Icons.Outlined.History, null, tint = cs.primary) },
+                        onClick = { vm.inspect(c.uri) },
+                    )
+                }
+            }
+        }
+    }
+}

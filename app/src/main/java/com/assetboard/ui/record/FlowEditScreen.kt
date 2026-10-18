@@ -74,7 +74,7 @@ class FlowEditViewModel(
     private val contextAccountId: String?,
     private val flowId: String?,
     initialKind: String?,
-) : ActionViewModel() {
+) : ActionViewModel(container) {
     private val repo = container.repository
 
     var loaded by mutableStateOf(false)
