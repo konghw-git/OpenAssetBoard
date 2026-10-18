@@ -77,7 +77,8 @@ data class QuickAddDefaults(val listId: String? = null, val plan: LocalDate? = n
 /**
  * The quick-add form: title focused on open, date shortcuts, then deadline, reminder, list and
  * the important flag. Enter saves and clears the title, keeping the choices, for entering several
- * in a row.
+ * in a row. [inline] is the in-page version: one row of choices, and Enter on an empty title
+ * calls [onEmptyDone] to close it.
  */
 @Composable
 fun QuickAddForm(
@@ -85,6 +86,8 @@ fun QuickAddForm(
     defaults: QuickAddDefaults,
     onSave: (TodoDraft) -> Unit,
     modifier: Modifier = Modifier,
+    inline: Boolean = false,
+    onEmptyDone: () -> Unit = {},
 ) {
     val today = rememberToday()
     var title by rememberSaveable { mutableStateOf("") }
@@ -125,8 +128,10 @@ fun QuickAddForm(
         title = ""
     }
 
-    Column(modifier.fillMaxWidth().navigationBarsPadding().padding(top = 18.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+    val side = if (inline) 14.dp else 20.dp
+    val outer = if (inline) modifier.fillMaxWidth().padding(top = 10.dp, bottom = 12.dp) else modifier.fillMaxWidth().navigationBarsPadding().padding(top = 18.dp, bottom = 14.dp)
+    Column(outer, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.padding(start = side, end = if (inline) 8.dp else side), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
                 if (title.isEmpty()) Text("准备做什么？", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Normal), color = cs.outline)
                 BasicTextField(
@@ -136,7 +141,7 @@ fun QuickAddForm(
                     textStyle = MaterialTheme.typography.titleMedium.copy(color = cs.onSurface, fontWeight = FontWeight.Medium),
                     cursorBrush = SolidColor(cs.primary),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { save() }),
+                    keyboardActions = KeyboardActions(onDone = { if (title.isBlank()) onEmptyDone() else save() }),
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 )
             }
@@ -156,16 +161,13 @@ fun QuickAddForm(
             }
         }
         AnimatedVisibility(added != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(horizontal = side), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Check, null, tint = cs.primary, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("已添加「${added.orEmpty()}」，可以接着写下一条", style = MaterialTheme.typography.labelMedium, color = cs.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
+        val dates: @Composable () -> Unit = {
             QuickDate.entries.forEach { q ->
                 val d = q.resolve(today)
                 Choice(q.label, selected = !someday && planDate == d) {
@@ -179,10 +181,7 @@ fun QuickAddForm(
                 if (someday) { plan = null; remind = null }
             }
         }
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
+        val more: @Composable () -> Unit = {
             Choice(deadline?.let { "截止 " + TodoDayLabel(LocalDate.parse(it), today) } ?: "截止", selected = deadline != null, icon = Icons.Outlined.Event) {
                 if (deadline != null) deadline = null else dialog = "deadline"
             }
@@ -191,6 +190,13 @@ fun QuickAddForm(
             }
             Choice(lists.firstOrNull { it.id == listId }?.name ?: "清单", selected = listId != null, icon = Icons.Outlined.FormatListBulleted) { dialog = "list" }
             Choice("重要", selected = important, icon = Icons.Default.Flag, tint = cs.error) { important = !important }
+        }
+        val rows = if (inline) listOf<@Composable () -> Unit>({ dates(); more() }) else listOf(dates, more)
+        rows.forEach { row ->
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = side - 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) { row() }
         }
     }
 

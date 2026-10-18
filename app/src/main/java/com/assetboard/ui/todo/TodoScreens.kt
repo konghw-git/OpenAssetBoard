@@ -41,7 +41,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -97,6 +96,9 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -107,6 +109,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -119,11 +122,12 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -146,13 +150,13 @@ import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.OpenRequest
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.TabHeader
-import com.assetboard.ui.components.PrimaryActionButton
 import com.assetboard.ui.components.HeaderAction
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.ListPickerDialog
 import com.assetboard.ui.components.ListRow
 import com.assetboard.ui.components.pressScale
 import com.assetboard.ui.theme.AppTheme
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.cos
 import kotlin.math.sin
@@ -166,9 +170,9 @@ object ViewKey {
 }
 
 /** Each smart view's icon and the gradient its card fills with when selected. */
-private class ViewStyle(val icon: ImageVector, val start: Color, val end: Color)
+internal class ViewStyle(val icon: ImageVector, val start: Color, val end: Color)
 
-private val viewStyles = mapOf(
+internal val viewStyles = mapOf(
     TodoView.TODAY to ViewStyle(Icons.Outlined.WbSunny, Color(0xFF2F8A73), Color(0xFF1B5246)),
     TodoView.UPCOMING to ViewStyle(Icons.Outlined.CalendarMonth, Color(0xFF6289CF), Color(0xFF3D5C99)),
     TodoView.INBOX to ViewStyle(Icons.Outlined.Inbox, Color(0xFFE2A94A), Color(0xFFC07F25)),
@@ -176,7 +180,7 @@ private val viewStyles = mapOf(
     TodoView.LOGBOOK to ViewStyle(Icons.Outlined.TaskAlt, Color(0xFF7F8B98), Color(0xFF55606C)),
 )
 
-private val viewOrder = listOf(TodoView.TODAY, TodoView.UPCOMING, TodoView.INBOX, TodoView.SOMEDAY, TodoView.LOGBOOK)
+internal val viewOrder = listOf(TodoView.TODAY, TodoView.UPCOMING, TodoView.INBOX, TodoView.SOMEDAY, TodoView.LOGBOOK)
 
 @Composable
 private fun todoViewModel(): TodoViewModel {
@@ -196,8 +200,8 @@ private fun listColor(d: TodoData?, listId: String?): Color? {
 
 /**
  * The todo tab on one page: smart view cards and list pills on top, the chosen view below, all
- * switched in place. New todos come from the centered + as a sheet docked to the keyboard; a
- * todo opens as a bottom sheet over the page.
+ * switched in place. The dial's hub opens the new-todo field right under it, in the page, high
+ * enough that the keyboard never covers it; a todo opens as a bottom sheet over the page.
  */
 @Composable
 fun TodoHomeScreen(
@@ -222,18 +226,33 @@ fun TodoHomeScreen(
     var moveFor by remember { mutableStateOf<List<String>?>(null) }
     var listDialog by remember { mutableStateOf<String?>(null) }
     var sectionDialog by remember { mutableStateOf<Pair<String, String>?>(null) } // (section id or "", name)
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     ErrorDialog(error) { vm.error.value = null }
     TodoSnackbars(vm, snackbar)
+    fun openComposer() {
+        composer = true
+        // Bring the dial back so the field sits just under it.
+        if (listState.firstVisibleItemIndex > DIAL_ITEM) scope.launch { listState.animateScrollToItem(DIAL_ITEM) }
+    }
+    fun closeComposer() {
+        focusManager.clearFocus()
+        keyboard?.hide()
+        composer = false
+    }
 
     LaunchedEffect(request) {
         when (request) {
-            OpenRequest.QuickAdd -> composer = true
+            OpenRequest.QuickAdd -> openComposer()
             OpenRequest.TodoToday -> selected = ViewKey.of(TodoView.TODAY)
             is OpenRequest.Todo -> detailId = request.id
             else -> return@LaunchedEffect
         }
         onRequestHandled()
     }
+    BackHandler(composer) { closeComposer() }
     BackHandler(selection.isNotEmpty()) { selection = emptySet() }
     BackHandler(sorting) { sorting = false }
 
@@ -244,6 +263,28 @@ fun TodoHomeScreen(
     // A deleted or archived list falls back to Today.
     LaunchedEffect(d, listId) { if (d != null && listId != null && list == null) selected = ViewKey.of(TodoView.TODAY) }
     val lines = remember(d, selected, today) { d?.let { buildLines(it, view, listId, today) }.orEmpty() }
+    val todayRows = remember(d, today) { d?.let { TodoViews.today(it.todos, it.lists, today) }.orEmpty() }
+    val doneToday = todayRows.count { it.done }
+    val dialGone by remember { derivedStateOf { listState.firstVisibleItemIndex > DIAL_ITEM } }
+    val habits by remember(today) { vm.habitsOn(today) }.collectAsStateWithLifecycle(emptySet())
+    val dial: @Composable (Modifier) -> Unit = { m ->
+        ViewsAndHabits(
+            d, today, selected, doneToday, todayRows.size, composer, habits,
+            onSelect = { selected = it },
+            onHub = { if (composer) closeComposer() else openComposer() },
+            onHabit = vm::toggleHabit,
+            modifier = m,
+        )
+    }
+    val composerField: @Composable () -> Unit = {
+        InlineComposer(
+            visible = composer,
+            lists = d?.lists?.filter { it.archivedAt == null }.orEmpty(),
+            defaults = QuickAddDefaults(listId = list?.id, plan = if (view == TodoView.TODAY) today else null, someday = view == TodoView.SOMEDAY),
+            onSave = { vm.quickAdd(it) },
+            onClose = ::closeComposer,
+        )
+    }
 
     val ctx = ViewContext(
         data = d, view = view, list = list, today = today, lines = lines,
@@ -255,6 +296,7 @@ fun TodoHomeScreen(
         onSort = { sorting = !sorting },
         onListMenu = { listDialog = it },
         onSection = { sectionDialog = it },
+        onAdd = if (dialGone && !composer) ({ openComposer() }) else null,
         vm = vm,
     )
     val cs = MaterialTheme.colorScheme
@@ -269,9 +311,10 @@ fun TodoHomeScreen(
                         Modifier.width(340.dp).fillMaxHeight().verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        HomeTitle(today, d, onSettings)
+                        HomeTitle(today, doneToday, todayRows.size, onSettings)
                         Box(Modifier.padding(horizontal = 16.dp)) { ReminderBanners(vm, onGuide) }
-                        ViewDial(d, today, selected, onSelect = { selected = it })
+                        dial(Modifier)
+                        composerField()
                         ListCards(d, selected, onSelect = { selected = it }, onCreate = { name -> vm.createList(name) { selected = ViewKey.list(it) } })
                     }
                     VerticalDivider(color = cs.outlineVariant)
@@ -279,36 +322,29 @@ fun TodoHomeScreen(
                         if (sorting) {
                             SortMode(ctx, Modifier.statusBarsPadding())
                         } else {
-                            LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 132.dp)) {
+                            LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 32.dp)) {
                                 viewContent(ctx)
                             }
                         }
-                        AddButton(visible = !composer && selection.isEmpty() && !sorting, Modifier.align(Alignment.BottomCenter)) { composer = true }
-                        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp))
+                        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp))
                     }
                 }
             } else {
                 if (sorting) {
                     SortMode(ctx, Modifier.statusBarsPadding())
                 } else {
-                    LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 132.dp)) {
-                        item("title") { HomeTitle(today, d, onSettings) }
-                        item("banners") { Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) { ReminderBanners(vm, onGuide) } }
-                        item("views") { ViewDial(d, today, selected, onSelect = { selected = it }, modifier = Modifier.padding(vertical = 4.dp)) }
+                    // Keep DIAL_ITEM in step with the item order here.
+                    LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
+                        item("title") { HomeTitle(today, doneToday, todayRows.size, onSettings) }
+                        item("banners") { Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) { ReminderBanners(vm, onGuide) } }
+                        item("views") { dial(Modifier.padding(top = 2.dp, bottom = 6.dp)) }
+                        item("composer") { composerField() }
                         item("lists") { ListStrip(d, selected, onSelect = { selected = it }, onCreate = { name -> vm.createList(name) { selected = ViewKey.list(it) } }) }
                         viewContent(ctx)
                     }
                 }
-                AddButton(visible = !composer && selection.isEmpty() && !sorting, Modifier.align(Alignment.BottomCenter)) { composer = true }
-                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp))
+                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp))
             }
-            QuickComposer(
-                visible = composer,
-                lists = d?.lists?.filter { it.archivedAt == null }.orEmpty(),
-                defaults = QuickAddDefaults(listId = list?.id, plan = if (view == TodoView.TODAY) today else null, someday = view == TodoView.SOMEDAY),
-                onSave = { vm.quickAdd(it) },
-                onDismiss = { composer = false },
-            )
         }
     }
 
@@ -369,162 +405,21 @@ fun TodoHomeScreen(
 }
 
 @Composable
-private fun HomeTitle(today: LocalDate, d: TodoData?, onSettings: () -> Unit) {
-    val open = d?.let { TodoViews.count(TodoView.TODAY, it.todos, today) } ?: 0
-    TabHeader(
-        "待办",
-        dayTitle(today, today).removePrefix("今天 · ") + if (open > 0) " · 今天还有 $open 件" else " · 今天的事都做完了",
-        statusBar = false,
-    ) {
+private fun HomeTitle(today: LocalDate, done: Int, total: Int, onSettings: () -> Unit) {
+    val progress = when {
+        total == 0 -> "今天没有安排"
+        done == total -> "今天的事都做完了"
+        else -> "今天完成 $done/$total"
+    }
+    TabHeader("待办", dayTitle(today, today).removePrefix("今天 · ") + " · " + progress, statusBar = false) {
         HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
     }
 }
 
 // ---------------------------------------------------------------- view cards
 
-/**
- * The five smart views as a ring of cards around a hub, sized to the width so all five fit
- * without scrolling. The hub shows the chosen view's count inside today's progress ring; the
- * cards fly out from the hub on first show.
- */
-@Composable
-private fun ViewDial(d: TodoData?, today: LocalDate, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
-    BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        val cardW = (maxWidth * 0.27f).coerceIn(84.dp, 108.dp)
-        val cardH = cardW * 0.86f
-        // The two upper side cards sit at ±cos 18° of the radius; keep them inside the width.
-        val radius = ((maxWidth - cardW) / (2 * 0.951f)).coerceAtMost(150.dp)
-        val hub = radius * 0.9f
-        val height = radius * 1.809f + cardH
-        val centerX = maxWidth / 2
-        val centerY = radius + cardH / 2
-        val fly = remember { Animatable(0f) }
-        LaunchedEffect(Unit) { fly.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 260f)) }
-        val ring = rememberInfiniteTransition(label = "dial")
-        val spin by ring.animateFloat(0f, 360f, infiniteRepeatable(tween(40_000, easing = LinearEasing)), label = "spin")
-        val dash = MaterialTheme.colorScheme.outlineVariant
-        Box(
-            Modifier.fillMaxWidth().height(height).drawBehind {
-                // A faint dashed orbit through the cards, turning slowly.
-                val c = Offset(centerX.toPx(), centerY.toPx())
-                rotate(spin, c) {
-                    drawCircle(dash, radius.toPx() * fly.value, c, style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 8.dp.toPx()))))
-                }
-            },
-        ) {
-            DialHub(d, today, selected, Modifier.offset(centerX - hub / 2, centerY - hub / 2).size(hub))
-            viewOrder.forEachIndexed { i, v ->
-                val angle = Math.toRadians(-90.0 + 72.0 * i)
-                val r = radius * fly.value
-                val x = centerX + r * cos(angle).toFloat() - cardW / 2
-                val y = centerY + r * sin(angle).toFloat() - cardH / 2
-                ViewCard(
-                    v, d, today, selected == ViewKey.of(v),
-                    Modifier.offset(x, y).size(cardW, cardH).graphicsLayer { val k = 0.4f + 0.6f * fly.value; scaleX = k; scaleY = k; alpha = fly.value.coerceIn(0f, 1f) },
-                ) { onSelect(ViewKey.of(v)) }
-            }
-        }
-    }
-}
-
-/** The middle of the dial: the chosen view's count, ringed by how much of today is done. */
-@Composable
-private fun DialHub(d: TodoData?, today: LocalDate, selected: String, modifier: Modifier) {
-    val cs = MaterialTheme.colorScheme
-    val view = ViewKey.view(selected)
-    val style = view?.let { viewStyles.getValue(it) }
-    val listColor = listColor(d, ViewKey.listId(selected))
-    val start by animateColorAsState(style?.start ?: listColor ?: cs.primary, tween(320), label = "hubStart")
-    val end by animateColorAsState(style?.end ?: listColor ?: cs.primary, tween(320), label = "hubEnd")
-    val todayRows = d?.let { TodoViews.today(it.todos, it.lists, today) }.orEmpty()
-    val doneToday = todayRows.count { it.done }
-    val progress = if (todayRows.isEmpty()) 0f else doneToday.toFloat() / todayRows.size
-    val shown by animateFloatAsState(progress, tween(700), label = "progress")
-    val count = when {
-        d == null -> 0
-        view == TodoView.LOGBOOK -> TodoViews.logbook(d.todos).count { TodoViews.localDate(it.completedAt!!) == today }
-        view != null -> TodoViews.count(view, d.todos, today)
-        else -> ViewKey.listId(selected)?.let { TodoViews.countInList(it, d.todos) } ?: 0
-    }
-    val label = when (view) {
-        TodoView.LOGBOOK -> "今天完成"
-        null -> d?.listById?.get(ViewKey.listId(selected))?.name ?: ""
-        else -> view.label
-    }
-    val track = cs.outlineVariant
-    Box(
-        modifier
-            .drawBehind {
-                val stroke = 5.dp.toPx()
-                val inset = stroke / 2
-                val arc = Size(size.width - stroke, size.height - stroke)
-                drawArc(track, 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(stroke))
-                if (shown > 0f) drawArc(Brush.sweepGradient(listOf(start, end, start)), -90f, 360f * shown, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
-            }
-            .padding(10.dp)
-            .shadow(10.dp, CircleShape, spotColor = end)
-            .clip(CircleShape)
-            .background(Brush.linearGradient(listOf(start, end))),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            AnimatedContent(count, transitionSpec = { (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { -it } + fadeOut()) }, label = "hubCount") {
-                Text(it.toString(), style = MaterialTheme.typography.headlineMedium, color = Color.White, fontWeight = FontWeight.Bold)
-            }
-            Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.9f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp))
-            if (todayRows.isNotEmpty()) {
-                Text("今日完成 $doneToday/${todayRows.size}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.72f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ViewCard(v: TodoView, d: TodoData?, today: LocalDate, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val style = viewStyles.getValue(v)
-    val cs = MaterialTheme.colorScheme
-    val n = d?.let { TodoViews.count(v, it.todos, today) } ?: 0
-    val overdue = v == TodoView.TODAY && d != null && d.todos.any { TodoViews.isOpen(it) && TodoViews.isOverdue(it, today) }
-    val fill by animateFloatAsState(if (selected) 1f else 0f, tween(260), label = "fill")
-    val fg by animateColorAsState(if (selected) Color.White else cs.onSurface, tween(260), label = "fg")
-    val sub by animateColorAsState(if (selected) Color.White.copy(alpha = 0.82f) else cs.onSurfaceVariant, tween(260), label = "sub")
-    val source = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(22.dp)
-    Box(
-        modifier
-            .pressScale(source)
-            .shadow(if (selected) 12.dp else 3.dp, shape, ambientColor = style.end.copy(alpha = 0.4f), spotColor = if (selected) style.end else Color.Black.copy(alpha = 0.12f))
-            .clip(shape)
-            .background(cs.surfaceContainer)
-            .background(Brush.linearGradient(listOf(style.start.copy(alpha = fill), style.end.copy(alpha = fill))))
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
-            .padding(12.dp),
-    ) {
-        Box {
-            Box(
-                Modifier.size(30.dp).clip(CircleShape).background(if (selected) Color.White.copy(alpha = 0.22f) else style.start.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(style.icon, null, tint = if (selected) Color.White else style.end, modifier = Modifier.size(18.dp))
-            }
-            // Something overdue: a badge on the icon.
-            if (overdue) {
-                Box(Modifier.align(Alignment.TopEnd).size(10.dp).clip(CircleShape).background(if (selected) Color.White else cs.surfaceContainer).padding(2.dp).clip(CircleShape).background(cs.error))
-            }
-        }
-        if (v != TodoView.LOGBOOK) {
-            AnimatedContent(
-                targetState = n,
-                transitionSpec = { (slideInVertically { if (targetState > initialState) it else -it } + fadeIn()) togetherWith (slideOutVertically { if (targetState > initialState) -it else it } + fadeOut()) },
-                modifier = Modifier.align(Alignment.TopEnd),
-                label = "count",
-            ) { count ->
-                Text(count.toString(), style = MaterialTheme.typography.titleLarge, color = fg, fontWeight = FontWeight.Bold)
-            }
-        }
-        Text(v.label, style = MaterialTheme.typography.titleSmall, color = sub, maxLines = 1, modifier = Modifier.align(Alignment.BottomStart))
-    }
-}
+/** The dial's index among the narrow layout's LazyColumn items. */
+private const val DIAL_ITEM = 2
 
 // ---------------------------------------------------------------- lists
 
@@ -680,50 +575,33 @@ private fun ListCards(d: TodoData?, selected: String, onSelect: (String) -> Unit
     }
 }
 
-// ---------------------------------------------------------------- the + button and the composer
-
-@Composable
-private fun AddButton(visible: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    AnimatedVisibility(
-        visible,
-        modifier = modifier.padding(bottom = 28.dp),
-        enter = scaleIn(spring(dampingRatio = 0.55f)) + fadeIn(),
-        exit = scaleOut() + fadeOut(),
-    ) {
-        PrimaryActionButton(Icons.Rounded.Add, "新待办", onClick)
-    }
-}
+// ---------------------------------------------------------------- the new-todo field
 
 /**
- * The quick-add sheet without leaving the page: slides up over a light scrim and rides on top of
- * the keyboard. Tapping outside or Back closes it.
+ * New todos without leaving the page: a card that unfolds under the dial, like the new-list
+ * field. It adds to the view on screen and stays open for the next one; Enter on an empty title,
+ * the hub or Back closes it. The view's defaults reset it when the view changes.
  */
 @Composable
-private fun QuickComposer(visible: Boolean, lists: List<TodoList>, defaults: QuickAddDefaults, onSave: (com.assetboard.data.TodoDraft) -> Unit, onDismiss: () -> Unit) {
-    BackHandler(visible) { onDismiss() }
-    Box(Modifier.fillMaxSize()) {
-        AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut()) {
-            Box(
-                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f))
-                    .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
-            )
-        }
-        AnimatedVisibility(
-            visible,
-            modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(spring(dampingRatio = 0.85f, stiffness = 500f)) { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut(),
+private fun InlineComposer(visible: Boolean, lists: List<TodoList>, defaults: QuickAddDefaults, onSave: (com.assetboard.data.TodoDraft) -> Unit, onClose: () -> Unit) {
+    AnimatedVisibility(
+        visible,
+        enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 500f)) + fadeIn(),
+        exit = shrinkVertically() + fadeOut(),
+    ) {
+        val cs = MaterialTheme.colorScheme
+        val shape = RoundedCornerShape(22.dp)
+        Box(
+            Modifier
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .fillMaxWidth()
+                .shadow(10.dp, shape, ambientColor = AppTheme.extra.heroStart.copy(alpha = 0.3f), spotColor = AppTheme.extra.heroStart.copy(alpha = 0.35f))
+                .clip(shape)
+                .background(cs.surfaceContainer)
+                .border(1.5.dp, cs.primary.copy(alpha = 0.45f), shape),
         ) {
-            Surface(
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shadowElevation = 16.dp,
-                modifier = Modifier.fillMaxWidth().imePadding().clickable(remember { MutableInteractionSource() }, indication = null) {},
-            ) {
-                Column {
-                    Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp).size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.outlineVariant))
-                    QuickAddForm(lists, defaults, onSave = onSave)
-                }
+            key(defaults) {
+                QuickAddForm(lists, defaults, onSave = onSave, inline = true, onEmptyDone = onClose)
             }
         }
     }
@@ -754,6 +632,8 @@ private class ViewContext(
     val onSort: () -> Unit,
     val onListMenu: (String) -> Unit,
     val onSection: (Pair<String, String>) -> Unit,
+    /** Set while the dial is scrolled away: a + in the sticky header brings the field back. */
+    val onAdd: (() -> Unit)?,
     val vm: TodoViewModel,
 ) {
     val manual get() = view == TodoView.INBOX || list != null
@@ -842,6 +722,14 @@ private fun ViewHeader(c: ViewContext) {
                                 Text("  $n 项", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
                             }
                         }
+                    }
+                    AnimatedVisibility(c.onAdd != null, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+                        Box(
+                            Modifier.padding(end = 4.dp).size(36.dp).clip(CircleShape)
+                                .background(Brush.linearGradient(listOf(AppTheme.extra.heroEnd, AppTheme.extra.heroStart)))
+                                .clickable { c.onAdd?.invoke() },
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Rounded.Add, "新待办", tint = AppTheme.extra.onHero, modifier = Modifier.size(22.dp)) }
                     }
                     if (c.manual) {
                         IconButton(onClick = c.onSort) { Icon(Icons.Outlined.SwapVert, "排序", tint = cs.onSurfaceVariant) }

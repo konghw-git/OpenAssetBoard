@@ -11,8 +11,10 @@ import com.assetboard.data.TodoData
 import com.assetboard.data.TodoDraft
 import com.assetboard.data.TodoKind
 import com.assetboard.data.UndoOutcome
+import com.assetboard.domain.Habit
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.ActionViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -37,6 +39,10 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
     private fun short(t: Todo) = "「" + t.title.take(14) + (if (t.title.length > 14) "…" else "") + "」"
 
     fun toggle(t: Todo) = if (TodoViews.isOpen(t)) complete(t) else uncomplete(t)
+
+    fun habitsOn(date: LocalDate): Flow<Set<Habit>> = container.habits.observe(date)
+
+    fun toggleHabit(h: Habit) = action { container.habits.toggle(h) }
 
     fun complete(t: Todo) = action {
         val logged = repo.complete(t.id, t.stateSeq)
