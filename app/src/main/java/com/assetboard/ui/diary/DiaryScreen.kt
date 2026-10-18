@@ -1,5 +1,14 @@
 package com.assetboard.ui.diary
 
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextStyle
+import com.assetboard.ui.components.tint
+import com.assetboard.domain.Habit
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -18,7 +27,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
@@ -70,12 +78,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -86,8 +93,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -141,10 +146,12 @@ import java.time.LocalDate
 fun DiaryScreen(
     pickedDate: String?,
     onPickedHandled: () -> Unit,
-    onCalendar: () -> Unit,
+    onCalendar: (LocalDate) -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
     onStocktake: () -> Unit = {},
+    /** The text is being typed in; the shell stops tab swiping meanwhile. */
+    onEditingChange: (Boolean) -> Unit = {},
 ) {
     val container = LocalContainer.current
     val vm: DiaryViewModel = viewModel { DiaryViewModel(container) }
@@ -155,7 +162,6 @@ fun DiaryScreen(
     val pastMidnight by vm.pastMidnight.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    var menu by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
     var jump by remember { mutableStateOf(false) }
     ErrorDialog(error) { vm.error.value = null }
@@ -187,6 +193,10 @@ fun DiaryScreen(
     val cs = MaterialTheme.colorScheme
     val today = LocalDate.now()
     val streak by vm.streak.collectAsStateWithLifecycle()
+    val habits by remember(date) { container.habits.observe(date) }.collectAsStateWithLifecycle(emptySet())
+    val habitsSince by remember { container.habits.observeFirstDate() }.collectAsStateWithLifecycle(null)
+    // From the first check on, every day shows its record, an empty one too; never the future.
+    val showHabits = !date.isAfter(today) && (date == today || habitsSince?.let { !date.isBefore(it) } == true)
     var editing by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -196,6 +206,7 @@ fun DiaryScreen(
         keyboard?.hide()
     }
     BackHandler(editing) { done() }
+    LaunchedEffect(editing) { onEditingChange(editing) }
 
     Scaffold(
         containerColor = cs.background,
@@ -214,15 +225,9 @@ fun DiaryScreen(
                         }
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            HeaderAction(Icons.Outlined.CalendarMonth, "日历", onCalendar)
                             HeaderAction(Icons.Outlined.Search, "搜索", onSearch)
-                            Box {
-                                HeaderAction(Icons.Default.MoreVert, "更多", { menu = true })
-                                DropdownMenu(menu, { menu = false }) {
-                                    if (entry != null) DropdownMenuItem(text = { Text("删除这篇", color = cs.error) }, onClick = { menu = false; askDelete = true })
-                                    DropdownMenuItem(text = { Text("设置") }, onClick = { menu = false; onSettings() })
-                                }
-                            }
+                            if (entry != null) HeaderAction(Icons.Outlined.Delete, "删除这篇", { askDelete = true })
+                            HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
                         }
                     }
                 }
@@ -246,6 +251,7 @@ fun DiaryScreen(
                     onNext = if (date.isBefore(today)) ({ vm.open(date.plusDays(1)) }) else null,
                     onToday = if (date != today) vm::goToday else null,
                     onJump = { jump = true },
+                    onCalendar = { onCalendar(date) },
                 )
                 StocktakeStrip(vm, date, today, onStocktake)
             }
@@ -265,7 +271,11 @@ fun DiaryScreen(
                         }
                     }
                 }
-                session?.let { Editor(it, autoFocus = date == today, onInput = vm::onInput, onFocus = { f -> editing = f }) }
+                session?.let {
+                    Editor(it, autoFocus = date == today, onInput = vm::onInput, onFocus = { f -> editing = f }) {
+                        if (showHabits) HabitRecord(habits, live = date == today)
+                    }
+                }
                 if (!editing) DayExtras(vm)
             }
         }
@@ -282,6 +292,48 @@ fun DiaryScreen(
     }
 }
 
+/**
+ * The day's five habits at the head of the page, read from the todo tab's battery: set in a
+ * different face, not part of the text, not editable here, and never counted as writing.
+ */
+@Composable
+private fun HabitRecord(checked: Set<Habit>, live: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    val face = TextStyle(fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, letterSpacing = 0.5.sp)
+    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Lock, null, tint = cs.outline, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(
+                "每日指标 ${checked.size}/${Habit.entries.size}" + if (live) " · 在待办页打勾，零点后定格" else "",
+                style = face.copy(fontSize = 12.sp, color = cs.onSurfaceVariant),
+            )
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
+            Habit.entries.forEach { h ->
+                val on = h in checked
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (on) h.tint.copy(alpha = 0.14f) else Color.Transparent)
+                        .border(1.dp, if (on) Color.Transparent else cs.outlineVariant, RoundedCornerShape(50))
+                        .padding(start = 5.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(if (on) Icons.Default.Check else Icons.Default.Remove, null, tint = if (on) h.tint else cs.outline, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(2.dp))
+                    Text(h.label, style = face.copy(fontSize = 12.sp, color = if (on) h.tint else cs.outline, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal))
+                }
+            }
+        }
+        Box(
+            Modifier.padding(top = 12.dp).fillMaxWidth().height(1.dp).drawBehind {
+                drawLine(cs.outlineVariant, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
+            },
+        )
+    }
+}
+
 private fun streakText(n: Int): String = when (n) {
     0 -> "今天写下第一篇吧"
     1 -> "已连续记录 1 天"
@@ -289,7 +341,7 @@ private fun streakText(n: Int): String = when (n) {
 }
 
 @Composable
-private fun Editor(session: DiarySession, autoFocus: Boolean, onInput: (String) -> Unit, onFocus: (Boolean) -> Unit) {
+private fun Editor(session: DiarySession, autoFocus: Boolean, onInput: (String) -> Unit, onFocus: (Boolean) -> Unit, header: @Composable () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     val text by session.text.collectAsStateWithLifecycle()
     val status by session.status.collectAsStateWithLifecycle()
@@ -324,6 +376,7 @@ private fun Editor(session: DiarySession, autoFocus: Boolean, onInput: (String) 
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 12.dp)) {
+            header()
             val style = MaterialTheme.typography.bodyLarge.copy(
                 color = cs.onSurface,
                 lineHeight = lineHeight,
@@ -386,6 +439,7 @@ private fun DayHeader(
     onNext: (() -> Unit)?,
     onToday: (() -> Unit)?,
     onJump: () -> Unit,
+    onCalendar: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val holidays by vm.holidays.collectAsStateWithLifecycle()
@@ -410,14 +464,18 @@ private fun DayHeader(
                     Text("${date.year} · 农历${info.lunar}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
             }
-            // Day stepping: previous, back to today when away, next up to today.
+            // Day stepping around the calendar: previous, the month view, back to today when away, next up to today.
             Row(
                 Modifier.clip(RoundedCornerShape(50)).background(cs.surfaceContainer),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onPrev, modifier = Modifier.size(40.dp)) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "前一天") }
+                Box(
+                    Modifier.size(34.dp).clip(CircleShape).background(cs.primary.copy(alpha = 0.12f)).clickable(onClick = onCalendar),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Outlined.CalendarMonth, "日历", tint = cs.primary, modifier = Modifier.size(19.dp)) }
                 if (onToday != null) {
-                    Text("今天", style = MaterialTheme.typography.labelLarge, color = cs.primary, modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onToday).padding(horizontal = 6.dp, vertical = 8.dp))
+                    Text("今天", style = MaterialTheme.typography.labelLarge, color = cs.primary, modifier = Modifier.padding(start = 4.dp).clip(RoundedCornerShape(50)).clickable(onClick = onToday).padding(horizontal = 6.dp, vertical = 8.dp))
                 }
                 IconButton(onClick = { onNext?.invoke() }, enabled = onNext != null, modifier = Modifier.size(40.dp)) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "后一天") }
             }

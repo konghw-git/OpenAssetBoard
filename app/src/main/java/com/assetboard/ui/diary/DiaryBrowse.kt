@@ -97,9 +97,11 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
     val cs = MaterialTheme.colorScheme
     val writtenSet = written.toSet()
     val streak = remember(recent, today) { DiaryStreak.of(recent.toSet(), today) }
+    // Months ahead show holidays and make-up workdays for planning; their days cannot be written yet.
+    val lastMonth = YearMonth.from(today).plusMonths(MONTHS_AHEAD)
     val go: (Int) -> Unit = { delta ->
         val next = ym.plusMonths(delta.toLong())
-        if (!next.atDay(1).isAfter(today)) month = next.atDay(1).toString()
+        if (next <= lastMonth) month = next.atDay(1).toString()
     }
 
     Scaffold(
@@ -114,7 +116,7 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Summary(written.size, ym, streak)
+            Summary(written.size, ym, today, streak)
             SectionCard(
                 Modifier.pointerInput(month) {
                     var total = 0f
@@ -132,7 +134,7 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
                     }, label = "month", modifier = Modifier.weight(1f)) { m ->
                         Text("${m.year}年${m.monthValue}月", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     }
-                    IconButton(onClick = { go(1) }, enabled = ym < YearMonth.from(today)) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "下个月") }
+                    IconButton(onClick = { go(1) }, enabled = ym < lastMonth) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "下个月") }
                 }
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     listOf("一", "二", "三", "四", "五", "六", "日").forEach {
@@ -172,20 +174,31 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
     }
 }
 
+private const val MONTHS_AHEAD = 12L
+
+/** This month counts the days so far, a past month all of its days, a future one none yet. */
 @Composable
-private fun Summary(count: Int, ym: YearMonth, streak: Int) {
+private fun Summary(count: Int, ym: YearMonth, today: LocalDate, streak: Int) {
+    val current = YearMonth.from(today)
+    val days = when {
+        ym == current -> today.dayOfMonth
+        ym > current -> 0
+        else -> ym.lengthOfMonth()
+    }
     val extra = AppTheme.extra
     Row(
         Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd))).padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("${ym.monthValue}月写了", style = MaterialTheme.typography.labelMedium, color = extra.onHeroMuted)
-            Row(verticalAlignment = Alignment.Bottom) {
+            Text(if (days == 0) "${ym.monthValue}月" else "${ym.monthValue}月写了", style = MaterialTheme.typography.labelMedium, color = extra.onHeroMuted)
+            if (days == 0) {
+                Text("还没到", style = MaterialTheme.typography.headlineMedium, color = extra.onHero, fontWeight = FontWeight.Bold)
+            } else Row(verticalAlignment = Alignment.Bottom) {
                 AnimatedContent(count, transitionSpec = { (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { -it } + fadeOut()) }, label = "count") {
                     Text(it.toString(), style = MaterialTheme.typography.headlineMedium, color = extra.onHero, fontWeight = FontWeight.Bold)
                 }
-                Text(" / ${ym.lengthOfMonth()} 天", style = MaterialTheme.typography.bodyMedium, color = extra.onHeroMuted, modifier = Modifier.padding(bottom = 4.dp))
+                Text(" / $days 天", style = MaterialTheme.typography.bodyMedium, color = extra.onHeroMuted, modifier = Modifier.padding(bottom = 4.dp))
             }
         }
         Box(Modifier.width(1.dp).height(40.dp).background(extra.onHero.copy(alpha = 0.2f)))

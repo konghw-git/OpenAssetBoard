@@ -4,7 +4,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -33,11 +36,13 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -54,9 +59,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -119,9 +121,8 @@ open class ActionViewModel(container: AppContainer) : ViewModel() {
 }
 
 object Routes {
-    const val OVERVIEW = "overview"
-    const val TODO_HOME = "todo_home"
-    const val DIARY = "diary"
+    /** The three tabs, side by side in one pager. */
+    const val HOME = "home"
     const val TREND = "trend"
     const val SETTINGS = "settings"
     const val GROUPS = "groups"
@@ -147,10 +148,11 @@ sealed interface OpenRequest {
     data object QuickAdd : OpenRequest
 }
 
-private enum class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
-    ASSETS(Routes.OVERVIEW, "资产", Icons.Outlined.AccountBalanceWallet, Icons.Filled.AccountBalanceWallet),
-    TODO(Routes.TODO_HOME, "待办", Icons.Outlined.TaskAlt, Icons.Filled.TaskAlt),
-    DIARY(Routes.DIARY, "日记", Icons.Outlined.EditNote, Icons.Filled.EditNote),
+/** The tabs in pager order. */
+private enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
+    ASSETS("资产", Icons.Outlined.AccountBalanceWallet, Icons.Filled.AccountBalanceWallet),
+    TODO("待办", Icons.Outlined.TaskAlt, Icons.Filled.TaskAlt),
+    DIARY("日记", Icons.Outlined.EditNote, Icons.Filled.EditNote),
 }
 
 private const val PICKED_DATE = "picked_date"
@@ -159,15 +161,8 @@ private fun optional(name: String) = navArgument(name) { type = NavType.StringTy
 
 private fun NavBackStackEntry.arg(name: String): String? = arguments?.getString(name)?.takeIf { it.isNotEmpty() }
 
-/** Switches tabs the Material way: each tab keeps its own stack. */
-private fun NavHostController.switchTab(route: String) = navigate(route) {
-    popUpTo(graph.findStartDestination().id) { saveState = true }
-    launchSingleTop = true
-    restoreState = true
-}
-
 /**
- * The app shell: three tabs, each with its own stack, rebuilt from scratch after every restore
+ * The app shell: three tabs in a pager (swipe or tap the bar), pages pushed over them, rebuilt from scratch after every restore
  * (fresh ViewModels, fresh epoch). Cold start always lands on the assets tab.
  */
 @Composable
@@ -206,23 +201,29 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
     val nav = rememberNavController()
     // Todo requests are handed to the todo tab, which shows them in place (sheet, view, composer).
     var todoRequest by remember { mutableStateOf<OpenRequest?>(null) }
+    val pager = rememberPagerState { Tab.entries.size }
+    val scope = rememberCoroutineScope()
+    // Swiping is off while the diary is being typed in, so a sideways stroke never leaves the page.
+    var diaryEditing by remember { mutableStateOf(false) }
+    fun showTab(tab: Tab) {
+        nav.popBackStack(Routes.HOME, inclusive = false)
+        scope.launch { pager.scrollToPage(tab.ordinal) }
+    }
     LaunchedEffect(open) {
         when (open) {
             null -> return@LaunchedEffect
-            OpenRequest.Stocktake -> { nav.switchTab(Routes.OVERVIEW); nav.navigate(Routes.stocktake()) { launchSingleTop = true } }
+            OpenRequest.Stocktake -> { showTab(Tab.ASSETS); nav.navigate(Routes.stocktake()) { launchSingleTop = true } }
             is OpenRequest.Todo, OpenRequest.TodoToday, OpenRequest.QuickAdd -> {
-                nav.popBackStack(Routes.TODO_HOME, inclusive = false)
-                nav.switchTab(Routes.TODO_HOME)
+                showTab(Tab.TODO)
                 todoRequest = open
             }
-            OpenRequest.Diary -> nav.switchTab(Routes.DIARY)
+            OpenRequest.Diary -> showTab(Tab.DIARY)
         }
         onOpenHandled()
     }
     val back: () -> Unit = { nav.popBackStack() }
     val entry by nav.currentBackStackEntryAsState()
-    val route = entry?.destination?.route
-    val showBar = Tab.entries.any { it.route == route }
+    val showBar = entry?.destination?.route == Routes.HOME
     val cs = MaterialTheme.colorScheme
 
     Scaffold(
@@ -237,10 +238,10 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                         .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
                 ) {
                     Tab.entries.forEach { tab ->
-                        val selected = entry?.destination?.hierarchy?.any { it.route == tab.route } == true
+                        val selected = pager.currentPage == tab.ordinal
                         NavigationBarItem(
                             selected = selected,
-                            onClick = { nav.switchTab(tab.route) },
+                            onClick = { scope.launch { pager.animateScrollToPage(tab.ordinal) } },
                             icon = { Icon(if (selected) tab.selectedIcon else tab.icon, null) },
                             label = { Text(tab.label, fontWeight = if (selected) FontWeight.SemiBold else null) },
                             colors = NavigationBarItemDefaults.colors(
@@ -260,7 +261,7 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
         val bottom = PaddingValues(bottom = padding.calculateBottomPadding())
         NavHost(
             navController = nav,
-            startDestination = Routes.OVERVIEW,
+            startDestination = Routes.HOME,
             modifier = Modifier.padding(bottom).consumeWindowInsets(bottom),
             enterTransition = { slideInHorizontally { it / 5 } + fadeIn() },
             exitTransition = { fadeOut() },
@@ -268,38 +269,44 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
             popExitTransition = { slideOutHorizontally { it / 5 } + fadeOut() },
         ) {
             val settings = { nav.navigate(Routes.SETTINGS) }
-            composable(Routes.OVERVIEW, enterTransition = { fadeIn() }, exitTransition = { fadeOut() }) {
-                OverviewScreen(
-                    onOpenAccount = { nav.navigate(Routes.account(it)) },
-                    onStocktake = { nav.navigate(Routes.stocktake()) },
-                    onEditStocktake = { nav.navigate(Routes.stocktake(it)) },
-                    onTrend = { nav.navigate(Routes.TREND) },
-                    onSettings = settings,
-                    onAddAccount = { groupId -> nav.navigate(Routes.accountEdit(groupId = groupId)) },
-                )
-            }
-            composable(Routes.TODO_HOME, enterTransition = { fadeIn() }, exitTransition = { fadeOut() }) {
-                TodoHomeScreen(
-                    onSettings = settings,
-                    onGuide = { nav.navigate(Routes.REMINDER_GUIDE) },
-                    request = todoRequest,
-                    onRequestHandled = { todoRequest = null },
-                )
-            }
-            composable(Routes.DIARY, enterTransition = { fadeIn() }, exitTransition = { fadeOut() }) { e ->
-                val picked by e.savedStateHandle.getStateFlow<String?>(PICKED_DATE, null).collectAsStateWithLifecycle()
-                DiaryScreen(
-                    pickedDate = picked,
-                    onPickedHandled = { e.savedStateHandle[PICKED_DATE] = null },
-                    onCalendar = { nav.navigate(Routes.diaryCalendar(java.time.LocalDate.now().toString())) },
-                    onSearch = { nav.navigate(Routes.DIARY_SEARCH) },
-                    onSettings = settings,
-                    onStocktake = { nav.navigate(Routes.stocktake()) },
-                )
+            composable(Routes.HOME, enterTransition = { fadeIn() }, exitTransition = { fadeOut() }) { e ->
+                // Back from another tab goes to the assets tab first, as the bar did before.
+                BackHandler(pager.currentPage != Tab.ASSETS.ordinal) { scope.launch { pager.animateScrollToPage(Tab.ASSETS.ordinal) } }
+                HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !diaryEditing, key = { it }) { page ->
+                    when (Tab.entries[page]) {
+                        Tab.ASSETS -> OverviewScreen(
+                            onOpenAccount = { nav.navigate(Routes.account(it)) },
+                            onStocktake = { nav.navigate(Routes.stocktake()) },
+                            onEditStocktake = { nav.navigate(Routes.stocktake(it)) },
+                            onTrend = { nav.navigate(Routes.TREND) },
+                            onSettings = settings,
+                            onAddAccount = { groupId -> nav.navigate(Routes.accountEdit(groupId = groupId)) },
+                        )
+                        Tab.TODO -> TodoHomeScreen(
+                            onSettings = settings,
+                            onGuide = { nav.navigate(Routes.REMINDER_GUIDE) },
+                            request = todoRequest,
+                            onRequestHandled = { todoRequest = null },
+                        )
+                        Tab.DIARY -> {
+                            val picked by e.savedStateHandle.getStateFlow<String?>(PICKED_DATE, null).collectAsStateWithLifecycle()
+                            DisposableEffect(Unit) { onDispose { diaryEditing = false } }
+                            DiaryScreen(
+                                pickedDate = picked,
+                                onPickedHandled = { e.savedStateHandle[PICKED_DATE] = null },
+                                onCalendar = { day -> nav.navigate(Routes.diaryCalendar(day.toString())) },
+                                onSearch = { nav.navigate(Routes.DIARY_SEARCH) },
+                                onSettings = settings,
+                                onStocktake = { nav.navigate(Routes.stocktake()) },
+                                onEditingChange = { diaryEditing = it },
+                            )
+                        }
+                    }
+                }
             }
             val pickDate: (java.time.LocalDate) -> Unit = { d ->
-                nav.getBackStackEntry(Routes.DIARY).savedStateHandle[PICKED_DATE] = d.toString()
-                nav.popBackStack(Routes.DIARY, inclusive = false)
+                nav.getBackStackEntry(Routes.HOME).savedStateHandle[PICKED_DATE] = d.toString()
+                nav.popBackStack(Routes.HOME, inclusive = false)
             }
             composable("diary_calendar?date={date}", arguments = listOf(optional("date"))) {
                 DiaryCalendarScreen(initial = it.arg("date"), onBack = back, onPick = pickDate)
@@ -340,7 +347,7 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                         nav.popBackStack()
                         nav.navigate(Routes.account(newId))
                     },
-                    onDeleted = { nav.popBackStack(Routes.OVERVIEW, inclusive = false) },
+                    onDeleted = { nav.popBackStack(Routes.HOME, inclusive = false) },
                     onRecordOutflow = { accountId -> nav.navigate(Routes.flow(accountId = accountId, kind = "EXTERNAL_OUT")) },
                 )
             }
