@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class ThemeMode(val label: String) { SYSTEM("跟随系统"), LIGHT("浅色"), DARK("深色") }
 
-/** A handful of per-device preferences; none of them is ledger data, so none is backed up. */
+/** Per-device preferences and bookkeeping; none of it is user data, so none is backed up. */
 class SettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
@@ -26,6 +26,52 @@ class SettingsStore(context: Context) {
 
     private val _lastBackupAt = MutableStateFlow(prefs.getLong(KEY_LAST_BACKUP, 0L).takeIf { it > 0 })
     val lastBackupAt: StateFlow<Long?> = _lastBackupAt.asStateFlow()
+
+    private fun bool(key: String, default: Boolean) = MutableStateFlow(prefs.getBoolean(key, default))
+
+    /** Master switch: when off the app makes no network request at all. */
+    val networkEnabled = bool(KEY_NETWORK, true)
+    val weatherEnabled = bool(KEY_WEATHER, true)
+    val holidayUpdateEnabled = bool(KEY_HOLIDAY_UPDATE, true)
+    /** Every reminder via setAlarmClock (status-bar alarm icon), for exact timing in deep doze. */
+    val allRemindersAsAlarms = bool(KEY_ALL_ALARMS, false)
+    val diaryReminderEnabled = bool(KEY_DIARY_REMINDER, true)
+    /** Minutes after midnight. */
+    val diaryReminderMinutes = MutableStateFlow(prefs.getInt(KEY_DIARY_REMINDER_AT, 22 * 60))
+    val reminderGuideSeen = bool(KEY_GUIDE_SEEN, false)
+
+    fun setBool(flow: MutableStateFlow<Boolean>, value: Boolean) {
+        val key = when (flow) {
+            networkEnabled -> KEY_NETWORK
+            weatherEnabled -> KEY_WEATHER
+            holidayUpdateEnabled -> KEY_HOLIDAY_UPDATE
+            allRemindersAsAlarms -> KEY_ALL_ALARMS
+            diaryReminderEnabled -> KEY_DIARY_REMINDER
+            reminderGuideSeen -> KEY_GUIDE_SEEN
+            else -> error("unknown setting")
+        }
+        prefs.edit { putBoolean(key, value) }
+        flow.value = value
+    }
+
+    fun setDiaryReminderMinutes(minutes: Int) {
+        prefs.edit { putInt(KEY_DIARY_REMINDER_AT, minutes) }
+        diaryReminderMinutes.value = minutes
+    }
+
+    val weatherAllowed: Boolean get() = networkEnabled.value && weatherEnabled.value
+    val holidayUpdateAllowed: Boolean get() = networkEnabled.value && holidayUpdateEnabled.value
+
+    // ------------------------------------------------------------ device-local bookkeeping
+
+    /** A restore committed but rebuilding the reminders failed; retried on the next start. */
+    fun rescheduleNeeded(): Boolean = prefs.getBoolean(KEY_RESCHEDULE, false)
+    fun setRescheduleNeeded(value: Boolean) = prefs.edit { putBoolean(KEY_RESCHEDULE, value) }
+
+    fun string(key: String): String? = prefs.getString(key, null)
+    fun putString(key: String, value: String?) = prefs.edit { putString(key, value) }
+    fun long(key: String): Long = prefs.getLong(key, 0L)
+    fun putLong(key: String, value: Long) = prefs.edit { putLong(key, value) }
 
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit { putString(KEY_THEME, mode.name) }
@@ -52,5 +98,13 @@ class SettingsStore(context: Context) {
         const val KEY_UP_RED = "up_is_red"
         const val KEY_BACKUP_URI = "backup_tree_uri"
         const val KEY_LAST_BACKUP = "last_backup_at"
+        const val KEY_NETWORK = "network_enabled"
+        const val KEY_WEATHER = "weather_enabled"
+        const val KEY_HOLIDAY_UPDATE = "holiday_update_enabled"
+        const val KEY_ALL_ALARMS = "all_reminders_as_alarms"
+        const val KEY_DIARY_REMINDER = "diary_reminder_enabled"
+        const val KEY_DIARY_REMINDER_AT = "diary_reminder_minutes"
+        const val KEY_GUIDE_SEEN = "reminder_guide_seen"
+        const val KEY_RESCHEDULE = "reschedule_needed"
     }
 }
