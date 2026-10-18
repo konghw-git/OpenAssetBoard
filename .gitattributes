@@ -1,0 +1,8 @@
+* text=auto
+
+# Gradle wrapper scripts need platform-specific line endings
+/gradlew text eol=lf
+*.bat text eol=crlf
+*.sh text eol=lf
+
+*.jar binary

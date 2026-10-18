@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">资产看板</string>
+    <string name="widget_name">净资产</string>
+    <string name="widget_description">显示净资产，一键开始盘点</string>
+    <string name="shortcut_stocktake">盘点</string>
+    <string name="shortcut_stocktake_long">开始一次盘点</string>
+</resources>
