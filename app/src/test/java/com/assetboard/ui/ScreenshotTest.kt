@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
@@ -133,6 +135,18 @@ class ScreenshotTest {
     @Test fun trend() {
         val c = demoContainer()
         shot("05-trend", c) { TrendScreen(noop, {}, noop) }
+    }
+
+    @Test fun trendLower() {
+        val c = demoContainer()
+        shot("05-trend", c) { TrendScreen(noop, {}, noop) }
+        // Items: headline, range, net worth chart, assets and debts, change.
+        compose.onNode(hasScrollAction()).performScrollToIndex(3)
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.onRoot().captureRoboImage("build/screenshots/05b-trend-balance.png")
+        compose.onNode(hasScrollAction()).performScrollToIndex(4)
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.onRoot().captureRoboImage("build/screenshots/05c-trend-change.png")
     }
 
     @Test fun investmentDetail() {

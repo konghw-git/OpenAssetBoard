@@ -52,15 +52,11 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FabPosition
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -104,7 +100,6 @@ import com.assetboard.ui.components.RowDivider
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
 import com.assetboard.ui.components.HeaderAction
-import com.assetboard.ui.components.PrimaryActionButton
 import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.Sparkline
 import com.assetboard.ui.theme.AppTheme
@@ -216,12 +211,6 @@ fun OverviewScreen(
                 HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
             }
         },
-        floatingActionButtonPosition = FabPosition.Center,
-        floatingActionButton = {
-            if (state?.hasAccounts == true) {
-                PrimaryActionButton(Icons.Rounded.Checklist, "盘点", onStocktake, Modifier.padding(bottom = 12.dp))
-            }
-        },
     ) { padding ->
         val s = state
         when {
@@ -230,12 +219,12 @@ fun OverviewScreen(
             else -> BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                 if (maxWidth >= 600.dp) {
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        LazyColumn(Modifier.weight(1.1f), contentPadding = PaddingValues(start = 16.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            item { Box(Modifier.appear(0)) { Hero(s) } }
+                        LazyColumn(Modifier.weight(1.1f), contentPadding = PaddingValues(start = 16.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            item { Box(Modifier.appear(0)) { Hero(s, onStocktake) } }
                             accountSections(s, onOpenAccount, onAddAccount, first = 1)
                         }
                         Column(
-                            Modifier.weight(0.9f).verticalScroll(rememberScrollState()).padding(end = 16.dp, bottom = 96.dp),
+                            Modifier.weight(0.9f).verticalScroll(rememberScrollState()).padding(end = 16.dp, bottom = 32.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             AllocationCard(s)
@@ -246,10 +235,10 @@ fun OverviewScreen(
                 } else {
                     LazyColumn(
                         Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        item { Box(Modifier.appear(0)) { Hero(s) } }
+                        item { Box(Modifier.appear(0)) { Hero(s, onStocktake) } }
                         if (s.allocation.isNotEmpty()) item { Box(Modifier.appear(1)) { AllocationCard(s) } }
                         accountSections(s, onOpenAccount, onAddAccount, first = 2)
                     }
@@ -269,10 +258,11 @@ private fun LazyListScope.accountSections(s: OverviewState, onOpenAccount: (Stri
 
 /**
  * The net worth card: a slow aurora drifting over the gradient, a light sheen every few seconds,
- * amounts that count up, and the sparkline drawing itself in.
+ * amounts that count up, and the sparkline drawing itself in. The stocktake button sits in its
+ * corner: a stocktake is what moves this number.
  */
 @Composable
-private fun Hero(s: OverviewState) {
+private fun Hero(s: OverviewState, onStocktake: () -> Unit) {
     val extra = AppTheme.extra
     val motion = rememberInfiniteTransition(label = "hero")
     val drift by motion.animateFloat(0f, 1f, infiniteRepeatable(tween(14_000, easing = LinearEasing), RepeatMode.Reverse), label = "drift")
@@ -308,15 +298,15 @@ private fun Hero(s: OverviewState) {
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("净资产", color = extra.onHeroMuted, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                s.history.lastOrNull()?.let {
+                Column(Modifier.weight(1f)) {
+                    Text("净资产", color = extra.onHeroMuted, style = MaterialTheme.typography.labelLarge)
                     Text(
-                        "上次盘点 · ${Dates.relative(it.snapshot.at)}",
-                        color = extra.onHero,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(extra.onHero.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 4.dp),
+                        s.history.lastOrNull()?.let { "上次盘点 · ${Dates.relative(it.snapshot.at)}" } ?: "还没有盘点过",
+                        color = extra.onHeroMuted,
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
+                if (s.hasAccounts) StocktakeButton(onStocktake)
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.Bottom) {
@@ -363,6 +353,28 @@ private fun Hero(s: OverviewState) {
                 DebtRatio(s.totals.assets, debts)
             }
         }
+    }
+}
+
+/** A light pill on the hero card, the one way into a stocktake. */
+@Composable
+private fun StocktakeButton(onClick: () -> Unit) {
+    val extra = AppTheme.extra
+    val source = remember { MutableInteractionSource() }
+    Row(
+        Modifier
+            .pressScale(source, 0.92f)
+            .shadow(6.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.25f))
+            .clip(RoundedCornerShape(50))
+            .background(extra.onHero)
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .height(38.dp)
+            .padding(start = 10.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Checklist, null, tint = extra.heroStart, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("盘点", color = extra.heroStart, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
     }
 }
 
