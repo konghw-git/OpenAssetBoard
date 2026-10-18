@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">资产看板</string>
+    <string name="app_name">强者之路</string>
     <string name="widget_name">净资产</string>
     <string name="widget_description">显示净资产，一键开始盘点</string>
+    <string name="todo_widget_name">今天待办</string>
+    <string name="todo_widget_description">今天要做的事，点圆圈完成，点 + 快速记一条</string>
     <string name="shortcut_stocktake">盘点</string>
     <string name="shortcut_stocktake_long">开始一次盘点</string>
+    <string name="shortcut_todo">记待办</string>
+    <string name="shortcut_todo_long">快速记一条待办</string>
+    <string name="shortcut_diary">写日记</string>
+    <string name="shortcut_diary_long">打开今天的日记</string>
 </resources>

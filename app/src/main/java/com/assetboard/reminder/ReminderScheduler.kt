@@ -1,0 +1,294 @@
+package com.assetboard.reminder
+
+import android.app.AlarmManager
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import androidx.core.content.ContextCompat
+import com.assetboard.AppContainer
+import com.assetboard.MainActivity
+import com.assetboard.data.RestoreEffects
+import com.assetboard.data.StaleAction
+import com.assetboard.data.Todo
+import com.assetboard.data.WriteRejected
+import com.assetboard.domain.todo.ReminderPlan
+import com.assetboard.domain.todo.ReminderState
+import com.assetboard.domain.todo.TodoViews
+import com.assetboard.widget.TodoWidget
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+
+/** A reminder that could not be shown: more than a day late, or notifications were off. */
+@Serializable
+data class MissedReminder(val todoId: String, val title: String, val at: Long, val notificationsOff: Boolean)
+
+/**
+ * Turns reminder state into alarms. Every alarm and button carries a [ReminderToken]; a token
+ * that no longer matches the todo (state_seq) or the data (epoch) is dropped when it fires.
+ */
+class ReminderScheduler(private val context: Context, private val container: AppContainer) : RestoreEffects {
+    private val am = context.getSystemService(AlarmManager::class.java)
+    private val nm = context.getSystemService(NotificationManager::class.java)
+    private val settings = container.settings
+    private val json = Json { ignoreUnknownKeys = true }
+    private val lock = Mutex()
+
+    private val _missed = MutableStateFlow(loadMissed())
+    val missed: StateFlow<List<MissedReminder>> = _missed.asStateFlow()
+
+    // ------------------------------------------------------------ permissions
+
+    fun notificationsEnabled(): Boolean = nm.areNotificationsEnabled()
+
+    fun exactAllowed(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
+
+    fun fullScreenAllowed(): Boolean = Build.VERSION.SDK_INT < 34 || nm.canUseFullScreenIntent()
+
+    // ------------------------------------------------------------ entry points
+
+    /** After every todo write: reschedule those todos and withdraw their stale notifications. */
+    fun onTodosChanged(ids: Set<String>) {
+        container.appScope.launch { runCatching { sync(ids, fromBoot = false) } }
+    }
+
+    suspend fun onAppStart() {
+        Notifier.ensureChannels(context)
+        if (settings.rescheduleNeeded()) settings.setRescheduleNeeded(false)
+        syncAll(fromBoot = false)
+        scheduleDiaryReminder()
+    }
+
+    /** Boot, time change, exact-alarm grant, app start, after a restore. */
+    suspend fun syncAll(fromBoot: Boolean) {
+        val ids = container.todos.loadOnce().todos.map { it.id }.toSet()
+        sync(ids, fromBoot)
+    }
+
+    override suspend fun afterRestore(oldTodoIds: List<String>) {
+        RingService.stop(context)
+        nm.cancelAll()
+        for (id in oldTodoIds) cancelAlarm(id)
+        syncAll(fromBoot = false)
+        scheduleDiaryReminder()
+        TodoWidget.refresh(context)
+    }
+
+    private suspend fun sync(ids: Set<String>, fromBoot: Boolean) = lock.withLock {
+        // A background task binds the epoch when it starts.
+        val epoch = container.gate.bound()
+        withContext(epoch) {
+            val now = System.currentTimeMillis()
+            for (id in ids) {
+                val t = container.todos.todo(id)
+                syncOne(id, t, now, epoch.value, fromBoot)
+            }
+        }
+    }
+
+    private suspend fun syncOne(id: String, t: Todo?, now: Long, epoch: Long, fromBoot: Boolean) {
+        cancelAlarm(id)
+        withdrawIfStale(id, t)
+        if (t == null || !TodoViews.isOpen(t)) return
+        when (val plan = ReminderState.plan(t, now)) {
+            ReminderPlan.None -> Unit
+            is ReminderPlan.At -> setAlarm(t, plan.at, ReminderToken(t.id, t.stateSeq, epoch))
+            is ReminderPlan.Late -> deliver(t, ReminderToken(t.id, t.stateSeq, epoch), plan.lateMinutes, fromBoot)
+            is ReminderPlan.Missed -> {
+                addMissed(MissedReminder(t.id, t.title, plan.at, notificationsOff = false))
+                markReminded(t)
+            }
+        }
+    }
+
+    /** A posted notification whose buttons carry an outdated state_seq is withdrawn. */
+    private fun withdrawIfStale(id: String, t: Todo?) {
+        val nid = Notifier.notificationId(id)
+        val posted = nm.activeNotifications.firstOrNull { it.id == nid } ?: return
+        val seq = posted.notification.extras.getLong(Notifier.EXTRA_SEQ, -1)
+        if (t == null || t.deletedAt != null || seq != t.stateSeq) {
+            nm.cancel(nid)
+            if (RingService.ringingFor == id) RingService.stop(context)
+        }
+    }
+
+    /** Called by the alarm receiver once the token checked out. */
+    suspend fun fire(token: ReminderToken) = lock.withLock {
+        val t = container.todos.todo(token.id) ?: return@withLock
+        if (token.epoch != container.gate.epochNow() || t.stateSeq != token.seq || !TodoViews.isOpen(t)) return@withLock
+        val (at, _) = ReminderState.pending(t) ?: return@withLock
+        val now = System.currentTimeMillis()
+        if (at > now + 60_000) {
+            setAlarm(t, at, token)
+            return@withLock
+        }
+        withContext(com.assetboard.data.Epoch(token.epoch)) {
+            deliver(t, token, ((now - at) / 60_000).coerceAtLeast(0), fromBoot = false)
+        }
+    }
+
+    private suspend fun deliver(t: Todo, token: ReminderToken, lateMinutes: Long, fromBoot: Boolean) {
+        if (!notificationsEnabled()) {
+            addMissed(MissedReminder(t.id, t.title, ReminderState.pending(t)?.first ?: System.currentTimeMillis(), notificationsOff = true))
+        } else if (t.strongRemind) {
+            if (fromBoot) {
+                nm.notify(Notifier.notificationId(t.id), Notifier.bootStrong(context, t, token, lateMinutes))
+                scheduleUnhandled(token, t.title)
+            } else {
+                RingService.start(context, token, t.title)
+            }
+        } else {
+            val listName = t.listId?.let { container.todos.loadOnce().listById[it]?.name }
+            nm.notify(Notifier.notificationId(t.id), Notifier.reminder(context, t, listName, token, lateMinutes))
+        }
+        markReminded(t)
+    }
+
+    private suspend fun markReminded(t: Todo) {
+        try {
+            container.todos.markReminded(t.id, t.stateSeq)
+        } catch (e: StaleAction) {
+            // The todo moved on meanwhile; its own change rescheduled it.
+        } catch (e: WriteRejected) {
+            // A restore is running; it reschedules everything after committing.
+        }
+    }
+
+    // ------------------------------------------------------------ alarms
+
+    private fun alarmIntent(id: String, token: ReminderToken?, flags: Int): PendingIntent? {
+        val intent = Intent(context, ReminderReceiver::class.java)
+            .setAction(ReminderReceiver.ACTION_FIRE)
+            .setData(Uri.parse("assetboard://todo/$id"))
+        token?.into(intent)
+        return PendingIntent.getBroadcast(context, Notifier.notificationId(id), intent, flags or PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    private fun cancelAlarm(id: String) {
+        alarmIntent(id, null, PendingIntent.FLAG_NO_CREATE)?.let {
+            am.cancel(it)
+            it.cancel()
+        }
+    }
+
+    private fun setAlarm(t: Todo, at: Long, token: ReminderToken) {
+        val pi = alarmIntent(t.id, token, PendingIntent.FLAG_UPDATE_CURRENT)!!
+        val exact = exactAllowed()
+        when {
+            exact && (t.strongRemind || settings.allRemindersAsAlarms.value) -> {
+                val show = PendingIntent.getActivity(
+                    context, Notifier.notificationId(t.id),
+                    Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN, MainActivity.OPEN_TODO).putExtra(MainActivity.EXTRA_ID, t.id),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                am.setAlarmClock(AlarmManager.AlarmClockInfo(at, show), pi)
+            }
+            exact -> am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            else -> am.setWindow(AlarmManager.RTC_WAKEUP, at, 10 * 60_000L, pi)
+        }
+    }
+
+    /** Five minutes after a boot-time strong reminder: swap it for a silent "unhandled" note. */
+    private fun scheduleUnhandled(token: ReminderToken, title: String) {
+        val pi = PendingIntent.getBroadcast(
+            context, Notifier.notificationId(token.id) xor 0x1000,
+            token.into(Intent(context, ReminderActionReceiver::class.java).setAction(ReminderActionReceiver.UNHANDLED).setData(Uri.parse("assetboard://unhandled/${token.id}")))
+                .putExtra(AlarmActivity.EXTRA_TITLE, title),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + RingService.MAX_RING_MS, pi)
+    }
+
+    // ------------------------------------------------------------ test from the guide
+
+    /** A reminder 15 seconds from now that touches no data; it shows exactly like a real one. */
+    fun scheduleTest(strong: Boolean) {
+        val token = ReminderToken(TEST_ID, 0, container.gate.epochNow())
+        val intent = token.into(Intent(context, ReminderReceiver::class.java).setAction(ReminderReceiver.ACTION_TEST).setData(Uri.parse("assetboard://test/$strong")))
+            .putExtra(ReminderReceiver.EXTRA_STRONG, strong)
+        val pi = PendingIntent.getBroadcast(context, if (strong) 7_201 else 7_200, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val at = System.currentTimeMillis() + 15_000
+        if (exactAllowed() && strong) {
+            am.setAlarmClock(AlarmManager.AlarmClockInfo(at, pi), pi)
+        } else if (exactAllowed()) {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        } else {
+            am.setWindow(AlarmManager.RTC_WAKEUP, at, 60_000, pi)
+        }
+    }
+
+    fun fireTest(strong: Boolean) {
+        val token = ReminderToken(TEST_ID, 0, container.gate.epochNow())
+        if (strong) {
+            RingService.start(context, token, "测试强提醒")
+        } else {
+            val t = Todo(TEST_ID, title = "测试提醒", createdAt = 0)
+            nm.notify(Notifier.notificationId(TEST_ID), Notifier.reminder(context, t, "提醒设置检查", token, 0))
+        }
+    }
+
+    // ------------------------------------------------------------ diary reminder
+
+    fun scheduleDiaryReminder() {
+        val pi = PendingIntent.getBroadcast(
+            context, Notifier.DIARY_NOTIFICATION_ID,
+            Intent(context, DiaryReminderReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        am.cancel(pi)
+        if (!settings.diaryReminderEnabled.value) return
+        val minutes = settings.diaryReminderMinutes.value
+        val zone = ZoneId.systemDefault()
+        val now = System.currentTimeMillis()
+        var at = LocalDate.now().atTime(LocalTime.of(minutes / 60, minutes % 60)).atZone(zone).toInstant().toEpochMilli()
+        if (at <= now) at += 24 * 3600_000L
+        am.setWindow(AlarmManager.RTC_WAKEUP, at, 5 * 60_000L, pi)
+    }
+
+    // ------------------------------------------------------------ missed reminders
+
+    private val missedSerializer = ListSerializer(MissedReminder.serializer())
+
+    private fun loadMissed(): List<MissedReminder> =
+        settings.string(KEY_MISSED)?.let { runCatching { json.decodeFromString(missedSerializer, it) }.getOrNull() }.orEmpty()
+
+    @Synchronized
+    fun addMissed(m: MissedReminder) {
+        val next = (_missed.value.filterNot { it.todoId == m.todoId && it.at == m.at } + m).takeLast(50)
+        settings.putString(KEY_MISSED, json.encodeToString(missedSerializer, next))
+        _missed.value = next
+    }
+
+    @Synchronized
+    fun clearMissed() {
+        settings.putString(KEY_MISSED, null)
+        _missed.value = emptyList()
+    }
+
+    fun refreshMissed() {
+        _missed.value = loadMissed()
+    }
+
+    companion object {
+        private const val KEY_MISSED = "missed_reminders"
+        const val TEST_ID = "__reminder_test__"
+
+        fun container(context: Context): AppContainer = (context.applicationContext as com.assetboard.AssetBoardApp).container
+
+        fun hasNotificationPermission(context: Context) = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+}

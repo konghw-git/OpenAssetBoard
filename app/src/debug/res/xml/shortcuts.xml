@@ -15,4 +15,34 @@
                 android:value="stocktake" />
         </intent>
     </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_todo"
+        android:shortcutId="quick_todo"
+        android:shortcutLongLabel="@string/shortcut_todo_long"
+        android:shortcutShortLabel="@string/shortcut_todo">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.assetboard.MainActivity"
+            android:targetPackage="com.assetboard.debug">
+            <extra
+                android:name="open"
+                android:value="quick_add" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_diary"
+        android:shortcutId="diary"
+        android:shortcutLongLabel="@string/shortcut_diary_long"
+        android:shortcutShortLabel="@string/shortcut_diary">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.assetboard.MainActivity"
+            android:targetPackage="com.assetboard.debug">
+            <extra
+                android:name="open"
+                android:value="diary" />
+        </intent>
+    </shortcut>
 </shortcuts>
