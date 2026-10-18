@@ -3,8 +3,9 @@
 「强者之路」: a personal Android app with three tabs. **Assets** is a balance-sheet dashboard (net
 worth, allocation, periodic stocktakes, investment flows with cumulative P&L). **Todo** is a
 Things-style task manager (inbox / today / upcoming / someday / logbook, lists with sections,
-repeats, reliable reminders, a home-screen widget). **Diary** is one plain-text entry per day with
-the lunar calendar, holidays and weather attached. Everything stays on the phone; the backup is one
+repeats, reliable reminders, a home-screen widget), plus five daily habits checked off on a
+battery next to the views. **Diary** is one plain-text entry per day with
+the lunar calendar, holidays and weather attached, and the day's habits shown read-only at its head. Everything stays on the phone; the backup is one
 JSON file in a folder you pick (`asset-board-backup.json`), overwritten by every backup.
 
 Design notes and the calculation rules live in the Obsidian notes
