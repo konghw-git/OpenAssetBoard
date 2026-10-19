@@ -1,0 +1,75 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got.
+      placeholder: |
+        I opened ...
+        I expected ...
+        Instead ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Tap ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown in Settings, under the app name.
+      placeholder: 0.4.0
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: vivo X100, Android 15
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: How did you install it?
+      options:
+        - Release APK from GitHub
+        - Built from source
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: theme
+    attributes:
+      label: Theme
+      placeholder: light / dark / follow system
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or logs
+      description: A screenshot is usually faster than a description. Remove anything personal first.
+      render: text
+
+  - type: textarea
+    id: data
+    attributes:
+      label: Backup and data
+      description: Only if the issue involves data. Never paste a real backup file; a trimmed or made-up one is enough.
+      render: text
