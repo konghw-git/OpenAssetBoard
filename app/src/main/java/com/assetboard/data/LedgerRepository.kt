@@ -347,7 +347,7 @@ class LedgerRepository(
             Triple(
                 "投资账户", false,
                 listOf(
-                    Seed("招商产业债券A", "孔心悦6000 3年后", 1664911, AccountKind.INVESTMENT),
+                    Seed("招商产业债券A", "3年后", 1664911, AccountKind.INVESTMENT),
                     Seed("兴证全球恒悦180天持有期债券A", "半年强制存储", 1120940, AccountKind.INVESTMENT),
                     Seed("进阶理财", null, 326525, AccountKind.INVESTMENT),
                 ),
