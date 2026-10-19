@@ -92,7 +92,7 @@ This app is built for it. One stocktake walks every account, you change the thre
 
 ## Install
 
-Download `app-release.apk` from [Releases](https://github.com/konghw-git/OpenAssetBoard/releases/latest) and open it on the phone (you'll need to allow installing from unknown sources).
+Download the latest `OpenAssetBoard-x.y.z.apk` from [Releases](https://github.com/konghw-git/OpenAssetBoard/releases/latest) and open it on the phone (you'll need to allow installing from unknown sources).
 
 - **Android 10 (API 29) and up.**
 - The app is written for Chinese Android phones (vivo, Xiaomi, OPPO and friends). **Reminder punctuality depends on background permissions**: after installing, open Settings → reminder setup and follow the checklist for autostart, background running, notifications and exact alarms. It works without Google services.

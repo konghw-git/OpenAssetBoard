@@ -92,7 +92,7 @@
 
 ## 安装
 
-从 [Releases](https://github.com/konghw-git/OpenAssetBoard/releases/latest) 下载 `app-release.apk`，在手机上打开安装（需要允许「安装未知来源应用」）。
+从 [Releases](https://github.com/konghw-git/OpenAssetBoard/releases/latest) 下载最新的 `OpenAssetBoard-x.y.z.apk`，在手机上打开安装（需要允许「安装未知来源应用」）。
 
 - 支持 **Android 10（API 29）及以上**。
 - 目标用户是国内手机（vivo / 小米 / OPPO 等）。**提醒的准时性依赖系统后台权限**：安装后请在「设置 → 提醒设置检查」里按引导打开自启动、后台运行、通知和精确闹钟。没有 Google 服务也能用。
