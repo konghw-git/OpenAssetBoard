@@ -73,6 +73,7 @@ import com.assetboard.ui.account.AccountEditScreen
 import com.assetboard.ui.diary.DiaryCalendarScreen
 import com.assetboard.ui.diary.DiaryScreen
 import com.assetboard.ui.diary.DiarySearchScreen
+import com.assetboard.ui.health.HealthScreen
 import com.assetboard.ui.overview.OverviewScreen
 import com.assetboard.ui.record.FlowEditScreen
 import com.assetboard.ui.record.ValuationEditScreen
@@ -130,6 +131,7 @@ object Routes {
     const val PRE_RESTORE = "pre_restore"
     const val REMINDER_GUIDE = "reminder_guide"
     const val DIARY_SEARCH = "diary_search"
+    fun health(record: Boolean = false) = "health?record=${if (record) "1" else ""}"
     fun stocktake(snapshotId: String? = null) = "stocktake?snapshotId=${snapshotId.orEmpty()}"
     fun account(id: String) = "account/$id"
     fun accountEdit(id: String? = null, groupId: String? = null) = "account_edit?id=${id.orEmpty()}&groupId=${groupId.orEmpty()}"
@@ -281,6 +283,7 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                             onTrend = { nav.navigate(Routes.TREND) },
                             onSettings = settings,
                             onAddAccount = { groupId -> nav.navigate(Routes.accountEdit(groupId = groupId)) },
+                            onHealth = { record -> nav.navigate(Routes.health(record)) },
                         )
                         Tab.TODO -> TodoHomeScreen(
                             onSettings = settings,
@@ -317,6 +320,9 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
             composable(Routes.REMINDER_GUIDE) { ReminderGuideScreen(onBack = back) }
             composable("stocktake?snapshotId={snapshotId}", arguments = listOf(optional("snapshotId"))) {
                 StocktakeScreen(snapshotId = it.arg("snapshotId"), onBack = back)
+            }
+            composable("health?record={record}", arguments = listOf(optional("record"))) {
+                HealthScreen(onBack = back, startRecording = it.arg("record") != null)
             }
             composable(Routes.TREND) {
                 TrendScreen(

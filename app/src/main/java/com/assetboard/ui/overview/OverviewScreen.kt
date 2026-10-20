@@ -48,6 +48,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.outlined.MonitorWeight
+import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material3.Button
@@ -82,7 +84,11 @@ import com.assetboard.domain.Dates
 import com.assetboard.domain.Ledger
 import com.assetboard.domain.LedgerData
 import com.assetboard.domain.Money
+import com.assetboard.domain.Liquidity
 import com.assetboard.domain.NetWorthPoint
+import com.assetboard.domain.health.Health
+import com.assetboard.ui.health.HealthState
+import com.assetboard.ui.health.gradeColor
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.AccountAvatar
@@ -107,6 +113,7 @@ import com.assetboard.ui.theme.NumberStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -134,6 +141,7 @@ data class OverviewState(
     val changeSinceLast: Long?,
     val hasAccounts: Boolean,
     val hasGroups: Boolean,
+    val liquidity: Liquidity,
 )
 
 fun buildOverview(l: LedgerData, now: Long = System.currentTimeMillis()): OverviewState {
@@ -168,6 +176,7 @@ fun buildOverview(l: LedgerData, now: Long = System.currentTimeMillis()): Overvi
         changeSinceLast = history.lastOrNull()?.let { totals.netWorth - it.netWorth },
         hasAccounts = l.accounts.isNotEmpty(),
         hasGroups = l.groups.isNotEmpty(),
+        liquidity = l.liquidity(now),
     )
 }
 
@@ -175,6 +184,9 @@ class OverviewViewModel(private val container: AppContainer) : ActionViewModel(c
     val state: StateFlow<OverviewState?> = container.repository.ledger
         .map { it?.let { l -> buildOverview(l) } }
         .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val health: StateFlow<HealthState?> = combine(container.health.profile, container.health.measurements, ::HealthState)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun seedSuishouji() = action { container.repository.seedFromSuishouji() }
@@ -189,10 +201,12 @@ fun OverviewScreen(
     onTrend: () -> Unit,
     onSettings: () -> Unit,
     onAddAccount: (String?) -> Unit,
+    onHealth: (record: Boolean) -> Unit = {},
 ) {
     val container = LocalContainer.current
     val vm: OverviewViewModel = viewModel { OverviewViewModel(container) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val health by vm.health.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     ErrorDialog(error) { vm.error.value = null }
 
@@ -206,6 +220,7 @@ fun OverviewScreen(
                 "${today.monthValue}月${today.dayOfMonth}日 ${com.assetboard.domain.todo.Recurrence.weekName(today.dayOfWeek)}" +
                     if (accounts > 0) " · $accounts 个账户" else "",
             ) {
+                HeaderAction(Icons.Outlined.MonitorWeight, "健康资产", { onHealth(false) })
                 HeaderAction(Icons.AutoMirrored.Filled.ShowChart, "净值趋势", onTrend)
                 HeaderAction(Icons.Default.Add, "新建账户", { onAddAccount(null) })
                 HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
@@ -221,7 +236,8 @@ fun OverviewScreen(
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         LazyColumn(Modifier.weight(1.1f), contentPadding = PaddingValues(start = 16.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             item { Box(Modifier.appear(0)) { Hero(s, onStocktake) } }
-                            accountSections(s, onOpenAccount, onAddAccount, first = 1)
+                            if (s.hasAccounts) item { Box(Modifier.appear(1)) { CashCard(s.liquidity) } }
+                            accountSections(s, onOpenAccount, onAddAccount, first = 2)
                         }
                         Column(
                             Modifier.weight(0.9f).verticalScroll(rememberScrollState()).padding(end = 16.dp, bottom = 32.dp),
@@ -229,6 +245,7 @@ fun OverviewScreen(
                         ) {
                             AllocationCard(s)
                             TrendCard(s, onTrend)
+                            health?.let { HealthCard(it, onHealth) }
                             RecentStocktakes(s, onEditStocktake)
                         }
                     }
@@ -239,8 +256,10 @@ fun OverviewScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         item { Box(Modifier.appear(0)) { Hero(s, onStocktake) } }
-                        if (s.allocation.isNotEmpty()) item { Box(Modifier.appear(1)) { AllocationCard(s) } }
-                        accountSections(s, onOpenAccount, onAddAccount, first = 2)
+                        if (s.hasAccounts) item(key = "cash") { Box(Modifier.appear(1)) { CashCard(s.liquidity) } }
+                        if (s.allocation.isNotEmpty()) item(key = "allocation") { Box(Modifier.appear(2)) { AllocationCard(s) } }
+                        health?.let { h -> item(key = "health") { Box(Modifier.appear(3)) { HealthCard(h, onHealth) } } }
+                        accountSections(s, onOpenAccount, onAddAccount, first = 4)
                     }
                 }
             }
@@ -559,6 +578,148 @@ private fun DisabledCard(rows: List<AccountRowUi>, onOpenAccount: (String) -> Un
                     RowDivider(startIndent = 74.dp)
                     AccountRow(r, onClick = { onOpenAccount(r.account.id) })
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The money at hand: counted asset accounts minus investments (funds) and locked balances. A
+ * bar shows how the counted assets split into the three, filling in on first show; the largest
+ * cash accounts are listed under it.
+ */
+@Composable
+private fun CashCard(l: Liquidity) {
+    val cs = MaterialTheme.colorScheme
+    val extra = AppTheme.extra
+    val cash = animatedCents(l.cash)
+    var open by rememberSaveable { mutableStateOf(false) }
+    val reveal = remember { Animatable(0f) }
+    LaunchedEffect(l.total) { reveal.animateTo(1f, tween(1_000, delayMillis = 200, easing = FastOutSlowInEasing)) }
+    val cashColor = cs.primary
+    val lockedColor = extra.group(2)
+    val investedColor = extra.group(1)
+    SectionCard(Modifier.clickable { open = !open }, contentPadding = PaddingValues(20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(cashColor.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Payments, null, tint = cashColor, modifier = Modifier.size(19.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("现金流", style = MaterialTheme.typography.titleMedium)
+                Text("不含基金投资和锁定资金", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+            if (l.total > 0) Pill("占资产 ${Money.percent(l.cash, l.total)}", cashColor)
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("¥", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp, end = 3.dp))
+            Text(Money.format(cash), style = MaterialTheme.typography.headlineMedium.merge(NumberStyle), maxLines = 1)
+        }
+        if (l.total > 0) {
+            Spacer(Modifier.height(12.dp))
+            // Three segments in one track: cash, locked, investments.
+            val parts = listOf(l.cash to cashColor, l.locked to lockedColor, l.invested to investedColor).filter { it.first > 0 }
+            Row(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(50)).background(cs.surfaceVariant)) {
+                parts.forEachIndexed { i, (v, c) ->
+                    val f = (v.toDouble() / l.total).toFloat() * reveal.value
+                    if (f > 0f) {
+                        Box(Modifier.weight(f.coerceAtLeast(0.0001f)).height(10.dp).background(c))
+                        if (i < parts.lastIndex) Spacer(Modifier.width(2.dp))
+                    }
+                }
+                if (reveal.value < 1f) Spacer(Modifier.weight((1f - reveal.value).coerceAtLeast(0.0001f)))
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                CashLegend("现金", l.cash, cashColor)
+                if (l.locked > 0) CashLegend("锁定", l.locked, lockedColor)
+                if (l.invested > 0) CashLegend("投资", l.invested, investedColor)
+            }
+        }
+        AnimatedVisibility(open && l.accounts.isNotEmpty()) {
+            Column(Modifier.padding(top = 12.dp)) {
+                l.accounts.filter { it.second != 0L }.forEach { (a, v) ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Dot(cashColor.copy(alpha = 0.6f), 6.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(a.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        MoneyText(v, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+        if (l.accounts.isNotEmpty()) {
+            Text(
+                if (open) "收起" else "查看 ${l.accounts.count { it.second != 0L }} 个现金账户",
+                style = MaterialTheme.typography.labelMedium, color = cs.primary,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CashLegend(label: String, cents: Long, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Dot(color, 7.dp)
+        Spacer(Modifier.width(5.dp))
+        Text("$label ${Money.compact(cents)}", style = MaterialTheme.typography.labelMedium.merge(NumberStyle), color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/**
+ * Health as one more asset: the latest weight counting up, the change since the previous
+ * weigh-in, BMI with its grade, and the last 30 records drawn in. Without a record it invites
+ * the first one.
+ */
+@Composable
+private fun HealthCard(h: HealthState, onHealth: (record: Boolean) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val latest = h.latest
+    SectionCard(Modifier.clickable { onHealth(false) }, contentPadding = PaddingValues(20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(cs.tertiary.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.MonitorWeight, null, tint = cs.tertiary, modifier = Modifier.size(19.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("健康", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    latest?.let { "上次称重 · ${com.assetboard.ui.health.dayLabel(it.date)}" } ?: "还没有健康记录",
+                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                )
+            }
+            Text(
+                "记录",
+                color = cs.primary, style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(cs.primary.copy(alpha = 0.10f)).clickable { onHealth(true) }.padding(horizontal = 14.dp, vertical = 7.dp),
+            )
+        }
+        if (latest == null) {
+            Text("每天称一次，体重和体脂率会画成曲线。没称的日子空着就好。", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
+            return@SectionCard
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(Health.kg(animatedCents(latest.weightG)), style = MaterialTheme.typography.headlineMedium.merge(NumberStyle))
+                    Text("kg", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                    h.previous?.let { p ->
+                        Text("较上次 ${Health.kgDelta(latest.weightG - p.weightG)} kg", style = MaterialTheme.typography.labelMedium.merge(NumberStyle), color = cs.onSurfaceVariant)
+                    }
+                    h.profile?.let { Health.bmi(latest.weightG, it.heightMm) }?.let { bmi ->
+                        val g = Health.bmiGrade(bmi)
+                        Pill("BMI ${Health.bmiText(bmi)} ${g.label}", gradeColor(g))
+                    }
+                }
+            }
+            val recent = h.records.takeLast(30).map { it.weightG }
+            if (recent.size >= 2) {
+                Sparkline(recent, cs.tertiary, Modifier.width(110.dp).height(46.dp), animate = true)
             }
         }
     }

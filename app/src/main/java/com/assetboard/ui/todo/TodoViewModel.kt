@@ -45,6 +45,8 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
 
     fun toggleHabit(h: Habit) = action { container.habits.toggle(h) }
 
+    fun toggleChecklist(itemId: String) = action { repo.toggleChecklist(itemId) }
+
     fun complete(t: Todo) = action {
         val logged = repo.complete(t.id, t.stateSeq)
         _events.tryEmit(

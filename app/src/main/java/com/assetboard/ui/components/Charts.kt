@@ -96,6 +96,10 @@ data class ChartSeries(
 /**
  * Line chart for money over time. The first series drives selection: drag or tap to scrub,
  * [onSelect] reports the index into its points (null when released).
+ *
+ * [target] (a dashed level line with its label) and [band] (a tinted range) are background:
+ * they never widen the y range, never take part in the selection, and are clipped to what the
+ * data shows, so a far-away target cannot flatten the line into the axis.
  */
 @Composable
 fun LineChart(
@@ -104,12 +108,17 @@ fun LineChart(
     formatY: (Long) -> String = Money::compact,
     formatX: (Long) -> String = Dates::axis,
     onSelect: (Int?) -> Unit = {},
+    target: Long? = null,
+    targetLabel: String? = null,
+    band: LongRange? = null,
 ) {
     val measurer = rememberTextMeasurer()
     val grid = AppTheme.extra.chartGrid
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val guideColor = MaterialTheme.colorScheme.outline
     val surface = MaterialTheme.colorScheme.surfaceContainer
+    val targetColor = MaterialTheme.colorScheme.tertiary
+    val bandColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor, fontFeatureSettings = "tnum")
     var selected by remember(series) { mutableStateOf<Int?>(null) }
     val progress = remember(series.firstOrNull()?.points?.size) { Animatable(0f) }
@@ -186,6 +195,24 @@ fun LineChart(
         if (maxX != minX) {
             val last = measurer.measure(formatX(maxX), labelStyle)
             drawText(last, topLeft = Offset(right - last.size.width, bottom + 4.dp.toPx()))
+        }
+
+        // Background: the band and the target, only where they fall inside the plotted range.
+        if (band != null) {
+            val lo = band.first.coerceIn(minY, maxY)
+            val hi = band.last.coerceIn(minY, maxY)
+            if (hi > lo) {
+                drawRect(bandColor, topLeft = Offset(left - inset, py(hi)), size = Size(right - left + inset * 2, py(lo) - py(hi)))
+            }
+        }
+        if (target != null && target in minY..maxY) {
+            val y = py(target)
+            drawLine(targetColor, Offset(left - inset, y), Offset(right + inset, y), strokeWidth = 1.4.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
+            targetLabel?.let {
+                val layout = measurer.measure(it, labelStyle.copy(color = targetColor))
+                val above = y - layout.size.height - 2.dp.toPx()
+                drawText(layout, topLeft = Offset(right - layout.size.width - 2.dp.toPx(), if (above >= top) above else y + 2.dp.toPx()))
+            }
         }
 
         clipRect(right = left + (right - left) * progress.value + inset) {

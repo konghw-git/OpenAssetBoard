@@ -10,6 +10,7 @@ import com.assetboard.data.BackupManager
 import com.assetboard.data.BackupWorker
 import com.assetboard.data.DiaryRepository
 import com.assetboard.data.HabitRepository
+import com.assetboard.data.HealthRepository
 import com.assetboard.data.HolidayRepository
 import com.assetboard.data.LedgerRepository
 import com.assetboard.data.MaintenanceWorker
@@ -54,6 +55,7 @@ class AppContainer(private val context: Context) {
     }
     val diary by lazy { DiaryRepository(db, gate) }
     val habits by lazy { HabitRepository(db, gate) }
+    val health by lazy { HealthRepository(db, gate) }
     val weather by lazy { WeatherService(context, settings) }
 
     private val _restoreGeneration = MutableStateFlow(0)

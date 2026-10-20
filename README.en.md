@@ -44,13 +44,15 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Trend**: 3 months / 6 months / 1 year / all time, with period high, low, change and change ratio; a bar-and-line chart of assets vs liabilities.
 - **Investment accounts**: buy, redeem, dividend, transfer, repay, borrow, external in/out. Fees have a payer, so the P&L arithmetic stays honest. Market value and net invested drawn as two lines.
 - **Account management**: groups, icons (built-in marks for common banks, payment apps and funds), an include-in-net-worth switch, suspend, "locked until" dates, moving the baseline earlier.
+- **Cash at hand**: the counted accounts minus investments and locked balances, with a bar splitting assets into cash / locked / invested.
+- **Health as an asset**: weigh in once a day, record weight (body fat optional), and follow weight, body fat and BMI with a 7-day average; BMI and body-fat grades, fat and lean mass, progress to a target and a nine-cell body type. A day without a weigh-in simply stays empty — no interpolation, no streaks.
 - **Home-screen widget**: net worth plus a one-tap stocktake.
 
 <img src="docs/images/01-overview.webp" width="24%" alt="Asset overview"> <img src="docs/images/03-stocktake.webp" width="24%" alt="Stocktake"> <img src="docs/images/04-trend.webp" width="24%" alt="Net worth trend"> <img src="docs/images/07-account-investment.webp" width="24%" alt="Investment account">
 
 ### Todo
 
-- **Things 3 structure**: inbox → today → upcoming → someday, plus lists with sections. Items carry deadlines, an important flag, notes and checklists.
+- **Things 3 structure**: inbox → today → upcoming → someday, plus lists with sections. Items carry deadlines, an important flag, notes and checklists; checklist items sit right under the todo's card and tick with one tap.
 - **A radial dial**: the home screen puts views on a wheel with live counts, one tap to switch; today's five daily habits sit beside it.
 - **Daily habits**: supplements, workout, diet, water, early sleep. Ticked on the todo page, shown read-only at the top of the diary.
 - **Reminders that fire**: normal notifications, a strong reminder (full screen, ring, vibrate — still on time in deep doze), per-occurrence reminders for repeating todos, catch-up after reboot, and recovery after the permission is revoked.
@@ -161,7 +163,7 @@ The images in `docs/images/` are those PNGs scaled down and converted to WebP.
 
 ```
 app/src/main/java/com/assetboard/
-├── domain/           pure rules: balances, net invested, P&L, net worth trend, todo views and recurrence, lunar calendar
+├── domain/           pure rules: balances, net invested, P&L, net worth trend, health grades and trend, todo views and recurrence, lunar calendar
 ├── data/             the only way in: validation, transactions, the write gate, backup and restore, migrations
 ├── ui/               Compose screens (assets / todo / diary / settings); components holds the charts and shared widgets
 ├── reminder/         alarms, notifications, the strong-reminder ring service, full-screen alarms, boot catch-up
@@ -173,18 +175,20 @@ The rule is **calculation out of the UI**: every number on screen comes from a p
 | File | What |
 |---|---|
 | `domain/Ledger.kt` | Balance, net invested, P&L, stocktake totals |
+| `domain/health/` | BMI, body-fat grades, body type, health trend and moving average |
 | `domain/todo/` | View membership and ordering, recurrence, reminder state, invariants |
 | `data/WriteGate.kt` | The read-write gate and the data epoch |
-| `data/BackupManager.kt` | JSON export (v3, reads v1 / v2), validation, restore coordinator |
+| `data/BackupManager.kt` | JSON export (v4, reads v1–v3), validation, restore coordinator |
 | `domain/calendar/` | Lunar calendar, solar terms, festivals, the official workday table |
 
 ## Roadmap
 
 - [x] Asset overview, stocktake, net worth trend, investment flows
 - [x] Todos, diary, daily habits, trash
-- [x] Backup / restore (v3), reminders, widgets
+- [x] Backup / restore (v4), reminders, widgets
+- [x] Health as an asset (weight, body fat, BMI), cash at hand
 - [ ] Rates of return (XIRR, money-weighted annualised)
-- [ ] Available vs locked assets, target allocation comparison
+- [ ] Target allocation comparison
 - [ ] Credit-card statement and due-date reminders
 - [ ] Automatic valuation from shares × NAV
 - [ ] App lock
@@ -197,6 +201,7 @@ Rules written down can be argued with. These are the answers to "why is it calcu
 - [The write gate and the data epoch](docs/write-gate.md) — why an operation from before a restore cannot land in restored data
 - [How reminders stay on time](docs/reminders.md) — exact alarms, strong reminders, recovery after a permission is revoked, tokens
 - [Backup and restore](docs/backup-format.md) — the file format, atomic replacement, whole-database restore
+- [Health](docs/health.md) — one record a day, missed days, anchored periods, where the grade tables come from
 
 ## Contributing
 

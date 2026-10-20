@@ -15,6 +15,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -32,6 +34,10 @@ import com.assetboard.ui.settings.SettingsScreen
 import com.assetboard.ui.stocktake.StocktakeScreen
 import com.assetboard.ui.theme.AssetBoardTheme
 import com.assetboard.ui.trend.TrendScreen
+import com.assetboard.ui.health.HealthScreen
+import com.assetboard.data.MeasurementDraft
+import com.assetboard.data.Sex
+import java.time.LocalDate
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -210,5 +216,74 @@ class ScreenshotTest {
     @Test fun settings() {
         val c = demoContainer()
         shot("10-settings", c) { SettingsScreen(noop, noop) }
+    }
+
+    /**
+     * About three months of weigh-ins toward today's 92.1 kg: most mornings, body fat on most of
+     * them, and two trips with nothing recorded at all.
+     */
+    private fun withHealth(c: AppContainer, profile: Boolean = true): AppContainer {
+        runBlocking(c.gate.bound()) {
+            if (profile) c.health.saveProfile(Sex.MALE, LocalDate.of(2001, 8, 2), 1820, null)
+            val today = LocalDate.now()
+            for (i in 90 downTo 0) {
+                if (i in 40..49 || i in 12..15 || i % 5 == 3) continue
+                val g = 92_100L + i * 32L + ((i * 37) % 7 - 3) * 120L
+                val fat = if (i % 3 == 1) null else 2_580 + i * 4 + ((i * 13) % 5 - 2) * 10
+                c.health.save(MeasurementDraft(null, today.minusDays(i.toLong()), g, fat, null))
+            }
+        }
+        return c
+    }
+
+    @Test fun health() {
+        val c = withHealth(demoContainer())
+        shot("11-health", c) { HealthScreen(noop) }
+    }
+
+    @Test fun healthLower() {
+        val c = withHealth(demoContainer())
+        shot("11-health", c) { HealthScreen(noop) }
+        // Items: hero, selectors, trend, figures, target, body type, records.
+        compose.onNode(hasScrollAction()).performScrollToIndex(3)
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.onRoot().captureRoboImage("build/screenshots/11b-health-figures.png")
+        compose.onNode(hasScrollAction()).performScrollToIndex(5)
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.onRoot().captureRoboImage("build/screenshots/11c-health-records.png")
+    }
+
+    @Test fun healthBodyFat() {
+        val c = withHealth(demoContainer())
+        shot("11-health", c) { HealthScreen(noop) }
+        compose.onNode(hasText("体脂率") and hasClickAction()).performClick()
+        compose.onNode(hasText("全部") and hasClickAction()).performClick()
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.onRoot().captureRoboImage("build/screenshots/11d-health-bodyfat.png")
+    }
+
+    @Test fun healthDark() {
+        val c = withHealth(demoContainer())
+        shot("12-health-dark", c, dark = true) { HealthScreen(noop) }
+    }
+
+    @Test fun healthEdit() {
+        val c = withHealth(demoContainer())
+        shot("13-health-edit", c) { HealthScreen(noop, startRecording = true) }
+    }
+
+    /** No profile yet: weight only, and the first visit asks for the profile. */
+    @Test fun healthWithoutProfile() {
+        val c = withHealth(demoContainer(), profile = false)
+        shot("14-health-profile", c) { HealthScreen(noop) }
+    }
+
+    @Test fun overviewCashAndHealth() {
+        val c = withHealth(demoContainer())
+        shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        compose.onNodeWithText("个现金账户", substring = true).performClick()
+        compose.onNode(hasScrollAction()).performScrollToIndex(2)
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.onRoot().captureRoboImage("build/screenshots/01b-overview-cash-health.png")
     }
 }

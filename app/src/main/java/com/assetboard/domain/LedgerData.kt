@@ -71,6 +71,27 @@ class LedgerData(
         return Ledger.Totals(assets, liabilities)
     }
 
+    /**
+     * The money at hand: counted asset accounts that are not investments (funds and the like)
+     * and not locked at [now]. Investments and locked balances are reported beside it, so the
+     * three add up to the counted assets.
+     */
+    fun liquidity(now: Long): Liquidity {
+        val cash = mutableListOf<Pair<Account, Long>>()
+        var invested = 0L
+        var locked = 0L
+        for (a in countedAccounts()) {
+            if (isLiability(a.id)) continue
+            val b = currentBalance(a.id)
+            when {
+                a.isInvestment -> invested += b
+                a.lockedUntil != null && a.lockedUntil > now -> locked += b
+                else -> cash += a to b
+            }
+        }
+        return Liquidity(cash.sumOf { it.second }, cash.sortedByDescending { it.second }, invested, locked)
+    }
+
     fun snapshotTotals(snapshotId: String): Ledger.Totals =
         Ledger.snapshotTotals(itemsOf(snapshotId), { valuationById[it] }, ::isLiability)
 
@@ -111,6 +132,11 @@ class LedgerData(
 }
 
 data class SeriesPoint(val at: Long, val value: Long, val invested: Long?)
+
+/** [cash] is spendable now; [invested] and [locked] are the rest of the counted assets. */
+data class Liquidity(val cash: Long, val accounts: List<Pair<Account, Long>>, val invested: Long, val locked: Long) {
+    val total: Long get() = cash + invested + locked
+}
 
 /** [liabilities] is positive here, ready for display. */
 data class NetWorthPoint(val snapshot: Snapshot, val assets: Long, val liabilities: Long, val netWorth: Long)

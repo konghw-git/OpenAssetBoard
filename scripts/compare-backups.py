@@ -8,6 +8,8 @@ import json
 import sys
 
 LEDGER = ["groups", "accounts", "snapshots", "valuations", "snapshotItems", "flows"]
+# Reported but never failing: a backup from before format 4 has no health tables at all.
+HEALTH = ["bodyMeasurements"]
 
 
 def key(table, row):
@@ -27,6 +29,14 @@ def main(a_path, b_path):
                 problems += 1
                 print(f"{t} {k}:\n  before {ra.get(k)}\n  after  {rb.get(k)}")
         print(f"{t}: {len(ra)} / {len(rb)} rows")
+    for t in HEALTH:
+        if t not in a:
+            print(f"{t}: absent before (older format), {len(b.get(t, []))} rows after")
+            continue
+        ra = {r["id"]: r for r in a.get(t, [])}
+        rb = {r["id"]: r for r in b.get(t, [])}
+        differ = sum(1 for k in set(ra) | set(rb) if ra.get(k) != rb.get(k))
+        print(f"{t}: {len(ra)} / {len(rb)} rows, {differ} differing (informational)")
     print("OK: ledger identical" if problems == 0 else f"FAIL: {problems} differing rows")
     return 0 if problems == 0 else 1
 

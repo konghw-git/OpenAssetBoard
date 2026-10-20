@@ -11,7 +11,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -72,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.assetboard.data.ChecklistItem
 import com.assetboard.data.Todo
 import com.assetboard.data.TodoKind
 import com.assetboard.domain.todo.DateBadge
@@ -186,10 +190,15 @@ fun TodoRow(
     onLongClick: (() -> Unit)? = null,
     selected: Boolean = false,
     inUpcoming: Boolean = false,
+    /** Shown under the title as small check points while the todo is open; empty hides them. */
+    checklist: List<ChecklistItem> = emptyList(),
+    /** Null makes the check points read-only (selecting, sorting). */
+    onToggleItem: ((String) -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val badge = if (done) null else TodoViews.trailing(todo, today, inUpcoming)
+    val points = if (done) emptyList() else checklist
     val content by animateFloatAsState(if (done) 0.55f else 1f, tween(260), label = "done")
     val bg by animateColorAsState(if (selected) cs.primaryContainer else cs.surfaceContainer, tween(200), label = "bg")
     Row(
@@ -201,8 +210,9 @@ fun TodoRow(
             .then(if (selected) Modifier.border(1.5.dp, cs.primary, TodoCardShape) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .heightIn(min = 60.dp)
-            .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = if (points.isEmpty()) 4.dp else 8.dp),
+        // With check points under the title, the box and badge stay with the title line.
+        verticalAlignment = if (points.isEmpty()) Alignment.CenterVertically else Alignment.Top,
     ) {
         CheckCircle(done, todo.important, onToggle, repeat = todo.kind == TodoKind.REPEAT_SOURCE)
         Column(Modifier.weight(1f).padding(vertical = 8.dp).graphicsLayer { alpha = content }) {
@@ -244,6 +254,7 @@ fun TodoRow(
                     }
                 }
             }
+            if (points.isNotEmpty()) InlineChecklist(points, onToggleItem, onMore = onClick)
         }
         if (badge != null) {
             val c = badgeColor(badge.tone)
@@ -253,13 +264,87 @@ fun TodoRow(
                 color = c,
                 fontWeight = if (badge.tone == DateBadge.Tone.ALERT) FontWeight.SemiBold else null,
                 modifier = Modifier
-                    .padding(start = 8.dp)
+                    .padding(start = 8.dp, top = if (points.isEmpty()) 0.dp else 10.dp)
                     .clip(RoundedCornerShape(50))
                     .background(c.copy(alpha = 0.10f))
                     .padding(horizontal = 9.dp, vertical = 3.dp),
             )
         }
         trailing?.invoke()
+    }
+}
+
+/** How many check points a card shows before folding the rest into "还有 N 项". */
+private const val INLINE_CHECKLIST_MAX = 6
+
+/**
+ * The todo's checklist as small check points under its title, hung off a thin guide line so they
+ * read as part of the card. Tapping one ticks it in place; the rest stays in the detail page.
+ */
+@Composable
+private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> Unit)?, onMore: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val shown = items.take(INLINE_CHECKLIST_MAX)
+    val guide = cs.outlineVariant
+    Column(
+        Modifier
+            .padding(top = 6.dp)
+            .fillMaxWidth()
+            .drawBehind {
+                val x = 1.dp.toPx()
+                drawLine(guide, Offset(x, 6.dp.toPx()), Offset(x, size.height - 6.dp.toPx()), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
+            }
+            .padding(start = 6.dp),
+    ) {
+        shown.forEach { item -> CheckPoint(item, onToggle) }
+        if (items.size > shown.size) {
+            Text(
+                "还有 ${items.size - shown.size} 项",
+                style = MaterialTheme.typography.labelSmall,
+                color = cs.outline,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onMore).padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
+    val cs = MaterialTheme.colorScheme
+    val scale by animateFloatAsState(if (item.done) 1f else 0.9f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium), label = "point")
+    val fill by animateColorAsState(if (item.done) cs.primary else Color.Transparent, tween(200), label = "pointFill")
+    val text by animateColorAsState(if (item.done) cs.outline else cs.onSurface.copy(alpha = 0.85f), tween(200), label = "pointText")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .then(if (onToggle != null) Modifier.clickable { onToggle(item.id) } else Modifier)
+            .heightIn(min = 30.dp)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(16.dp)
+                .scale(scale)
+                .clip(RoundedCornerShape(5.dp))
+                .background(fill)
+                .border(if (item.done) 0.dp else 1.4.dp, cs.outline, RoundedCornerShape(5.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.animation.AnimatedVisibility(item.done, enter = scaleIn(spring(dampingRatio = 0.4f)) + fadeIn(), exit = fadeOut()) {
+                Icon(Icons.Default.Check, null, tint = cs.onPrimary, modifier = Modifier.size(11.dp))
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            item.text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = text,
+            textDecoration = if (item.done) TextDecoration.LineThrough else null,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

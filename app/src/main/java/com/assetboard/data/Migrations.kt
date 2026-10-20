@@ -18,6 +18,15 @@ object Migrations {
         }
     }
 
+    /** Adds the health profile and the daily weigh-ins; nothing else changes. */
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS `health_profile` (`id` TEXT NOT NULL, `sex` TEXT NOT NULL, `birth_date` TEXT NOT NULL, `height_mm` INTEGER NOT NULL, `target_weight_g` INTEGER, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `body_measurements` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `measured_at` INTEGER NOT NULL, `weight_g` INTEGER NOT NULL, `body_fat_bp` INTEGER, `note` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_body_measurements_date` ON `body_measurements` (`date`)")
+        }
+    }
+
     private val V2_TABLES = listOf(
         "CREATE TABLE IF NOT EXISTS `todo_lists` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `notes` TEXT NOT NULL, `deadline` TEXT, `sort_order` INTEGER NOT NULL, `archived_at` INTEGER, `created_at` INTEGER NOT NULL, `deleted_at` INTEGER, `delete_batch` TEXT, PRIMARY KEY(`id`))",
         "CREATE TABLE IF NOT EXISTS `todo_sections` (`id` TEXT NOT NULL, `list_id` TEXT NOT NULL, `name` TEXT NOT NULL, `sort_order` INTEGER NOT NULL, `deleted_at` INTEGER, `delete_batch` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`list_id`) REFERENCES `todo_lists`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",

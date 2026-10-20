@@ -684,6 +684,8 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             onLongClick = if (logbook || line.row.done) null else ({ c.onSelection(c.selection.toggle(t.id)) }),
                             selected = t.id in c.selection,
                             inUpcoming = c.view == TodoView.UPCOMING,
+                            checklist = if (logbook) emptyList() else items.sortedBy { it.sortOrder },
+                            onToggleItem = if (selecting) null else c.vm::toggleChecklist,
                         )
                     }
                 }

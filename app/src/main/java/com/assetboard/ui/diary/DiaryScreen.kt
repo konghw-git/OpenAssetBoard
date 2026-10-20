@@ -104,8 +104,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
@@ -138,8 +136,8 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
- * The diary tab: today on open. An empty day puts the cursor in the editor at once; a day with
- * text opens for reading and edits on tap. 完成 saves and puts the keyboard away. [pickedDate]
+ * The diary tab: today on open, always for reading first; tapping the page brings up the
+ * keyboard. 完成 saves and puts the keyboard away. [pickedDate]
  * comes from the calendar or search.
  */
 @Composable
@@ -274,7 +272,7 @@ fun DiaryScreen(
                     }
                 }
                 session?.let {
-                    Editor(it, autoFocus = date == today, onInput = vm::onInput, onFocus = { f -> editing = f }) {
+                    Editor(it, onInput = vm::onInput, onFocus = { f -> editing = f }) {
                         if (showHabits) HabitRecord(habits, live = date == today)
                     }
                 }
@@ -355,7 +353,7 @@ private fun streakText(n: Int): String = when (n) {
 }
 
 @Composable
-private fun Editor(session: DiarySession, autoFocus: Boolean, onInput: (String) -> Unit, onFocus: (Boolean) -> Unit, header: @Composable () -> Unit = {}) {
+private fun Editor(session: DiarySession, onInput: (String) -> Unit, onFocus: (Boolean) -> Unit, header: @Composable () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     val text by session.text.collectAsStateWithLifecycle()
     val status by session.status.collectAsStateWithLifecycle()
@@ -364,10 +362,8 @@ private fun Editor(session: DiarySession, autoFocus: Boolean, onInput: (String) 
     // Local state keeps the cursor; the session holds the text that gets saved.
     var value by remember(session) { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
     if (value.text != text && status != DiarySession.Status.UNSAVED) value = value.copy(text = text, selection = TextRange(text.length))
-    val focus = remember(session) { FocusRequester() }
     var focused by remember(session) { mutableStateOf(false) }
-    // Only an empty day starts in the editor; written days open for reading.
-    LaunchedEffect(session) { if (autoFocus && session.text.value.isBlank()) runCatching { focus.requestFocus() } }
+    // Every day opens for reading, an empty one too: the keyboard comes up only on a tap.
 
     if (status == DiarySession.Status.UNSAVED) {
         Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
@@ -416,7 +412,7 @@ private fun Editor(session: DiarySession, autoFocus: Boolean, onInput: (String) 
                     },
                     textStyle = style,
                     cursorBrush = SolidColor(cs.primary),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 270.dp).focusRequester(focus).onFocusChanged {
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 270.dp).onFocusChanged {
                         focused = it.isFocused
                         onFocus(it.isFocused)
                     },

@@ -30,6 +30,7 @@ class Fixture {
     val todos = TodoRepository(db, gate, scope, calendar = { calendar }, clock = { now }, zone = { zone }) { changed += it }
     val diary = DiaryRepository(db, gate, clock = { now })
     val habits = HabitRepository(db, gate, clock = { now }, zone = { zone })
+    val health = HealthRepository(db, gate, clock = { now }, zone = { zone })
     val settings = SettingsStore(context)
     var effectsFail = false
     val effectCalls = mutableListOf<List<String>>()

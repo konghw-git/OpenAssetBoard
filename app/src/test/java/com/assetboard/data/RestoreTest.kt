@@ -55,6 +55,9 @@ class RestoreTest {
         f.todos.complete(rep, f.todos.todo(rep)!!.stateSeq)
         f.todos.delete(f.todos.create(TodoDraft("进回收站")))
         f.habits.toggle(com.assetboard.domain.Habit.WORKOUT)
+        f.health.saveProfile(Sex.MALE, date("2001-08-02"), 1820, null)
+        f.health.save(MeasurementDraft(null, date("2026-10-17"), 92_100, 2_580, "体脂秤"))
+        f.health.save(MeasurementDraft(null, date("2026-10-20"), 91_800, null, null))
         val s = DiarySession(f.diary, date("2026-10-20"), f.scope + f.gate.bound(), clock = { f.now })
         s.open(null)
         s.onInput("今天写了日记")
@@ -191,6 +194,9 @@ class RestoreTest {
         assertTrue(again.todos.any { it.deletedAt != null })
         assertTrue(again.todos.any { it.kind == TodoKind.COMPLETION })
         assertEquals(listOf("workout"), again.habitChecks.map { it.habit })
+        assertEquals(listOf(92_100L, 91_800L), again.bodyMeasurements.map { it.weightG })
+        assertEquals(listOf(2_580, null), again.bodyMeasurements.map { it.bodyFatBp })
+        assertEquals(1820, again.healthProfile?.heightMm)
         assertEquals(epoch + 1, f.gate.epochNow())
         assertFalse(exported.contains(WriteGate.KEY_EPOCH))
     }
@@ -206,6 +212,7 @@ class RestoreTest {
             todos = b.todos.sortedBy { it.id }, checklistItems = b.checklistItems.sortedBy { it.id },
             diaryEntries = b.diaryEntries.sortedBy { it.id }, diaryDrafts = b.diaryDrafts.sortedBy { it.id },
             habitChecks = b.habitChecks.sortedBy { it.date + it.habit },
+            bodyMeasurements = b.bodyMeasurements.sortedBy { it.date },
         )
     }
 
@@ -222,6 +229,46 @@ class RestoreTest {
         assertEquals(before, counts())
         assertFalse(f.gate.frozen.value)
         assertTrue(localCopies().isEmpty())
+    }
+
+    /** A format 3 file has no health tables: it reads, and the restore leaves them empty. */
+    @Test fun formatThreeBackupWipesHealth() = f.run {
+        seed()
+        val v4 = codec.parseToJsonElement(f.backup.exportJson()).jsonObject
+        val v3 = JsonObject(
+            v4.filterKeys { it !in setOf("healthProfile", "bodyMeasurements") }
+                .mapValues { (k, v) -> if (k == "formatVersion" || k == "schemaVersion") kotlinx.serialization.json.JsonPrimitive(3) else v },
+        )
+        val uri = file("v3.json", v3.toString())
+        val preview = f.backup.inspect(uri)
+        assertEquals(0, preview.healthRecords)
+        assertEquals(2, preview.currentHealthRecords)
+        f.backup.restore(uri)
+        assertTrue(f.db.healthDao().all().isEmpty())
+        assertEquals(null, f.db.healthDao().profile())
+        assertEquals(1, f.db.dao().accounts().size)
+    }
+
+    @Test fun healthRecordsTwoOnOneDate() = f.run {
+        seed()
+        rejects { b -> b.copy(bodyMeasurements = b.bodyMeasurements + b.bodyMeasurements.first().copy(id = "dup")) }
+    }
+
+    @Test fun healthRecordOutOfRange() = f.run {
+        seed()
+        rejects { b -> b.copy(bodyMeasurements = b.bodyMeasurements.map { it.copy(weightG = 5_000) }) }
+        rejects { b -> b.copy(bodyMeasurements = b.bodyMeasurements.map { it.copy(bodyFatBp = 9_000) }) }
+        rejects { b -> b.copy(healthProfile = b.healthProfile!!.copy(heightMm = 400)) }
+    }
+
+    /** A birthday that makes the person a child is a profile detail, not a reason to refuse the file. */
+    @Test fun youngBirthdayStillRestores() = f.run {
+        seed()
+        val b = codec.decodeFromString(BackupFile.serializer(), f.backup.exportJson())
+        val young = b.copy(healthProfile = b.healthProfile!!.copy(birthDate = "2015-01-01"))
+        f.backup.restore(file("young.json", codec.encodeToString(BackupFile.serializer(), young)))
+        assertEquals("2015-01-01", f.db.healthDao().profile()?.birthDate)
+        assertEquals(2, f.db.healthDao().all().size)
     }
 
     @Test fun r7_twoLiveEntriesOnOneDate() = f.run {

@@ -20,8 +20,8 @@ import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
- * Format 2 adds the todo and diary tables, format 3 the daily habit checks; older files read
- * with the newer tables empty. Device-local
+ * Format 2 adds the todo and diary tables, format 3 the daily habit checks, format 4 the health
+ * profile and weigh-ins; older files read with the newer tables empty. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -42,6 +42,8 @@ data class BackupFile(
     val diaryEntries: List<DiaryEntry> = emptyList(),
     val diaryDrafts: List<DiaryDraft> = emptyList(),
     val habitChecks: List<HabitCheck> = emptyList(),
+    val healthProfile: HealthProfile? = null,
+    val bodyMeasurements: List<BodyMeasurement> = emptyList(),
 )
 
 /**
@@ -67,6 +69,8 @@ data class BackupPreview(
     val diaries: Int,
     val currentTodos: Int,
     val currentDiaries: Int,
+    val healthRecords: Int = 0,
+    val currentHealthRecords: Int = 0,
 )
 
 /** A saved copy of the data as it was right before a restore. */
@@ -122,6 +126,8 @@ class BackupManager(
                 diaryEntries = d.all(),
                 diaryDrafts = d.allDrafts(),
                 habitChecks = db.habitDao().all(),
+                healthProfile = db.healthDao().profile(),
+                bodyMeasurements = db.healthDao().all(),
             )
         }
         return json.encodeToString(BackupFile.serializer(), file)
@@ -212,6 +218,8 @@ class BackupManager(
             diaries = file.diaryEntries.count { it.deletedAt == null },
             currentTodos = db.todoDao().liveTodos().size,
             currentDiaries = db.diaryDao().all().count { it.deletedAt == null },
+            healthRecords = file.bodyMeasurements.size,
+            currentHealthRecords = db.healthDao().all().size,
         )
     }
 
@@ -229,6 +237,17 @@ class BackupManager(
         for (h in file.habitChecks) {
             ensure(com.assetboard.domain.Habit.of(h.habit) != null) { "备份里有未知的每日指标「${h.habit}」" }
             ensure(runCatching { java.time.LocalDate.parse(h.date) }.isSuccess) { "备份里有日期无效的每日指标" }
+        }
+        unique(file.bodyMeasurements, { it.id }, "健康记录")
+        unique(file.bodyMeasurements, { it.date }, "同一天的健康记录")
+        for (m in file.bodyMeasurements) {
+            ensure(runCatching { java.time.LocalDate.parse(m.date) }.isSuccess) { "备份里有日期无效的健康记录" }
+            HealthRepository.checkMeasurement(m.weightG, m.bodyFatBp)
+        }
+        file.healthProfile?.let { p ->
+            ensure(p.id == "self") { "备份里的健康档案无效" }
+            // Only the format and the range; a young birthday never fails a restore.
+            HealthRepository.checkProfile(p.birthDate, p.heightMm, p.targetWeightG, java.time.LocalDate.MAX)
         }
         val groupIds = file.groups.map { it.id }.toSet()
         val byId = file.accounts.associateBy { it.id }
@@ -324,6 +343,8 @@ class BackupManager(
         todo.clearLists()
         d.clear()
         db.habitDao().clear()
+        db.healthDao().clearProfile()
+        db.healthDao().clear()
         dao.insertGroups(file.groups)
         dao.insertAccounts(file.accounts)
         dao.insertSnapshots(file.snapshots)
@@ -338,6 +359,8 @@ class BackupManager(
         d.insertAll(file.diaryEntries)
         d.insertDrafts(file.diaryDrafts)
         db.habitDao().insertAll(file.habitChecks)
+        file.healthProfile?.let { db.healthDao().insertProfiles(listOf(it)) }
+        db.healthDao().insertAll(file.bodyMeasurements)
     }
 
     // ------------------------------------------------------------ the coordinator's private write channel
@@ -426,7 +449,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 3
+        const val FORMAT_VERSION = 4
     }
 }
 
