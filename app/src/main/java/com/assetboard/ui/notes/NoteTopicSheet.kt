@@ -52,6 +52,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.assetboard.data.NoteTopic
 import com.assetboard.ui.components.pressScale
+import com.assetboard.ui.components.LocalAmbient
+import com.assetboard.ui.components.glass
 import com.assetboard.ui.theme.AppTheme
 
 /** How many topics before the sheet offers a search field. */
@@ -149,7 +151,8 @@ fun TopicSheet(
 @Composable
 internal fun FilterPill(name: String, count: Int?, color: Color, selected: Boolean, dot: Color?, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val bg by animateColorAsState(if (selected) color else cs.surfaceContainer, tween(220), label = "pill")
+    val bg by animateColorAsState(if (selected) color else color.copy(alpha = 0f), tween(220), label = "pill")
+    val onGlass = LocalAmbient.current != null
     // Dark mode's palette is light: picked text goes dark on it instead of white.
     val onColor = if (color.luminance() > 0.5f) Color(0xFF12201C) else Color.White
     val fg = if (selected) onColor else cs.onSurface
@@ -158,7 +161,13 @@ internal fun FilterPill(name: String, count: Int?, color: Color, selected: Boole
         modifier
             .height(38.dp)
             .pressScale(source)
-            .shadow(if (selected) 6.dp else 1.dp, RoundedCornerShape(50), spotColor = if (selected) color else Color.Black.copy(alpha = 0.1f))
+            .then(
+                when {
+                    selected -> Modifier.shadow(4.dp, RoundedCornerShape(50), spotColor = color)
+                    onGlass -> Modifier.glass(RoundedCornerShape(50), glass, elevation = 5.dp)
+                    else -> Modifier.shadow(1.dp, RoundedCornerShape(50), spotColor = Color.Black.copy(alpha = 0.1f)).background(cs.surfaceContainer, RoundedCornerShape(50))
+                },
+            )
             .clip(RoundedCornerShape(50))
             .background(bg)
             .clickable(interactionSource = source, indication = null, onClick = onClick)

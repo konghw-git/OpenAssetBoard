@@ -76,13 +76,22 @@ fun TabHeader(
 @Composable
 fun HeaderAction(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = MaterialTheme.colorScheme.onSurface) {
     val source = remember { MutableInteractionSource() }
+    // Glass on a page with colour behind it; a plain soft card elsewhere.
+    val onGlass = LocalAmbient.current != null
     Box(
         modifier
             .size(42.dp)
             .pressScale(source, 0.9f)
-            .shadow(2.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.10f))
+            .then(
+                if (onGlass) {
+                    Modifier.glass(CircleShape, glass, elevation = 6.dp)
+                } else {
+                    Modifier
+                        .shadow(2.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.10f))
+                        .background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
+                },
+            )
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
             .clickable(interactionSource = source, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-20
+
+### Fixed
+
+- A todo or note deleted by swipe came back blank after undo, or after a restore from the
+  trash: its card stayed hidden once the dust had settled. It now shows again as soon as the
+  dust settles or the row returns.
+
+### Changed
+
+- **Pull down to write a note.** The 写笔记 button is gone; pulling the list down past its top
+  and letting go opens a new note, in the topic being looked at.
+- **Extract a selection in one tap.** While text is selected in a diary entry, a 提炼选中的 N 字
+  button sits above the keyboard (the system menu puts app items last).
+- **Real glass.** Todo and note cards, chips and buttons are frosted glass over colour fields:
+  the page blurred into them (Android 12 and later), a lit rim and a glow inside the top edge.
+  Settings › 外观 › 卡片玻璃 picks 清透 (clear) or 深色 (denser), in light and dark themes.
+
 ## [0.7.0] - 2026-10-20
 
 ### Added
@@ -136,7 +154,8 @@ between minor versions; backup format v3 reads v1 and v2.
 - Reminder punctuality depends on the phone's autostart and background permissions; the in-app
   checklist walks through them.
 
-[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.4.0...v0.5.0

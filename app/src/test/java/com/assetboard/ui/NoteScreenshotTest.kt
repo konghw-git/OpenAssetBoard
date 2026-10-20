@@ -14,12 +14,15 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextInputSelection
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
 import com.assetboard.data.DiarySession
 import com.assetboard.data.SourceRef
 import com.assetboard.data.ThemeMode
 import com.assetboard.ui.theme.AssetBoardTheme
+import com.assetboard.ui.components.GlassMode
+import com.assetboard.ui.components.LocalGlassMode
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.runBlocking
@@ -75,9 +78,9 @@ class NoteScreenshotTest {
         return c
     }
 
-    private fun show(c: AppContainer, dark: Boolean = false) {
+    private fun show(c: AppContainer, dark: Boolean = false, deep: Boolean = false) {
         compose.setContent {
-            CompositionLocalProvider(LocalContainer provides c) {
+            CompositionLocalProvider(LocalContainer provides c, LocalGlassMode provides if (deep) GlassMode.DEEP else GlassMode.CLEAR) {
                 AssetBoardTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT, upIsRed = true) { AppNav(open = null, onOpenHandled = {}) }
             }
         }
@@ -94,13 +97,13 @@ class NoteScreenshotTest {
 
     private fun openTab() {
         compose.onNodeWithText("笔记").performClick()
-        waitFor("写笔记")
+        compose.waitUntil(8_000) { compose.onAllNodes(hasContentDescription("搜索笔记")).fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test fun notesList() {
         show(demo())
         openTab()
-        waitFor("定投纪律")
+        waitFor("火锅局的启发")
         capture("50-notes")
     }
 
@@ -111,10 +114,38 @@ class NoteScreenshotTest {
         capture("50b-notes-review")
     }
 
+    @Test fun deepGlass() {
+        show(demo(), deep = true)
+        openTab()
+        waitFor("火锅局的启发")
+        capture("51b-notes-deep")
+    }
+
+    @Test fun deepGlassDark() {
+        show(demo(), dark = true, deep = true)
+        openTab()
+        waitFor("火锅局的启发")
+        capture("51c-notes-deep-dark")
+    }
+
+    @Test fun todoGlass() {
+        show(demo())
+        compose.onNodeWithText("待办").performClick()
+        waitFor("新待办")
+        capture("51d-todo-glass")
+    }
+
+    @Test fun todoGlassDark() {
+        show(demo(), dark = true)
+        compose.onNodeWithText("待办").performClick()
+        waitFor("新待办")
+        capture("51e-todo-glass-dark")
+    }
+
     @Test fun notesListDark() {
         show(demo(), dark = true)
         openTab()
-        waitFor("定投纪律")
+        waitFor("火锅局的启发")
         capture("51-notes-dark")
     }
 
@@ -128,8 +159,8 @@ class NoteScreenshotTest {
     @Test fun noteRead() {
         show(demo())
         openTab()
-        waitFor("定投纪律")
-        compose.onNodeWithText("定投纪律").performClick()
+        waitFor("火锅局的启发")
+        compose.onNodeWithText("火锅局的启发").performClick()
         waitFor("摘自")
         capture("53-note")
     }
@@ -137,7 +168,17 @@ class NoteScreenshotTest {
     @Test fun noteNew() {
         show(demo())
         openTab()
-        compose.onNodeWithText("写笔记").performClick()
+        waitFor("火锅局的启发")
+        // Halfway down: the hint shows; past the threshold it changes, and letting go opens a new note.
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("全部").performTouchInput { down(center); moveBy(Offset(0f, 40f)); moveBy(Offset(0f, 120f)) }
+        repeat(10) { compose.mainClock.advanceTimeByFrame() }
+        capture("54a-note-pull")
+        compose.onNodeWithText("全部").performTouchInput { moveBy(Offset(0f, 200f)); moveBy(Offset(0f, 200f)) }
+        repeat(20) { compose.mainClock.advanceTimeByFrame() }
+        capture("54b-note-pull-armed")
+        compose.onNodeWithText("全部").performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
         waitFor("标题")
         capture("54-note-new")
     }
@@ -167,7 +208,7 @@ class NoteScreenshotTest {
     @Test fun swipeActions() {
         show(demo())
         openTab()
-        waitFor("定投纪律")
+        waitFor("火锅局的启发")
         // Halfway through a swipe: right shows pin and topic, left shows delete.
         compose.onNodeWithText("火锅局的启发").performTouchInput { down(center); moveBy(Offset(60f, 0f)); moveBy(Offset(200f, 0f)); moveBy(Offset(200f, 0f)) }
         capture("61-note-swipe-right")
@@ -180,7 +221,7 @@ class NoteScreenshotTest {
     @Test fun sortMenu() {
         show(demo())
         openTab()
-        waitFor("定投纪律")
+        waitFor("火锅局的启发")
         compose.onNodeWithContentDescription("排序").performClick()
         waitFor("自定义顺序")
         capture("63-note-sort")
@@ -235,6 +276,20 @@ class NoteScreenshotTest {
         compose.onNodeWithContentDescription("日历").performClick()
         waitFor("日记日历")
         capture("67-calendar-weeks")
+    }
+
+    @Test fun extractSelection() {
+        show(demo())
+        compose.onNodeWithText("日记").performClick()
+        compose.waitUntil(8_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
+        val editor = compose.onNode(hasSetTextAction())
+        editor.performClick()
+        editor.performTextInputSelection(androidx.compose.ui.text.TextRange(0, 13))
+        waitFor("提炼选中的 13 字")
+        capture("58b-extract-selection-button")
+        compose.onNodeWithText("提炼选中的 13 字").performClick()
+        compose.waitUntil(8_000) { compose.onAllNodes(hasText("选中的文字", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        capture("58c-extract-selection")
     }
 
     @Test fun diaryWithNotes() {

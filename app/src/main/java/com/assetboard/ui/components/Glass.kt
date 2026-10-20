@@ -6,6 +6,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.isSpecified
+import com.assetboard.ui.theme.AppTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,10 +49,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toIntSize
 import androidx.compose.ui.unit.toSize
 
+/** The two kinds of glass, picked in settings: clear shows the colour behind, deep is denser and calmer. */
+enum class GlassMode(val label: String) { CLEAR("清透"), DEEP("深色") }
+
+val LocalGlassMode = staticCompositionLocalOf { GlassMode.CLEAR }
+
 /**
- * The glass material of list cards and floating bars: a translucent fill that takes on the
- * page's ambient colour, a soft sheen over the top, a lit rim and a shadow that stays outside
- * the shape, so the fill never turns grey over it.
+ * The glass material of list cards, chips and floating bars, after the iOS 26 kind: the page's
+ * colour seen through a frosted, translucent body, a lit rim brighter at the top left, a glow
+ * along the inside of the top edge, and a shadow kept outside the shape so the body never greys
+ * over it.
  */
 @Immutable
 data class GlassStyle(
@@ -56,46 +66,105 @@ data class GlassStyle(
     val sheen: Color,
     val rimLight: Color,
     val rimShade: Color,
+    /** The thin line inside the top edge, where light enters the glass. */
+    val glow: Color,
+    /** A faint outer line that keeps the shape from dissolving into the page. */
+    val edge: Color,
     val shadow: Color,
     val floatFill: Color,
+    /** How much of the page behind is blurred into the body; zero draws none. */
+    val blur: Dp,
 )
 
-private val LightGlass = GlassStyle(
-    fill = Color.White.copy(alpha = 0.70f),
-    sheen = Color.White.copy(alpha = 0.55f),
-    rimLight = Color.White.copy(alpha = 0.95f),
-    rimShade = Color(0xFF1E5B4F).copy(alpha = 0.07f),
-    shadow = Color(0xFF1E3A33).copy(alpha = 0.10f),
-    floatFill = Color(0xFFFBFAF7).copy(alpha = 0.62f),
+private val LightClear = GlassStyle(
+    fill = Color.White.copy(alpha = 0.32f),
+    sheen = Color.White.copy(alpha = 0.42f),
+    rimLight = Color.White,
+    rimShade = Color.White.copy(alpha = 0.55f),
+    glow = Color.White.copy(alpha = 0.85f),
+    edge = Color(0xFF1E3A33).copy(alpha = 0.06f),
+    shadow = Color(0xFF1E3A33).copy(alpha = 0.13f),
+    floatFill = Color.White.copy(alpha = 0.45f),
+    blur = 26.dp,
 )
 
-private val DarkGlass = GlassStyle(
-    fill = Color.White.copy(alpha = 0.06f),
-    sheen = Color.White.copy(alpha = 0.06f),
-    rimLight = Color.White.copy(alpha = 0.17f),
-    rimShade = Color.White.copy(alpha = 0.03f),
-    shadow = Color.Black.copy(alpha = 0.40f),
-    floatFill = Color(0xFF1E2321).copy(alpha = 0.66f),
+private val LightDeep = GlassStyle(
+    fill = Color(0xFFF7F8F5).copy(alpha = 0.82f),
+    sheen = Color.White.copy(alpha = 0.30f),
+    rimLight = Color.White,
+    rimShade = Color.White.copy(alpha = 0.25f),
+    glow = Color.White.copy(alpha = 0.9f),
+    edge = Color(0xFF1E3A33).copy(alpha = 0.09f),
+    shadow = Color(0xFF1E3A33).copy(alpha = 0.16f),
+    floatFill = Color(0xFFF7F8F5).copy(alpha = 0.78f),
+    blur = 26.dp,
 )
 
-/** The glass for the current theme; the theme has no flag, so the background decides. */
+private val DarkClear = GlassStyle(
+    fill = Color.White.copy(alpha = 0.075f),
+    sheen = Color.White.copy(alpha = 0.10f),
+    rimLight = Color.White.copy(alpha = 0.38f),
+    rimShade = Color.White.copy(alpha = 0.14f),
+    glow = Color.White.copy(alpha = 0.22f),
+    edge = Color.Black.copy(alpha = 0.25f),
+    shadow = Color.Black.copy(alpha = 0.45f),
+    floatFill = Color(0xFF26302C).copy(alpha = 0.55f),
+    blur = 26.dp,
+)
+
+private val DarkDeep = GlassStyle(
+    fill = Color(0xFF080B0A).copy(alpha = 0.55f),
+    sheen = Color.White.copy(alpha = 0.05f),
+    rimLight = Color.White.copy(alpha = 0.22f),
+    rimShade = Color.White.copy(alpha = 0.06f),
+    glow = Color.White.copy(alpha = 0.12f),
+    edge = Color.Black.copy(alpha = 0.35f),
+    shadow = Color.Black.copy(alpha = 0.55f),
+    floatFill = Color(0xFF101513).copy(alpha = 0.78f),
+    blur = 26.dp,
+)
+
+/** The glass for the current theme and the mode picked in settings. */
 val glass: GlassStyle
-    @Composable @ReadOnlyComposable get() = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) DarkGlass else LightGlass
+    @Composable @ReadOnlyComposable get() {
+        val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+        return when (LocalGlassMode.current) {
+            GlassMode.CLEAR -> if (dark) DarkClear else LightClear
+            GlassMode.DEEP -> if (dark) DarkDeep else LightDeep
+        }
+    }
 
 /**
- * A glass card behind the content. [tint] washes the fill (a selected row); [elevation] sets
- * how far the shadow spreads, zero for none.
+ * A glass body behind the content. On a page with an [Ambient] (see [LocalAmbient]) the colour
+ * fields under the shape are blurred into it (Android 12 and later). [tint] washes the body (a
+ * selected row); [elevation] sets how far the shadow spreads, zero for none.
  */
-fun Modifier.glass(shape: Shape, style: GlassStyle, tint: Color = Color.Unspecified, elevation: Dp = 10.dp): Modifier = drawBehind {
-    val outline = shape.createOutline(size, layoutDirection, this)
-    val path = Path().apply { addOutline(outline) }
-    if (elevation > 0.dp) softShadow(path, style.shadow, elevation)
-    drawPath(path, style.fill)
-    if (tint != Color.Unspecified) drawPath(path, tint)
-    clipPath(path) {
-        drawRect(Brush.verticalGradient(listOf(style.sheen, Color.Transparent), endY = size.height * 0.55f))
+fun Modifier.glass(shape: Shape, style: GlassStyle, tint: Color = Color.Unspecified, elevation: Dp = 10.dp): Modifier = composed {
+    val ambient = LocalAmbient.current
+    val blur = ambient != null && style.blur > 0.dp && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val layer = if (blur) rememberGraphicsLayer() else null
+    var at by remember { mutableStateOf(Offset.Unspecified) }
+    (if (blur) onGloballyPositioned { at = it.positionInRoot() } else Modifier).drawBehind {
+        val outline = shape.createOutline(size, layoutDirection, this)
+        val path = Path().apply { addOutline(outline) }
+        if (elevation > 0.dp) softShadow(path, style.shadow, elevation)
+        if (layer != null && ambient != null && at.isSpecified) {
+            clipPath(path) {
+                val r = style.blur.toPx()
+                layer.renderEffect = BlurEffect(r, r, TileMode.Clamp)
+                layer.record(size.toIntSize()) {
+                    translate(ambient.origin.x - at.x, ambient.origin.y - at.y) { drawAmbient(ambient, ambient.size.width, ambient.size.height) }
+                }
+                drawLayer(layer)
+            }
+        }
+        drawPath(path, style.fill)
+        if (tint != Color.Unspecified) drawPath(path, tint)
+        clipPath(path) {
+            drawRect(Brush.verticalGradient(listOf(style.sheen, Color.Transparent), endY = size.height * 0.5f))
+        }
+        rim(path, style)
     }
-    rim(path, style)
 }
 
 /** A shadow outside [path] only: the shape is clipped away before the blur is drawn. */
@@ -106,36 +175,51 @@ internal fun DrawScope.softShadow(path: Path, color: Color, elevation: Dp) {
         val paint = Paint().asFrameworkPaint().apply {
             isAntiAlias = true
             this.color = android.graphics.Color.WHITE
-            setShadowLayer(elevation.toPx() * 1.4f, 0f, elevation.toPx() * 0.45f, color.toArgb())
+            setShadowLayer(elevation.toPx() * 1.5f, 0f, elevation.toPx() * 0.5f, color.toArgb())
         }
         canvas.nativeCanvas.drawPath(path.asAndroidPath(), paint)
         canvas.restore()
     }
 }
 
-/** A hairline lit from the top left and fading toward the bottom right. */
+/**
+ * The lit edges: a faint outer line for definition, a rim bright at the top left that dims
+ * across and brightens a little again at the bottom right, and a glow just inside the top.
+ */
 internal fun DrawScope.rim(path: Path, style: GlassStyle) {
-    val w = 1.dp.toPx()
+    drawPath(path, style.edge, style = Stroke(2.dp.toPx()))
     drawPath(
         path,
         Brush.linearGradient(
             0f to style.rimLight,
-            0.45f to style.rimLight.copy(alpha = style.rimLight.alpha * 0.35f),
+            0.4f to style.rimLight.copy(alpha = style.rimLight.alpha * 0.25f),
+            0.75f to style.rimShade.copy(alpha = style.rimShade.alpha * 0.4f),
             1f to style.rimShade,
             start = Offset.Zero,
             end = Offset(size.width, size.height),
         ),
-        style = Stroke(w),
+        style = Stroke(1.2.dp.toPx()),
     )
+    clipPath(path) {
+        drawPath(
+            path,
+            Brush.verticalGradient(listOf(style.glow, Color.Transparent), startY = 0f, endY = minOf(size.height * 0.45f, 26.dp.toPx())),
+            style = Stroke(3.dp.toPx()),
+        )
+    }
 }
 
+/** The page's [Ambient], for the glass on it to blur. */
+val LocalAmbient = compositionLocalOf<Ambient?> { null }
+
 /**
- * Soft colour fields fixed behind a page, for the glass over it to pick up: green from the top
- * left, sand from the right, a little blue lower down. A sticky header draws its own slice of
- * the same fields ([ambientSlice]), so it covers the rows under it without showing a seam.
+ * Colour fields fixed behind a page, for the glass over it to show: green from the top left,
+ * sand from the right, blue lower down and teal at the bottom, from the app's group palette. A
+ * sticky header draws its own slice of the same fields ([ambientSlice]), so it covers the rows
+ * under it without showing a seam.
  */
 @Stable
-class Ambient internal constructor(val background: Color, val primary: Color, val secondary: Color, val tertiary: Color) {
+class Ambient internal constructor(val background: Color, val palette: List<Color>, val dark: Boolean) {
     internal var origin by mutableStateOf(Offset.Zero)
     internal var size by mutableStateOf(Size.Zero)
 }
@@ -143,21 +227,25 @@ class Ambient internal constructor(val background: Color, val primary: Color, va
 @Composable
 fun rememberAmbient(): Ambient {
     val cs = MaterialTheme.colorScheme
-    return remember(cs.background, cs.primary, cs.secondary, cs.tertiary) { Ambient(cs.background, cs.primary, cs.secondary, cs.tertiary) }
+    val palette = AppTheme.extra.groupPalette
+    return remember(cs.background, palette) { Ambient(cs.background, palette, cs.background.luminance() < 0.5f) }
 }
 
 private fun DrawScope.drawAmbient(a: Ambient, w: Float, h: Float) {
-    val dark = a.background.luminance() < 0.5f
     drawRect(a.background, size = Size(w, h))
-    fun blob(c: Color, alpha: Float, x: Float, y: Float, r: Float) =
-        drawCircle(Brush.radialGradient(listOf(c.copy(alpha = alpha), Color.Transparent), center = Offset(x, y), radius = r), r, Offset(x, y))
-    blob(a.primary, if (dark) 0.16f else 0.12f, w * 0.05f, h * 0.02f, w * 0.95f)
-    blob(a.secondary, if (dark) 0.10f else 0.13f, w * 1.0f, h * 0.22f, w * 0.80f)
-    blob(a.tertiary, if (dark) 0.10f else 0.08f, w * 0.0f, h * 0.62f, w * 0.85f)
-    blob(a.primary, if (dark) 0.08f else 0.06f, w * 0.95f, h * 0.95f, w * 0.9f)
+    // A body that holds its colour, then a soft edge: blurred under glass it reads as frosted.
+    fun orb(c: Color, alpha: Float, x: Float, y: Float, r: Float) = drawCircle(
+        Brush.radialGradient(0f to c.copy(alpha = alpha), 0.55f to c.copy(alpha = alpha * 0.7f), 1f to Color.Transparent, center = Offset(x, y), radius = r),
+        r, Offset(x, y),
+    )
+    val k = if (a.dark) 1.15f else 1f
+    orb(a.palette[0], 0.30f * k, w * 0.10f, h * 0.05f, w * 0.80f)
+    orb(a.palette[2], 0.26f * k, w * 1.00f, h * 0.26f, w * 0.62f)
+    orb(a.palette[1], 0.22f * k, w * 0.02f, h * 0.58f, w * 0.72f)
+    orb(a.palette[5], 0.22f * k, w * 0.92f, h * 0.88f, w * 0.68f)
 }
 
-/** The page background. */
+/** The page background; also makes [a] the one the glass on the page blurs, through [LocalAmbient]. */
 fun Modifier.ambient(a: Ambient): Modifier = this
     .onGloballyPositioned {
         a.origin = it.positionInRoot()

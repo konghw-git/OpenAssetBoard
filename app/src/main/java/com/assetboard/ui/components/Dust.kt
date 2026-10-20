@@ -47,7 +47,8 @@ import kotlin.random.Random
 @Stable
 class DustState {
     internal val bursts = mutableStateListOf<Burst>()
-    private val hidden = mutableStateMapOf<Any, Long>()
+    /** Keys whose card is dust now; each leaves when its burst ends or its row comes back. */
+    private val hidden = mutableStateMapOf<Any, Burst>()
     private val targets = HashMap<Any, Target>()
 
     internal class Target(val layer: GraphicsLayer) {
@@ -57,7 +58,18 @@ class DustState {
     /** Hidden cards draw nothing; they are about to leave the list. */
     fun isHidden(key: Any): Boolean = key in hidden
 
-    internal fun register(key: Any, target: Target) { targets[key] = target }
+    /**
+     * A card composed under [key]. If that key is still hidden, this is the row coming back
+     * (an undo, a restore from the trash) while its old dust drifts: it shows at once.
+     */
+    internal fun register(key: Any, target: Target) {
+        targets[key] = target
+        cameBack(key)
+    }
+
+    internal fun cameBack(key: Any) {
+        hidden.remove(key)
+    }
     internal fun unregister(key: Any, target: Target) { if (targets[key] === target) targets.remove(key) }
 
     /**
@@ -79,31 +91,32 @@ class DustState {
                 continue
             }
             if (image.width == 0 || image.height == 0) continue
-            bursts += Burst(image, c.positionInRoot(), particles(image.width, image.height, cell, direction), cell)
-            hidden[key] = System.nanoTime()
+            start(Burst(key, image, c.positionInRoot(), particles(image.width, image.height, cell, direction), cell))
             any = true
         }
         if (any) delay(HOLD_MS)
     }
 
-    internal fun finished(b: Burst) {
-        bursts.remove(b)
-        // Leave the keys hidden a little longer than the dust, then let them show again: by then
-        // the row is gone, and an undo brings it back visible.
-        val now = System.nanoTime()
-        hidden.entries.removeAll { now - it.value > 1_600_000_000L }
+    /** [b]'s card hides and its dust starts. */
+    internal fun start(b: Burst) {
+        bursts += b
+        hidden[b.key] = b
     }
 
-    internal fun sweepHidden() {
-        val now = System.nanoTime()
-        hidden.entries.removeAll { now - it.value > 1_600_000_000L }
+    /**
+     * The dust of [b] has settled. Its card shows again: by now the row has left the list, or
+     * the delete failed and it should be seen.
+     */
+    internal fun finished(b: Burst) {
+        bursts.remove(b)
+        if (hidden[b.key] === b) hidden.remove(b.key)
     }
 }
 
 val LocalDust = staticCompositionLocalOf<DustState?> { null }
 
 /** One snapshot breaking up: a particle per [cell]-pixel square, laid out in [p]. */
-internal class Burst(val image: ImageBitmap, val origin: Offset, val p: FloatArray, val cell: Float) {
+internal class Burst(val key: Any, val image: ImageBitmap, val origin: Offset, val p: FloatArray, val cell: Float) {
     var start = -1L
 }
 
@@ -154,7 +167,6 @@ fun DustHost(state: DustState, modifier: Modifier = Modifier) {
                     }
                 }
             }
-            state.sweepHidden()
         }
     }
     val wobble = with(LocalDensity.current) { 3f * density }

@@ -1,5 +1,8 @@
 package com.assetboard.ui.todo
 
+import com.assetboard.ui.components.glass
+import com.assetboard.ui.components.LocalAmbient
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.text.style.LineBreak
 import android.content.Intent
 import android.net.Uri
@@ -334,6 +337,7 @@ fun TodoHomeScreen(
 
     // A Surface, so text outside a Scaffold still gets the theme's content color.
     Surface(color = Color.Transparent, modifier = Modifier.fillMaxSize().ambient(ambient)) {
+        CompositionLocalProvider(LocalAmbient provides ambient) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= 600.dp
             if (wide) {
@@ -382,6 +386,7 @@ fun TodoHomeScreen(
             }
         }
     }
+}
 
     detailId?.let { id ->
         TodoDetailSheet(id, onDismiss = { detailId = null }, onOpenTodo = { detailId = it })
@@ -556,14 +561,14 @@ private fun NewListField(visible: Boolean, onCreate: (String) -> Unit, onClose: 
 @Composable
 private fun ListPill(l: TodoList, color: Color, count: Int, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val bg by animateColorAsState(if (selected) color else cs.surfaceContainer, tween(220), label = "pill")
+    val bg by animateColorAsState(if (selected) color else color.copy(alpha = 0f), tween(220), label = "pill")
     val fg = if (selected) Color.White else cs.onSurface
     val source = remember { MutableInteractionSource() }
     Row(
         modifier
             .height(44.dp)
             .pressScale(source)
-            .shadow(if (selected) 8.dp else 2.dp, RoundedCornerShape(50), spotColor = if (selected) color else Color.Black.copy(alpha = 0.1f))
+            .then(if (selected) Modifier.shadow(8.dp, RoundedCornerShape(50), spotColor = color) else Modifier.glass(RoundedCornerShape(50), glass, elevation = 6.dp))
             .clip(RoundedCornerShape(50))
             .background(bg)
             .clickable(interactionSource = source, indication = null, onClick = onClick)

@@ -84,6 +84,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import com.assetboard.ui.notes.ExtractOrigin
+import com.assetboard.ui.components.GlassSnackbarHost
+import androidx.compose.animation.scaleOut
+import androidx.compose.material3.FabPosition
+import androidx.compose.ui.draw.shadow
 import androidx.compose.material.icons.outlined.ViewWeek
 import com.assetboard.data.Weeks
 import androidx.compose.foundation.text.contextmenu.builder.item
@@ -107,7 +111,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -192,6 +195,8 @@ fun DiaryScreen(
     var extracting by remember { mutableStateOf<Pair<LocalDate, String>?>(null) }
     // Set when the text came from a selection: then all of it is ticked to begin with.
     var extractingSelection by remember { mutableStateOf(false) }
+    // What is selected in the entry right now, for the extract button over the keyboard.
+    var selected by remember { mutableStateOf<String?>(null) }
     ErrorDialog(error) { vm.error.value = null }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
     LaunchedEffect(vm) {
@@ -242,9 +247,27 @@ fun DiaryScreen(
     BackHandler(editing) { done() }
     LaunchedEffect(editing) { onEditingChange(editing) }
 
+    val extractSelection: (String) -> Unit = { picked ->
+        focusManager.clearFocus()
+        extractingSelection = true
+        extracting = date to picked
+    }
     Scaffold(
         containerColor = cs.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { GlassSnackbarHost(snackbar) },
+        // The system's selection menu puts app items last; this one is right above the keyboard.
+        floatingActionButton = {
+            val text = selected
+            AnimatedVisibility(
+                editing && text != null,
+                enter = fadeIn() + scaleIn(initialScale = 0.8f) + slideInVertically { it / 2 },
+                exit = fadeOut() + scaleOut(targetScale = 0.9f),
+                modifier = Modifier.imePadding(),
+            ) {
+                ExtractSelectionButton(text?.count { !it.isWhitespace() } ?: 0) { text?.let(extractSelection) }
+            }
+        },
+        floatingActionButtonPosition = FabPosition.Center,
         topBar = {
             TabHeader("日记", streakText(streak)) {
                 AnimatedContent(editing, transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.9f)) togetherWith fadeOut() }, label = "actions") { on ->
@@ -323,11 +346,8 @@ fun DiaryScreen(
                 session?.let {
                     Editor(
                         it, onInput = vm::onInput, onFocus = { f -> editing = f },
-                        onExtract = { picked ->
-                            focusManager.clearFocus()
-                            extractingSelection = true
-                            extracting = date to picked
-                        },
+                        onExtract = extractSelection,
+                        onSelection = { selected = it },
                     ) {
                         if (showHabits) HabitRecord(habits, live = date == today)
                     }
@@ -424,6 +444,30 @@ private fun streakText(n: Int): String = when (n) {
 
 private object EXTRACT_ITEM
 
+/** A gradient capsule over the keyboard while text is selected: one tap takes it into a note. */
+@Composable
+private fun ExtractSelectionButton(chars: Int, onClick: () -> Unit) {
+    val extra = AppTheme.extra
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier
+            .padding(bottom = 12.dp)
+            .shadow(14.dp, shape, ambientColor = extra.heroStart, spotColor = extra.heroStart)
+            .clip(shape)
+            .background(Brush.linearGradient(listOf(extra.heroEnd, extra.heroStart)))
+            .clickable(onClick = onClick)
+            .height(48.dp)
+            .padding(start = 8.dp, end = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(34.dp).clip(CircleShape).background(extra.onHero), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Lightbulb, null, tint = extra.heroStart, modifier = Modifier.size(19.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Text("提炼选中的 $chars 字", color = extra.onHero, style = MaterialTheme.typography.titleSmall)
+    }
+}
+
 @Composable
 private fun Editor(
     session: DiarySession,
@@ -431,6 +475,8 @@ private fun Editor(
     onFocus: (Boolean) -> Unit,
     /** The selected text, from 提炼到笔记 in the selection menu. */
     onExtract: (String) -> Unit = {},
+    /** The text selected now, or null when nothing (or only spaces) is. */
+    onSelection: (String?) -> Unit = {},
     header: @Composable () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
@@ -442,6 +488,10 @@ private fun Editor(
     var value by remember(session) { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
     if (value.text != text && status != DiarySession.Status.UNSAVED) value = value.copy(text = text, selection = TextRange(text.length))
     var focused by remember(session) { mutableStateOf(false) }
+    val selection = value.selection
+    val picked = if (selection.collapsed) null else value.text.substring(selection.min, selection.max).trim().takeIf { it.isNotEmpty() }
+    LaunchedEffect(picked) { onSelection(picked) }
+    DisposableEffect(session) { onDispose { onSelection(null) } }
     // Every day opens for reading, an empty one too: the keyboard comes up only on a tap.
 
     if (status == DiarySession.Status.UNSAVED) {

@@ -1,5 +1,7 @@
 package com.assetboard.ui.week
 
+import com.assetboard.ui.components.LocalAmbient
+import androidx.compose.runtime.CompositionLocalProvider
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.activity.compose.BackHandler
@@ -177,6 +179,7 @@ fun WeekScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenNote:
     BackHandler(status == WeekSession.Status.UNSAVED) { back() }
     val thisWeek = Weeks.start(vm.today())
 
+    CompositionLocalProvider(LocalAmbient provides ambient) {
     Scaffold(
         containerColor = Color.Transparent,
         modifier = Modifier.ambient(ambient),
@@ -252,6 +255,7 @@ fun WeekScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenNote:
                 session?.let { s -> ReviewEditor(s, focus, onInput = vm::onInput, onFocus = { editing = it }) }
             }
         }
+    }
     }
 
     extracting?.let { (origin, body) ->

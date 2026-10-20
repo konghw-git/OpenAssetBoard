@@ -1,5 +1,7 @@
 package com.assetboard.ui.notes
 
+import com.assetboard.ui.components.LocalAmbient
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -69,7 +71,8 @@ import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.HeaderAction
-import com.assetboard.ui.components.PrimaryActionButton
+import com.assetboard.ui.components.PullToCreateBox
+import com.assetboard.ui.components.rememberPullToCreate
 import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.appear
 import com.assetboard.ui.components.pressScale
@@ -91,6 +94,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.IconButton
@@ -250,6 +254,8 @@ fun NotesScreen(
 
     // A topic deleted meanwhile falls back to everything.
     val filter = if (filterRaw == NotesViewModel.ALL || filterRaw == NotesViewModel.UNSORTED || topics.any { it.id == filterRaw }) filterRaw else NotesViewModel.ALL
+    // Pull the list down to start a note, in the topic being looked at.
+    val pull = rememberPullToCreate { onNew(filter.takeIf { it != NotesViewModel.ALL && it != NotesViewModel.UNSORTED }) }
     val notes = all.orEmpty()
     val counts = remember(notes) { notes.groupingBy { it.topicId }.eachCount() }
     val shown = remember(notes, filter, sort) {
@@ -286,6 +292,7 @@ fun NotesScreen(
     )
 
     Box(Modifier.fillMaxSize().ambient(ambient)) {
+        CompositionLocalProvider(LocalAmbient provides ambient) {
         Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
             Scaffold(
                 containerColor = Color.Transparent,
@@ -298,10 +305,11 @@ fun NotesScreen(
                 },
             ) { padding ->
                 val list = all
+                PullToCreateBox(pull, "下拉新建笔记", "松手新建笔记", Modifier.fillMaxSize().padding(padding)) {
                 LazyColumn(
-                    Modifier.fillMaxSize().padding(padding),
+                    Modifier.fillMaxSize(),
                     state = listState,
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = with(LocalDensity.current) { pull.pulled.toDp() }, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     item(key = "topics") {
@@ -331,7 +339,7 @@ fun NotesScreen(
                         notes.isEmpty() -> item(key = "empty") { EmptyNotes(Modifier.appear(1)) }
                         shown.isEmpty() -> item(key = "emptyTopic") {
                             Text(
-                                if (filter == NotesViewModel.UNSORTED) "所有笔记都有主题了" else "这个主题下还没有笔记，点下方「写笔记」写第一篇",
+                                if (filter == NotesViewModel.UNSORTED) "所有笔记都有主题了" else "这个主题下还没有笔记，往下拉写第一篇",
                                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 48.dp),
                             )
@@ -376,15 +384,12 @@ fun NotesScreen(
                         }
                     }
                 }
+                }
             }
         }
-        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp), backdrop)
-        PrimaryActionButton(
-            Icons.Outlined.Edit, "写笔记",
-            onClick = { onNew(filter.takeIf { it != NotesViewModel.ALL && it != NotesViewModel.UNSORTED }) },
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp),
-        )
+        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp), backdrop)
     }
+}
 
     if (topicsOpen) {
         TopicSheet(
@@ -511,7 +516,7 @@ private fun TopicBar(
                     }
                 },
             state = row,
-            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 24.dp),
+            contentPadding = PaddingValues(start = 16.dp, top = 12.dp, bottom = 14.dp, end = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = NotesViewModel.ALL) { FilterPill("全部", total, cs.primary, filter == NotesViewModel.ALL, null) { onPick(NotesViewModel.ALL) } }
@@ -665,7 +670,7 @@ private fun EmptyNotes(modifier: Modifier = Modifier) {
         Surface(color = cs.surfaceContainer, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Hint(Icons.Outlined.Lightbulb, "从日记提炼", "在日记页点右上角的灯泡，勾选值得留下的段落")
-                Hint(Icons.Outlined.Edit, "直接写", "点下方「写笔记」，第一行就是标题")
+                Hint(Icons.Outlined.Edit, "直接写", "在列表顶部往下拉，松手就新建一篇；第一行就是标题")
             }
         }
     }

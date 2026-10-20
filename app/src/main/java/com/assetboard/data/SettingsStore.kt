@@ -18,6 +18,15 @@ class SettingsStore(context: Context) {
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
     /** Chinese market convention by default: gains red, losses green. */
+    /** The glass of todo and note cards: [GLASS_CLEAR] or [GLASS_DEEP]. */
+    private val _glass = MutableStateFlow(prefs.getString(KEY_GLASS, null) ?: GLASS_CLEAR)
+    val glass: StateFlow<String> = _glass.asStateFlow()
+
+    fun setGlass(value: String) {
+        prefs.edit { putString(KEY_GLASS, value) }
+        _glass.value = value
+    }
+
     private val _upIsRed = MutableStateFlow(prefs.getBoolean(KEY_UP_RED, true))
     val upIsRed: StateFlow<Boolean> = _upIsRed.asStateFlow()
 
@@ -93,18 +102,21 @@ class SettingsStore(context: Context) {
         _lastBackupAt.value = at
     }
 
-    private companion object {
-        const val KEY_THEME = "theme_mode"
-        const val KEY_UP_RED = "up_is_red"
-        const val KEY_BACKUP_URI = "backup_tree_uri"
-        const val KEY_LAST_BACKUP = "last_backup_at"
-        const val KEY_NETWORK = "network_enabled"
-        const val KEY_WEATHER = "weather_enabled"
-        const val KEY_HOLIDAY_UPDATE = "holiday_update_enabled"
-        const val KEY_ALL_ALARMS = "all_reminders_as_alarms"
-        const val KEY_DIARY_REMINDER = "diary_reminder_enabled"
-        const val KEY_DIARY_REMINDER_AT = "diary_reminder_minutes"
-        const val KEY_GUIDE_SEEN = "reminder_guide_seen"
-        const val KEY_RESCHEDULE = "reschedule_needed"
+    companion object {
+        const val GLASS_CLEAR = "clear"
+        const val GLASS_DEEP = "deep"
+        private const val KEY_GLASS = "glass"
+        private const val KEY_THEME = "theme_mode"
+        private const val KEY_UP_RED = "up_is_red"
+        private const val KEY_BACKUP_URI = "backup_tree_uri"
+        private const val KEY_LAST_BACKUP = "last_backup_at"
+        private const val KEY_NETWORK = "network_enabled"
+        private const val KEY_WEATHER = "weather_enabled"
+        private const val KEY_HOLIDAY_UPDATE = "holiday_update_enabled"
+        private const val KEY_ALL_ALARMS = "all_reminders_as_alarms"
+        private const val KEY_DIARY_REMINDER = "diary_reminder_enabled"
+        private const val KEY_DIARY_REMINDER_AT = "diary_reminder_minutes"
+        private const val KEY_GUIDE_SEEN = "reminder_guide_seen"
+        private const val KEY_RESCHEDULE = "reschedule_needed"
     }
 }

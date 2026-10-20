@@ -68,6 +68,8 @@ import com.assetboard.AppContainer
 import com.assetboard.BuildConfigInfo
 import com.assetboard.data.BackupKind
 import com.assetboard.data.ThemeMode
+import com.assetboard.data.SettingsStore
+import androidx.compose.material.icons.outlined.BlurOn
 import com.assetboard.domain.Dates
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
@@ -114,6 +116,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val theme by settings.themeMode.collectAsStateWithLifecycle()
     val upIsRed by settings.upIsRed.collectAsStateWithLifecycle()
+    val glassMode by settings.glass.collectAsStateWithLifecycle()
     val tree by settings.backupTreeUri.collectAsStateWithLifecycle()
     val lastBackup by settings.lastBackupAt.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
@@ -295,6 +298,15 @@ fun SettingsScreen(
                         Text("涨跌颜色", style = MaterialTheme.typography.bodyMedium)
                     }
                     SegmentedControl(listOf(true, false), upIsRed, { if (it) "红涨绿跌" else "绿涨红跌" }, settings::setUpIsRed)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)) {
+                        IconTile(Icons.Outlined.BlurOn, palette.group(5), size = 28.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text("卡片玻璃", style = MaterialTheme.typography.bodyMedium)
+                            Text("待办和笔记的卡片：清透能看见背后的颜色，深色更沉稳、对比更高", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    SegmentedControl(listOf(SettingsStore.GLASS_CLEAR, SettingsStore.GLASS_DEEP), glassMode, { if (it == SettingsStore.GLASS_DEEP) "深色" else "清透" }, settings::setGlass)
                 }
             }
 

@@ -1,5 +1,8 @@
 package com.assetboard.ui.todo
 
+import com.assetboard.ui.components.glass
+import com.assetboard.ui.components.LocalAmbient
+import com.assetboard.ui.components.rim
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -128,6 +131,8 @@ internal fun ViewRing(
     val fills = viewOrder.map { v -> animateFloatAsState(if (selected == ViewKey.of(v)) 1f else 0f, tween(280), label = "fill").value }
     val base = cs.surfaceContainer
     val shade = Color.Black.copy(alpha = 0.06f)
+    // On a page with colour behind it the wedges are glass too.
+    val glassy = if (LocalAmbient.current != null) glass else null
 
     Box(
         modifier
@@ -157,7 +162,12 @@ internal fun ViewRing(
                 val pop = 4.dp.toPx() * fills[i]
                 val path = sectorPath(c, r, outer.toPx() - 4.dp.toPx() + pop, start, 72f - GAP_DEG, 7.dp.toPx())
                 translate(top = 1.5.dp.toPx()) { drawPath(path, shade) }
-                drawPath(path, base)
+                if (glassy != null) {
+                    drawPath(path, glassy.fill)
+                    rim(path, glassy)
+                } else {
+                    drawPath(path, base)
+                }
                 if (fills[i] > 0f) {
                     drawPath(path, Brush.linearGradient(listOf(style.start, style.end), start = Offset(0f, 0f), end = Offset(this.size.width, this.size.height)), alpha = fills[i])
                 }
@@ -327,9 +337,8 @@ internal fun HabitBattery(checked: Set<Habit>, onToggle: (Habit) -> Unit, modifi
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .shadow(if (full) 10.dp else 3.dp, body, ambientColor = charge, spotColor = if (full) charge else Color.Black.copy(alpha = 0.12f))
+                .then(if (full) Modifier.shadow(10.dp, body, ambientColor = charge, spotColor = charge).background(cs.surfaceContainer, body) else Modifier.glass(body, glass, elevation = 8.dp))
                 .clip(body)
-                .background(cs.surfaceContainer)
                 .border(2.dp, edge, body)
                 .padding(5.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),

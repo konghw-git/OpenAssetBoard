@@ -17,6 +17,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.assetboard.data.ThemeMode
 import com.assetboard.ui.AppNav
 import com.assetboard.ui.LocalContainer
+import com.assetboard.data.SettingsStore
+import com.assetboard.ui.components.GlassMode
+import com.assetboard.ui.components.LocalGlassMode
 import com.assetboard.ui.OpenRequest
 import com.assetboard.ui.theme.AssetBoardTheme
 
@@ -31,6 +34,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val theme by container.settings.themeMode.collectAsStateWithLifecycle()
             val upIsRed by container.settings.upIsRed.collectAsStateWithLifecycle()
+            val glass by container.settings.glass.collectAsStateWithLifecycle()
             val dark = when (theme) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
@@ -41,7 +45,10 @@ class MainActivity : ComponentActivity() {
                 val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
-            CompositionLocalProvider(LocalContainer provides container) {
+            CompositionLocalProvider(
+                LocalContainer provides container,
+                LocalGlassMode provides if (glass == SettingsStore.GLASS_DEEP) GlassMode.DEEP else GlassMode.CLEAR,
+            ) {
                 AssetBoardTheme(theme, upIsRed) {
                     AppNav(open = open, onOpenHandled = { open = null })
                 }

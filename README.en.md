@@ -77,7 +77,7 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Extract from the diary**: tap the light bulb on a diary day and tick paragraphs, or select some text and pick 提炼到笔记 from the selection menu; save it as a new note (titled after the day unless you type one) or append it to one. The original is untouched; the note remembers where it came from and takes you back there. Weekly reviews extract the same way.
 - **Today's review**: each day one note left alone the longest comes back to the top of the list.
 - **One level of topics**: a row of filters with a fixed button at its end that opens every topic in a grid (searchable once there are many); search every note.
-- **Order and swipes**: long-press a note to drag it (or sort by last updated or created); swipe left to delete, right to pin or move to a topic. Cards are translucent glass.
+- **Order and swipes**: long-press a note to drag it (or sort by last updated or created); swipe left to delete, right to pin or move to a topic. Cards are frosted glass, clear or deep (a setting). Pull the list down to start a new note.
 - **Never loses text either**: the diary's autosave and conflict-to-draft rules; unsaved notes are committed before a restore.
 
 ### Shared
