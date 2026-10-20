@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [Unreleased]
+
+### Changed
+
+- **Switches that move instead of blink.** One segmented control everywhere (health metric and
+  range, net worth range, account chart range, theme, up/down colours, fee side): the thumb slides
+  on a spring, the labels take the picked colour exactly where the thumb covers them, nothing
+  shifts sideways, and a pick gives a light haptic tick. The health range picker is a lighter
+  variant so the two rows no longer look like one control twice.
+- **Charts morph between views.** Switching a metric or a range reshapes the line out of the one
+  that was there, with the axis labels and the healthy band handing over; the left-to-right
+  draw-in only plays the first time. Applies to the health chart, the net worth chart and account
+  charts. Figures above the chart roll to their new values.
+- Stepping to the previous or next diary day slides the page in from that side, and the date rolls.
+
 ## [0.5.0] - 2026-10-20
 
 ### Added

@@ -88,10 +88,13 @@ import com.assetboard.domain.health.Health
 import com.assetboard.domain.health.HealthTrend
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
+import com.assetboard.ui.components.SegmentStyle
+import com.assetboard.ui.components.SegmentedControl
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.LineChart
 import com.assetboard.ui.components.SectionCard
+import com.assetboard.ui.components.SwapText
 import com.assetboard.ui.components.animatedCents
 import com.assetboard.ui.components.appear
 import com.assetboard.ui.components.pressScale
@@ -276,8 +279,8 @@ private fun HealthContent(
             Column(Modifier.appear(1), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val metrics = if (s.profile == null) listOf(HealthMetric.WEIGHT, HealthMetric.FAT) else HealthMetric.entries
                 if (metric !in metrics) metric = HealthMetric.WEIGHT
-                Segmented(metrics, metric, { it.label }) { metric = it }
-                Segmented(HealthRange.entries, range, { it.label }) { range = it }
+                SegmentedControl(metrics, metric, { it.label }, { metric = it })
+                SegmentedControl(HealthRange.entries, range, { it.label }, { range = it }, style = SegmentStyle.TINT, height = 32.dp)
             }
         }
         item { Box(Modifier.appear(2)) { TrendCard(s, metric, range) } }
@@ -447,33 +450,6 @@ private fun HeroFigure(label: String, value: String, grade: String?, modifier: M
     }
 }
 
-/** A row of options with the chosen one filled; the fill slides over in color. */
-@Composable
-fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).background(cs.surfaceContainerHigh).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        options.forEach { o ->
-            val on = o == selected
-            val bg by animateColorAsState(if (on) cs.surfaceContainer else Color.Transparent, tween(220), label = "seg")
-            val fg by animateColorAsState(if (on) cs.primary else cs.onSurfaceVariant, tween(220), label = "segText")
-            Box(
-                Modifier
-                    .weight(1f)
-                    .height(34.dp)
-                    .then(if (on) Modifier.shadow(2.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.10f)) else Modifier)
-                    .clip(RoundedCornerShape(50))
-                    .background(bg)
-                    .clickable { onSelect(o) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(label(o), color = fg, style = MaterialTheme.typography.labelLarge, fontWeight = if (on) FontWeight.SemiBold else null)
-            }
-        }
-    }
-}
 
 /**
  * The chosen metric over the chosen period: the summary of what changed between its two ends,
@@ -489,8 +465,8 @@ private fun TrendCard(s: HealthState, metric: HealthMetric, range: HealthRange) 
     SectionCard(contentPadding = PaddingValues(20.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
-                Text("${metric.label}变化", style = MaterialTheme.typography.titleMedium)
-                Text(HealthTrend.coverageLabel(range.days, period.records), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                SwapText("${metric.label}变化", style = MaterialTheme.typography.titleMedium)
+                SwapText(HealthTrend.coverageLabel(range.days, period.records), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             val first = chart.records.firstOrNull()
             val last = chart.records.lastOrNull()
@@ -498,8 +474,8 @@ private fun TrendCard(s: HealthState, metric: HealthMetric, range: HealthRange) 
                 val h = s.profile?.heightMm
                 val d = metric.value(last, h)!! - metric.value(first, h)!!
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(metric.deltaWithUnit(d), style = MaterialTheme.typography.titleMedium.merge(NumberStyle))
-                    Text("自 ${dayLabel(first.date)}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    SwapText(metric.deltaWithUnit(d), style = MaterialTheme.typography.titleMedium.merge(NumberStyle), textAlign = TextAlign.End)
+                    SwapText("自 ${dayLabel(first.date)}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, textAlign = TextAlign.End)
                 }
             }
         }
@@ -518,29 +494,41 @@ private fun TrendCard(s: HealthState, metric: HealthMetric, range: HealthRange) 
             )
         }
         Spacer(Modifier.height(6.dp))
-        if (chart.records.isEmpty()) {
-            Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                Text(if (metric == HealthMetric.FAT) "这段时间没有记录体脂率" else "这段时间没有记录", color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        // An empty period fades in place of the chart; the chart itself morphs between views.
+        // Keyed on empty-or-not, so the outgoing side keeps the data it had.
+        AnimatedContent(
+            chart.takeIf { it.records.isNotEmpty() },
+            contentKey = { it == null },
+            transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(160)) },
+            label = "chart",
+        ) { shown ->
+            if (shown == null) {
+                Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
+                    Text(if (metric == HealthMetric.FAT) "这段时间没有记录体脂率" else "这段时间没有记录", color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                LineChart(
+                    series = shown.series,
+                    modifier = Modifier.fillMaxWidth().height(220.dp),
+                    formatY = metric::format,
+                    onSelect = { selected = it },
+                    target = shown.target,
+                    targetLabel = shown.targetLabel,
+                    band = shown.band,
+                )
             }
-        } else {
-            LineChart(
-                series = chart.series,
-                modifier = Modifier.fillMaxWidth().height(220.dp),
-                formatY = metric::format,
-                onSelect = { selected = it },
-                target = chart.target,
-                targetLabel = chart.targetLabel,
-                band = chart.band,
-            )
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Legend(cs.primary, dashed = false, "每次记录")
-            if (chart.series.size > 1) Legend(cs.tertiary, dashed = true, "7 天平均")
+            androidx.compose.animation.AnimatedVisibility(chart.series.size > 1, enter = fadeIn(tween(260)), exit = fadeOut(tween(160))) {
+                Legend(cs.tertiary, dashed = true, "7 天平均")
+            }
             // Only when the band actually reaches the plotted values; the chart clips it otherwise.
             val ys = chart.series.first().points.map { it.y }
             val band = chart.band
-            if (band != null && ys.isNotEmpty() && band.first <= ys.max() && band.last >= ys.min()) {
+            val reached = band != null && ys.isNotEmpty() && band.first <= ys.max() && band.last >= ys.min()
+            androidx.compose.animation.AnimatedVisibility(reached, enter = fadeIn(tween(260)), exit = fadeOut(tween(160))) {
                 LegendBand(if (metric == HealthMetric.FAT) "标准区间" else "健康区间")
             }
         }
@@ -642,13 +630,17 @@ private fun TargetCard(s: HealthState, profile: HealthProfile, range: HealthRang
         )
         if (progress != null && start != null) {
             val shown = remember { Animatable(0f) }
-            LaunchedEffect(progress) { shown.animateTo(progress.toFloat(), tween(1_000, delayMillis = 200, easing = FastOutSlowInEasing)) }
+            // A slow fill on first show; a switch of range just moves it.
+            LaunchedEffect(progress) {
+                val first = shown.value == 0f
+                shown.animateTo(progress.toFloat(), tween(if (first) 1_000 else 520, delayMillis = if (first) 200 else 0, easing = FastOutSlowInEasing))
+            }
             Spacer(Modifier.height(8.dp))
             Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)).background(cs.primary.copy(alpha = 0.12f))) {
                 Box(Modifier.fillMaxWidth(shown.value).height(8.dp).clip(RoundedCornerShape(50)).background(Brush.horizontalGradient(listOf(cs.primary.copy(alpha = 0.6f), cs.primary))))
             }
             Spacer(Modifier.height(6.dp))
-            Text(
+            SwapText(
                 "自 ${dayLabel(start.date)}（${Health.kg(start.weightG)} kg）走完 ${(progress * 100).roundToLong()}%",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
             )

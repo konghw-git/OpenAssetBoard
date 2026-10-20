@@ -193,6 +193,19 @@ class ScreenshotTest {
         shot("05-trend", c) { TrendScreen(noop, {}, noop) }
     }
 
+    /** Mid-switch from 1年 to 3月: the thumb sliding and the line morphing, its ticks never stacked. */
+    @Test fun trendSwitchMidway() {
+        val c = demoContainer()
+        shot("05-trend", c) { TrendScreen(noop, {}, noop) }
+        compose.mainClock.autoAdvance = false
+        compose.onNode(hasText("3月") and hasClickAction()).performClick()
+        for (ms in listOf(40, 80, 160)) {
+            compose.mainClock.advanceTimeBy(if (ms == 160) 80 else 40)
+            compose.onRoot().captureRoboImage("build/screenshots/05d-trend-switch-${ms}ms.png")
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun trendLower() {
         val c = demoContainer()
         shot("05-trend", c) { TrendScreen(noop, {}, noop) }
@@ -276,6 +289,21 @@ class ScreenshotTest {
         compose.onNode(hasText("全部") and hasClickAction()).performClick()
         compose.mainClock.advanceTimeBy(1_500)
         compose.onRoot().captureRoboImage("build/screenshots/11d-health-bodyfat.png")
+    }
+
+    /** Mid-switch frames: the thumb on its way and the weight line morphing into body fat. */
+    @Test fun healthSwitchMidway() {
+        val c = withHealth(demoContainer())
+        shot("11-health", c) { HealthScreen(noop) }
+        compose.mainClock.autoAdvance = false
+        compose.onNode(hasText("体脂率") and hasClickAction()).performClick()
+        for (ms in listOf(40, 80, 120, 160, 200, 260)) {
+            compose.mainClock.advanceTimeBy(if (ms == 40) 40 else if (ms == 260) 60 else 40)
+            compose.onRoot().captureRoboImage("build/screenshots/11e-health-switch-${ms}ms.png")
+        }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onRoot().captureRoboImage("build/screenshots/11g-health-switch-done.png")
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun healthDark() {

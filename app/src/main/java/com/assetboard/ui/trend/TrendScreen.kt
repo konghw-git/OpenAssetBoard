@@ -54,6 +54,8 @@ import com.assetboard.domain.Money
 import com.assetboard.domain.NetWorthPoint
 import com.assetboard.domain.NetWorthTrend
 import com.assetboard.ui.LocalContainer
+import com.assetboard.ui.components.SegmentStyle
+import com.assetboard.ui.components.SegmentedControl
 import com.assetboard.ui.components.ChartRange
 import com.assetboard.ui.components.ListRow
 import com.assetboard.ui.components.MoneyText
@@ -205,25 +207,10 @@ private fun HeadStat(label: String, p: NetWorthPoint, modifier: Modifier) {
     }
 }
 
-/** 3月 / 半年 / 1年 / 全部 as one segmented pill. */
+/** 3月 / 半年 / 1年 / 全部: the one control this page is about. */
 @Composable
 private fun RangeTabs(range: ChartRange, onSelect: (ChartRange) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).background(cs.surfaceContainer).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        ChartRange.entries.forEach { r ->
-            val on = r == range
-            val bg by animateColorAsState(if (on) cs.primary else Color.Transparent, tween(200), label = "range")
-            Box(
-                Modifier.weight(1f).height(36.dp).clip(RoundedCornerShape(50)).background(bg).clickable { onSelect(r) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(r.label, style = MaterialTheme.typography.labelLarge, color = if (on) cs.onPrimary else cs.onSurfaceVariant)
-            }
-        }
-    }
+    SegmentedControl(ChartRange.entries, range, { it.label }, onSelect, style = SegmentStyle.SOLID)
 }
 
 @Composable

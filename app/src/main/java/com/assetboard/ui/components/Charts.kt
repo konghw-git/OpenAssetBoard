@@ -1,6 +1,7 @@
 package com.assetboard.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -14,11 +15,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -100,6 +101,10 @@ data class ChartSeries(
  * [target] (a dashed level line with its label) and [band] (a tinted range) are background:
  * they never widen the y range, never take part in the selection, and are clipped to what the
  * data shows, so a far-away target cannot flatten the line into the axis.
+ *
+ * It draws itself in from the left once. After that, new data morphs out of the line that was
+ * there: every point starts at the old line's height at the same place across the plot, the axis
+ * labels and the background cross-fade, so switching a metric or a range reads as one movement.
  */
 @Composable
 fun LineChart(
@@ -121,8 +126,14 @@ fun LineChart(
     val bandColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor, fontFeatureSettings = "tnum")
     var selected by remember(series) { mutableStateOf<Int?>(null) }
-    val progress = remember(series.firstOrNull()?.points?.size) { Animatable(0f) }
-    LaunchedEffect(progress) { progress.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
+    val reveal = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { reveal.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
+    // The frame last drawn; a change of data morphs from it.
+    val last = remember { arrayOfNulls<ChartFrame>(1) }
+    val change = remember(series, band, target) { Any() }
+    val from = remember(change) { last[0] }
+    val morph = remember(change) { Animatable(if (from == null) 1f else 0f) }
+    LaunchedEffect(morph) { morph.animateTo(1f, tween(450, easing = MorphEasing)) }
 
     // Plot bounds from the last draw, so touch x maps onto the same axis the lines use.
     val plotBounds = remember { floatArrayOf(0f, 1f) }
@@ -147,6 +158,17 @@ fun LineChart(
         minY -= pad
         maxY += pad
     }
+    fun nx(x: Long): Float = if (maxX == minX) 0.5f else (x - minX).toFloat() / (maxX - minX).toFloat()
+    fun ny(y: Long): Float = (y - minY).toFloat() / (maxY - minY).toFloat()
+    val frame = ChartFrame(
+        shape = primary.map { nx(it.x) to ny(it.y) },
+        yTexts = (0..3).map { i -> formatY(minY + (maxY - minY) * i / 3) },
+        xTexts = listOfNotNull(formatX(minX), formatX(maxX).takeIf { maxX != minX }),
+        band = band?.let { ny(it.first).coerceIn(0f, 1f) to ny(it.last).coerceIn(0f, 1f) }?.takeIf { it.second > it.first },
+        target = target?.takeIf { it in minY..maxY }?.let(::ny),
+        targetLabel = targetLabel,
+    )
+    SideEffect { last[0] = frame }
 
     Canvas(
         modifier
@@ -171,61 +193,85 @@ fun LineChart(
                 }
             },
     ) {
+        val t = morph.value
+        val old = from?.takeIf { t < 1f }
         val top = 8.dp.toPx()
         val bottom = size.height - 20.dp.toPx()
-        val yLabels = (0..3).map { i -> minY + (maxY - minY) * i / 3 }.map { it to measurer.measure(formatY(it), labelStyle) }
-        val gutter = yLabels.maxOf { it.second.size.width } + 8.dp.toPx()
+        val yLabels = frame.yTexts.map { measurer.measure(it, labelStyle) }
+        frame.gutter = yLabels.maxOf { it.size.width } + 8.dp.toPx()
+        val gutter = if (old != null) old.gutter + (frame.gutter - old.gutter) * t else frame.gutter
         val inset = 6.dp.toPx()
         val left = inset
         val right = size.width - gutter
         plotBounds[0] = left
         plotBounds[1] = right
-        fun px(x: Long): Float =
-            if (maxX == minX) (left + right) / 2 else left + (right - left) * ((x - minX).toFloat() / (maxX - minX).toFloat())
-        fun py(y: Long): Float = bottom - (bottom - top) * ((y - minY).toFloat() / (maxY - minY).toFloat())
-
-        // Grid with labels in the right gutter.
-        for ((yv, layout) in yLabels) {
-            val y = py(yv)
-            drawLine(grid, Offset(0f, y), Offset(right + inset, y), strokeWidth = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
-            drawText(layout, topLeft = Offset(size.width - layout.size.width, y - layout.size.height / 2f))
+        fun sx(n: Float): Float = left + (right - left) * n
+        fun sy(n: Float): Float = bottom - (bottom - top) * n
+        fun px(x: Long): Float = sx(nx(x))
+        // Mid-morph a point sits between the old line's height and its own.
+        fun py(x: Long, y: Long): Float {
+            val n = ny(y)
+            val start = old?.heightAt(nx(x)) ?: return sy(n)
+            return sy(start + (n - start) * t)
         }
-        val first = measurer.measure(formatX(minX), labelStyle)
-        drawText(first, topLeft = Offset(0f, bottom + 4.dp.toPx()))
-        if (maxX != minX) {
-            val last = measurer.measure(formatX(maxX), labelStyle)
-            drawText(last, topLeft = Offset(right - last.size.width, bottom + 4.dp.toPx()))
+
+        // Grid at fixed quarters, so only the labels change; old and new labels cross-fade.
+        for (i in 0..3) {
+            val y = sy(i / 3f)
+            drawLine(grid, Offset(0f, y), Offset(right + inset, y), strokeWidth = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
+            if (old != null) {
+                val o = measurer.measure(old.yTexts[i], labelStyle)
+                drawText(o, topLeft = Offset(size.width - o.size.width, y - o.size.height / 2f), alpha = fadeOutAlpha(t))
+            }
+            val l = yLabels[i]
+            drawText(l, topLeft = Offset(size.width - l.size.width, y - l.size.height / 2f), alpha = if (old != null) fadeInAlpha(t) else 1f)
+        }
+        fun xLabels(texts: List<String>, alpha: Float) {
+            texts.getOrNull(0)?.let { drawText(measurer.measure(it, labelStyle), topLeft = Offset(0f, bottom + 4.dp.toPx()), alpha = alpha) }
+            texts.getOrNull(1)?.let {
+                val l = measurer.measure(it, labelStyle)
+                drawText(l, topLeft = Offset(right - l.size.width, bottom + 4.dp.toPx()), alpha = alpha)
+            }
+        }
+        if (old != null && old.xTexts != frame.xTexts) {
+            xLabels(old.xTexts, fadeOutAlpha(t))
+            xLabels(frame.xTexts, fadeInAlpha(t))
+        } else {
+            xLabels(frame.xTexts, 1f)
         }
 
         // Background: the band and the target, only where they fall inside the plotted range.
-        if (band != null) {
-            val lo = band.first.coerceIn(minY, maxY)
-            val hi = band.last.coerceIn(minY, maxY)
-            if (hi > lo) {
-                drawRect(bandColor, topLeft = Offset(left - inset, py(hi)), size = Size(right - left + inset * 2, py(lo) - py(hi)))
+        fun background(f: ChartFrame, alpha: Float) {
+            f.band?.let { (lo, hi) ->
+                drawRect(bandColor.copy(alpha = bandColor.alpha * alpha), topLeft = Offset(left - inset, sy(hi)), size = Size(right - left + inset * 2, sy(lo) - sy(hi)))
+            }
+            f.target?.let { n ->
+                val y = sy(n)
+                drawLine(
+                    targetColor.copy(alpha = alpha), Offset(left - inset, y), Offset(right + inset, y), strokeWidth = 1.4.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())),
+                )
+                f.targetLabel?.let {
+                    val layout = measurer.measure(it, labelStyle.copy(color = targetColor))
+                    val above = y - layout.size.height - 2.dp.toPx()
+                    drawText(layout, topLeft = Offset(right - layout.size.width - 2.dp.toPx(), if (above >= top) above else y + 2.dp.toPx()), alpha = alpha)
+                }
             }
         }
-        if (target != null && target in minY..maxY) {
-            val y = py(target)
-            drawLine(targetColor, Offset(left - inset, y), Offset(right + inset, y), strokeWidth = 1.4.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
-            targetLabel?.let {
-                val layout = measurer.measure(it, labelStyle.copy(color = targetColor))
-                val above = y - layout.size.height - 2.dp.toPx()
-                drawText(layout, topLeft = Offset(right - layout.size.width - 2.dp.toPx(), if (above >= top) above else y + 2.dp.toPx()))
-            }
-        }
+        if (old != null) background(old, 1f - t)
+        background(frame, if (old != null) t else 1f)
 
-        clipRect(right = left + (right - left) * progress.value + inset) {
+        clipRect(right = left + (right - left) * reveal.value + inset) {
             for (s in series.asReversed()) {
                 val pts = s.points
                 if (pts.isEmpty()) continue
                 if (pts.size == 1) {
-                    drawCircle(s.color, 4.dp.toPx(), Offset(px(pts[0].x), py(pts[0].y)))
+                    drawCircle(s.color, 4.dp.toPx(), Offset(px(pts[0].x), py(pts[0].x, pts[0].y)))
                     continue
                 }
                 val path = Path().apply {
-                    moveTo(px(pts[0].x), py(pts[0].y))
-                    for (p in pts.drop(1)) lineTo(px(p.x), py(p.y))
+                    moveTo(px(pts[0].x), py(pts[0].x, pts[0].y))
+                    for (p in pts.drop(1)) lineTo(px(p.x), py(p.x, p.y))
                 }
                 if (s.fill) {
                     val area = Path().apply {
@@ -247,8 +293,9 @@ fun LineChart(
                 )
                 if (pts.size <= 24 && !s.dashed) {
                     for (p in pts) {
-                        drawCircle(surface, 3.dp.toPx(), Offset(px(p.x), py(p.y)))
-                        drawCircle(s.color, 3.dp.toPx(), Offset(px(p.x), py(p.y)), style = Stroke(1.6.dp.toPx()))
+                        val c = Offset(px(p.x), py(p.x, p.y))
+                        drawCircle(surface, 3.dp.toPx(), c)
+                        drawCircle(s.color, 3.dp.toPx(), c, style = Stroke(1.6.dp.toPx()))
                     }
                 }
             }
@@ -260,10 +307,43 @@ fun LineChart(
             drawLine(guideColor, Offset(x, top), Offset(x, bottom), strokeWidth = 1.dp.toPx())
             for (s in series) {
                 val q = s.points.minByOrNull { abs(it.x - p.x) } ?: continue
-                drawCircle(surface, 6.dp.toPx(), Offset(px(q.x), py(q.y)))
-                drawCircle(s.color, 4.5.dp.toPx(), Offset(px(q.x), py(q.y)))
+                drawCircle(surface, 6.dp.toPx(), Offset(px(q.x), py(q.x, q.y)))
+                drawCircle(s.color, 4.5.dp.toPx(), Offset(px(q.x), py(q.x, q.y)))
             }
         }
+    }
+}
+
+/** Moves at once and settles slowly, so a switch answers the tap without a lag. */
+internal val MorphEasing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+
+/** Labels during a morph: the old ones gone by the middle, the new ones in after it, never stacked. */
+internal fun fadeOutAlpha(t: Float) = (1f - t * 2.5f).coerceIn(0f, 1f)
+internal fun fadeInAlpha(t: Float) = ((t - 0.35f) / 0.65f).coerceIn(0f, 1f)
+
+/**
+ * What one draw of a chart showed, on a 0..1 square: the main line's shape, the axis texts and the
+ * background. The next data morphs out of it. [gutter] is filled in by the draw that used it.
+ */
+internal class ChartFrame(
+    val shape: List<Pair<Float, Float>>,
+    val yTexts: List<String>,
+    val xTexts: List<String>,
+    val band: Pair<Float, Float>? = null,
+    val target: Float? = null,
+    val targetLabel: String? = null,
+) {
+    var gutter = 0f
+
+    /** The line's height at [x] across the plot, straight between its points and flat past its ends. */
+    fun heightAt(x: Float): Float? {
+        if (shape.isEmpty()) return null
+        if (x <= shape.first().first) return shape.first().second
+        if (x >= shape.last().first) return shape.last().second
+        val i = shape.indexOfFirst { it.first >= x }
+        val (x0, y0) = shape[i - 1]
+        val (x1, y1) = shape[i]
+        return if (x1 == x0) y1 else y0 + (y1 - y0) * (x - x0) / (x1 - x0)
     }
 }
 
@@ -327,9 +407,5 @@ enum class ChartRange(val label: String, val days: Long?) {
 
 @Composable
 fun RangeChips(selected: ChartRange, onSelect: (ChartRange) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-        ChartRange.entries.forEach { r ->
-            FilterChip(selected = r == selected, onClick = { onSelect(r) }, label = { Text(r.label) })
-        }
-    }
+    SegmentedControl(ChartRange.entries, selected, { it.label }, onSelect, modifier, style = SegmentStyle.TINT, height = 32.dp)
 }

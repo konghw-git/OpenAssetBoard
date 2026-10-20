@@ -41,9 +41,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -74,6 +71,7 @@ import com.assetboard.data.ThemeMode
 import com.assetboard.domain.Dates
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
+import com.assetboard.ui.components.SegmentedControl
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.IconTile
@@ -290,21 +288,13 @@ fun SettingsScreen(
                         Spacer(Modifier.width(10.dp))
                         Text("主题", style = MaterialTheme.typography.bodyMedium)
                     }
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        ThemeMode.entries.forEachIndexed { i, m ->
-                            SegmentedButton(selected = theme == m, onClick = { settings.setThemeMode(m) }, shape = SegmentedButtonDefaults.itemShape(i, ThemeMode.entries.size)) { Text(m.label) }
-                        }
-                    }
+                    SegmentedControl(ThemeMode.entries, theme, { it.label }, settings::setThemeMode)
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)) {
                         IconTile(Icons.AutoMirrored.Outlined.TrendingUp, palette.group(3), size = 28.dp)
                         Spacer(Modifier.width(10.dp))
                         Text("涨跌颜色", style = MaterialTheme.typography.bodyMedium)
                     }
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        listOf(true to "红涨绿跌", false to "绿涨红跌").forEachIndexed { i, (v, label) ->
-                            SegmentedButton(selected = upIsRed == v, onClick = { settings.setUpIsRed(v) }, shape = SegmentedButtonDefaults.itemShape(i, 2)) { Text(label) }
-                        }
-                    }
+                    SegmentedControl(listOf(true, false), upIsRed, { if (it) "红涨绿跌" else "绿涨红跌" }, settings::setUpIsRed)
                 }
             }
 

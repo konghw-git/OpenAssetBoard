@@ -1,5 +1,6 @@
 package com.assetboard.ui.trend
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -9,6 +10,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -34,6 +37,9 @@ import androidx.compose.ui.unit.sp
 import com.assetboard.domain.Dates
 import com.assetboard.domain.Money
 import com.assetboard.domain.NetWorthPoint
+import com.assetboard.ui.components.MorphEasing
+import com.assetboard.ui.components.fadeInAlpha
+import com.assetboard.ui.components.fadeOutAlpha
 import com.assetboard.ui.theme.AppTheme
 import kotlin.math.abs
 import kotlin.math.max
@@ -71,17 +77,17 @@ private fun niceTicks(lo: Long, hi: Long): List<Long> {
     return (0..4).map { first + it * step }.filter { it <= hi + step / 2 }.take(5)
 }
 
-private fun DrawScope.yGrid(ticks: List<Long>, py: (Long) -> Float, right: Float, grid: Color, measurer: TextMeasurer, style: TextStyle) {
+private fun DrawScope.yGrid(ticks: List<Long>, py: (Long) -> Float, right: Float, grid: Color, measurer: TextMeasurer, style: TextStyle, alpha: Float = 1f) {
     for (t in ticks) {
         val y = py(t)
-        drawLine(grid, Offset(0f, y), Offset(right, y), strokeWidth = 1f)
+        drawLine(grid.copy(alpha = grid.alpha * alpha), Offset(0f, y), Offset(right, y), strokeWidth = 1f)
         val label = measurer.measure(Money.compact(t), style)
-        drawText(label, topLeft = Offset(size.width - label.size.width, y - label.size.height / 2f))
+        drawText(label, topLeft = Offset(size.width - label.size.width, y - label.size.height / 2f), alpha = alpha)
     }
 }
 
 /** Date labels under the plot: the ends always, the middle ones only where they fit. */
-private fun DrawScope.xLabels(times: List<Long>, px: (Long) -> Float, bottom: Float, left: Float, right: Float, measurer: TextMeasurer, style: TextStyle) {
+private fun DrawScope.xLabels(times: List<Long>, px: (Long) -> Float, bottom: Float, left: Float, right: Float, measurer: TextMeasurer, style: TextStyle, alpha: Float = 1f) {
     if (times.isEmpty()) return
     val lo = times.first()
     val hi = times.last()
@@ -99,7 +105,7 @@ private fun DrawScope.xLabels(times: List<Long>, px: (Long) -> Float, bottom: Fl
         val lastStart = right - measurer.measure(Dates.axis(hi), style).size.width
         if (x < lastEnd + gap) return@forEachIndexed
         if (i != marks.lastIndex && nextIsLast && x + text.size.width + gap > lastStart) return@forEachIndexed
-        drawText(text, topLeft = Offset(x, bottom + 6.dp.toPx()))
+        drawText(text, topLeft = Offset(x, bottom + 6.dp.toPx()), alpha = alpha)
         lastEnd = x + text.size.width
     }
 }
@@ -130,39 +136,64 @@ fun NetWorthChart(points: List<NetWorthPoint>, selected: Int?, onSelect: (Int?) 
     val extra = AppTheme.extra
     val measurer = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 10.sp, color = cs.onSurfaceVariant, fontFeatureSettings = "tnum")
-    val reveal = remember(points.size, points.firstOrNull()?.snapshot?.id) { Animatable(0f) }
-    LaunchedEffect(reveal) { reveal.animateTo(1f, tween(800, easing = FastOutSlowInEasing)) }
+    // Drawn in from the left once; a new range then morphs out of the line that was there.
+    val reveal = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { reveal.animateTo(1f, tween(800, easing = FastOutSlowInEasing)) }
+    val last = remember { arrayOfNulls<TrendFrame>(1) }
+    val change = remember(points) { Any() }
+    val from = remember(change) { last[0] }
+    val morph = remember(change) { Animatable(if (from == null) 1f else 0f) }
+    LaunchedEffect(morph) { morph.animateTo(1f, tween(450, easing = MorphEasing)) }
     val plot = remember { PlotX() }
     if (points.isEmpty()) return
     val minX = points.first().snapshot.at
     val maxX = points.last().snapshot.at
-    fun px(t: Long) = if (maxX == minX) (plot.left + plot.right) / 2 else plot.left + (plot.right - plot.left) * ((t - minX).toFloat() / (maxX - minX))
+    fun nx(t: Long) = if (maxX == minX) 0.5f else (t - minX).toFloat() / (maxX - minX)
+    fun px(t: Long) = plot.left + (plot.right - plot.left) * nx(t)
     val start = points.first().netWorth
-    val line = extra.signed(points.last().netWorth - start).takeIf { points.size > 1 } ?: cs.primary
+    val line by animateColorAsState(extra.signed(points.last().netWorth - start).takeIf { points.size > 1 } ?: cs.primary, tween(520), label = "line")
     val lo0 = points.minOf { it.netWorth }
     val hi0 = points.maxOf { it.netWorth }
     val pad = max((hi0 - lo0) / 6, max(100L, abs(hi0) / 20))
     val ticks = niceTicks(lo0 - pad, hi0 + pad)
     val lo = min(ticks.first(), lo0)
     val hi = max(ticks.last(), hi0)
+    fun ny(v: Long) = (v - lo).toFloat() / (hi - lo).coerceAtLeast(1)
+    val frame = TrendFrame(points.map { nx(it.snapshot.at) to ny(it.netWorth) }, ticks.map { ny(it) to it }, points.map { it.snapshot.at }, ny(start))
+    SideEffect { last[0] = frame }
 
     Canvas(modifier.scrub(points.size, plot, { px(points[it].snapshot.at) }, selected, onSelect)) {
         // Room above the line for the picked stocktake's bubble.
         val top = 40.dp.toPx()
         val bottom = size.height - 22.dp.toPx()
-        val gutter = ticks.maxOf { measurer.measure(Money.compact(it), labelStyle).size.width } + 10.dp.toPx()
+        val t = morph.value
+        val old = from?.takeIf { t < 1f }
+        frame.gutter = ticks.maxOf { measurer.measure(Money.compact(it), labelStyle).size.width } + 10.dp.toPx()
+        val gutter = if (old != null) old.gutter + (frame.gutter - old.gutter) * t else frame.gutter
         plot.left = 8.dp.toPx()
         plot.right = size.width - gutter
-        fun py(v: Long) = bottom - (bottom - top) * ((v - lo).toFloat() / (hi - lo).coerceAtLeast(1))
-        yGrid(ticks, ::py, plot.right + 4.dp.toPx(), extra.chartGrid, measurer, labelStyle)
-        xLabels(points.map { it.snapshot.at }, ::px, bottom, 0f, plot.right, measurer, labelStyle)
+        fun sy(n: Float) = bottom - (bottom - top) * n
+        fun py(v: Long) = sy(ny(v))
+        // Mid-morph a point sits between the old line's height and its own.
+        fun my(at: Long, v: Long): Float {
+            val n = ny(v)
+            val from0 = old?.heightAt(nx(at)) ?: return sy(n)
+            return sy(from0 + (n - from0) * t)
+        }
+        if (old != null) {
+            yGrid(old.ticks.map { it.second }, { v -> sy(old.ticks.first { it.second == v }.first) }, plot.right + 4.dp.toPx(), extra.chartGrid, measurer, labelStyle, fadeOutAlpha(t))
+            xLabels(old.times, { at -> plot.left + (plot.right - plot.left) * old.nx(at) }, bottom, 0f, plot.right, measurer, labelStyle, fadeOutAlpha(t))
+        }
+        yGrid(ticks, ::py, plot.right + 4.dp.toPx(), extra.chartGrid, measurer, labelStyle, if (old != null) fadeInAlpha(t) else 1f)
+        xLabels(points.map { it.snapshot.at }, ::px, bottom, 0f, plot.right, measurer, labelStyle, if (old != null) fadeInAlpha(t) else 1f)
 
         // The starting value, for "above the line is a gain".
         if (points.size > 1) {
-            drawLine(cs.outline, Offset(plot.left, py(start)), Offset(plot.right, py(start)), strokeWidth = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 5.dp.toPx())))
+            val y = if (old != null) sy(old.start + (ny(start) - old.start) * t) else py(start)
+            drawLine(cs.outline, Offset(plot.left, y), Offset(plot.right, y), strokeWidth = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 5.dp.toPx())))
         }
         val path = Path()
-        points.forEachIndexed { i, p -> if (i == 0) path.moveTo(px(p.snapshot.at), py(p.netWorth)) else path.lineTo(px(p.snapshot.at), py(p.netWorth)) }
+        points.forEachIndexed { i, p -> if (i == 0) path.moveTo(px(p.snapshot.at), my(p.snapshot.at, p.netWorth)) else path.lineTo(px(p.snapshot.at), my(p.snapshot.at, p.netWorth)) }
         clipRect(right = plot.left + (plot.right - plot.left) * reveal.value + 8.dp.toPx()) {
             if (points.size > 1) {
                 val area = Path().apply {
@@ -176,7 +207,7 @@ fun NetWorthChart(points: List<NetWorthPoint>, selected: Int?, onSelect: (Int?) 
             }
             if (points.size <= 40) {
                 for (p in points) {
-                    val c = Offset(px(p.snapshot.at), py(p.netWorth))
+                    val c = Offset(px(p.snapshot.at), my(p.snapshot.at, p.netWorth))
                     drawCircle(cs.surfaceContainer, 3.5.dp.toPx(), c)
                     drawCircle(line, 3.5.dp.toPx(), c, style = Stroke(1.8.dp.toPx()))
                 }
@@ -198,6 +229,31 @@ fun NetWorthChart(points: List<NetWorthPoint>, selected: Int?, onSelect: (Int?) 
             ),
             measurer, cs.inverseSurface,
         )
+    }
+}
+
+/**
+ * What one draw of [NetWorthChart] showed, on a 0..1 square: the line, the ticks, the dates and
+ * the starting value. The next range morphs out of it. [gutter] is filled in by the draw.
+ */
+private class TrendFrame(
+    val shape: List<Pair<Float, Float>>,
+    val ticks: List<Pair<Float, Long>>,
+    val times: List<Long>,
+    val start: Float,
+) {
+    var gutter = 0f
+
+    fun nx(at: Long): Float = if (times.first() == times.last()) 0.5f else (at - times.first()).toFloat() / (times.last() - times.first())
+
+    /** The line's height at [x] across the plot, straight between its points and flat past its ends. */
+    fun heightAt(x: Float): Float {
+        if (x <= shape.first().first) return shape.first().second
+        if (x >= shape.last().first) return shape.last().second
+        val i = shape.indexOfFirst { it.first >= x }
+        val (x0, y0) = shape[i - 1]
+        val (x1, y1) = shape[i]
+        return if (x1 == x0) y1 else y0 + (y1 - y0) * (x - x0) / (x1 - x0)
     }
 }
 

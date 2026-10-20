@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.assetboard.data.HealthProfile
 import com.assetboard.data.Sex
 import com.assetboard.domain.health.Health
+import com.assetboard.ui.components.SegmentedControl
 import com.assetboard.ui.components.DatePickDialog
 import com.assetboard.ui.components.SelectField
 import java.time.LocalDate
@@ -80,7 +81,7 @@ fun HealthProfileSheet(
                 "身高用来算 BMI，生日和性别决定体脂率的分级。只保存在这台手机上，跟着备份走。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Segmented(Sex.entries, sex, { if (it == Sex.MALE) "男" else "女" }) { sex = it }
+            SegmentedControl(Sex.entries, sex, { if (it == Sex.MALE) "男" else "女" }, { sex = it })
             SelectField(
                 label = "生日",
                 value = birth?.let { LocalDate.parse(it).let { d -> "${d.year}年${d.monthValue}月${d.dayOfMonth}日" } } ?: "选择生日",

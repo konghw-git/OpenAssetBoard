@@ -25,9 +25,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -55,6 +52,7 @@ import com.assetboard.domain.LedgerException
 import com.assetboard.domain.Money
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
+import com.assetboard.ui.components.SegmentedControl
 import com.assetboard.ui.components.AccountAvatar
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.DateField
@@ -259,11 +257,7 @@ fun FlowEditScreen(accountId: String?, flowId: String?, initialKind: String?, on
                     Spacer(Modifier.height(10.dp))
                     Text("手续费算谁的成本", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
                     Spacer(Modifier.height(6.dp))
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        listOf(FeeOn.FROM to "转出方", FeeOn.TO to "转入方").forEachIndexed { i, (v, label) ->
-                            SegmentedButton(selected = vm.feeOn == v, onClick = { vm.feeOn = v }, shape = SegmentedButtonDefaults.itemShape(i, 2)) { Text(label) }
-                        }
-                    }
+                    SegmentedControl(listOf(FeeOn.FROM, FeeOn.TO), vm.feeOn, { if (it == FeeOn.FROM) "转出方" else "转入方" }, { vm.feeOn = it })
                     Text(
                         "只影响投资账户的累计盈亏：申购费算基金的，赎回费也算基金的。",
                         style = MaterialTheme.typography.bodySmall,

@@ -19,6 +19,16 @@ import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.HeaderAction
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.AnimatedContent
+import kotlin.math.abs
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.SideEffect
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -255,8 +265,19 @@ fun DiaryScreen(
                 )
                 StocktakeStrip(vm, date, today, onStocktake)
             }
+            // Stepping a day slides the new page in from the side it lies on: a later day from the right.
+            val lastDate = remember { arrayOf(date) }
+            val shift = remember(date) { Animatable(lastDate[0].compareTo(date).coerceIn(-1, 1).toFloat() * -1f) }
+            SideEffect { lastDate[0] = date }
+            LaunchedEffect(shift) { shift.animateTo(0f, tween(320, easing = FastOutSlowInEasing)) }
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 48.dp),
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationX = shift.value * 32.dp.toPx()
+                        alpha = 1f - abs(shift.value) * 0.85f
+                    }
+                    .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 48.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 drafts.forEach { d ->
@@ -462,16 +483,27 @@ private fun DayHeader(
     Column(Modifier.fillMaxWidth().animateContentSize().padding(horizontal = 6.dp, vertical = 2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).clip(MaterialTheme.shapes.medium).clickable(onClick = onJump), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    date.dayOfMonth.toString(),
-                    style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = cs.primary,
-                )
+                // The date rolls with the step: a later day comes up from below, an earlier one from above.
+                val roll: AnimatedContentTransitionScope<LocalDate>.() -> ContentTransform = {
+                    val later = targetState > initialState
+                    (slideInVertically(tween(280, easing = FastOutSlowInEasing)) { if (later) it / 2 else -it / 2 } + fadeIn(tween(220, delayMillis = 40))) togetherWith
+                        (slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { if (later) -it / 2 else it / 2 } + fadeOut(tween(140))) using
+                        SizeTransform(clip = false)
+                }
+                AnimatedContent(date, transitionSpec = roll, label = "day") { d ->
+                    Text(
+                        d.dayOfMonth.toString(),
+                        style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = cs.primary,
+                    )
+                }
                 Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("${date.monthValue}月 · ${Recurrence.weekName(date.dayOfWeek)}", style = MaterialTheme.typography.titleMedium)
-                    Text("${date.year} · 农历${info.lunar}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                AnimatedContent(date, transitionSpec = roll, label = "dayInfo") { d ->
+                    Column {
+                        Text("${d.monthValue}月 · ${Recurrence.weekName(d.dayOfWeek)}", style = MaterialTheme.typography.titleMedium)
+                        Text("${d.year} · 农历${ChineseCalendar.info(d).lunar}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    }
                 }
             }
             // Day stepping around the calendar: previous, the month view, back to today when away, next up to today.
