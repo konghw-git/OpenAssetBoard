@@ -56,11 +56,11 @@ fun DonutChart(
     modifier: Modifier = Modifier,
     thickness: Dp = 18.dp,
     highlighted: Int? = null,
+    track: Color = MaterialTheme.colorScheme.surfaceVariant,
     center: @Composable BoxScope.() -> Unit = {},
 ) {
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) { progress.animateTo(1f, tween(800, easing = FastOutSlowInEasing)) }
-    val track = MaterialTheme.colorScheme.surfaceVariant
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = thickness.toPx()

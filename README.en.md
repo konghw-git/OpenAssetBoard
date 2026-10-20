@@ -39,12 +39,12 @@ This app is built for it. One stocktake walks every account, you change the thre
 
 ### Assets
 
-- **Net worth**: net worth, total assets / liabilities, debt ratio, accounts grouped with subtotals, a donut chart for allocation that drills down into accounts.
+- **Net worth**: net worth, total assets / liabilities, debt ratio, accounts grouped with subtotals, a small allocation ring inside the net worth card; groups fold to their subtotal and open to show each account.
 - **Stocktake**: edit every account inline, touch only the ones that moved, backfill historical dates; each stocktake becomes a point on the net worth line.
 - **Trend**: 3 months / 6 months / 1 year / all time, with period high, low, change and change ratio; a bar-and-line chart of assets vs liabilities.
 - **Investment accounts**: buy, redeem, dividend, transfer, repay, borrow, external in/out. Fees have a payer, so the P&L arithmetic stays honest. Market value and net invested drawn as two lines.
 - **Account management**: groups, icons (built-in marks for common banks, payment apps and funds), an include-in-net-worth switch, suspend, "locked until" dates, moving the baseline earlier.
-- **Cash at hand**: the counted accounts minus investments and locked balances, with a bar splitting assets into cash / locked / invested.
+- **Cash at hand**: the counted accounts minus investments and locked balances, with a bar splitting assets into cash / locked / invested; tapping it lists every cash account.
 - **Health as an asset**: weigh in once a day, record weight (body fat optional), and follow weight, body fat and BMI with a 7-day average; BMI and body-fat grades, fat and lean mass, progress to a target and a nine-cell body type. A day without a weigh-in simply stays empty — no interpolation, no streaks.
 - **Home-screen widget**: net worth plus a one-tap stocktake.
 

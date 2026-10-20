@@ -115,17 +115,33 @@ class ScreenshotTest {
         shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
     }
 
-    /** Picking a group in the allocation card, then tapping the ring, shows the total again. */
+    /** Picking a group under the hero's ring puts its share in the middle; picking it again lets go. */
     @Test fun allocationReturnsToTotal() {
         val c = demoContainer()
         shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        compose.onNodeWithText("配置", useUnmergedTree = true).assertExists()
         compose.onAllNodesWithText("储蓄账户")[0].performClick()
-        compose.onNodeWithText("点圆环看总资产").assertExists().performClick()
-        compose.waitForIdle()
-        compose.onNodeWithText("点圆环看总资产").assertDoesNotExist()
-        compose.onAllNodesWithText("投资账户")[0].performClick()
-        compose.onAllNodesWithText("投资账户")[0].performClick()
-        compose.onNodeWithText("点圆环看总资产").assertDoesNotExist()
+        compose.onNodeWithText("配置", useUnmergedTree = true).assertDoesNotExist()
+        compose.onAllNodesWithText("储蓄账户")[0].performClick()
+        compose.onNodeWithText("配置", useUnmergedTree = true).assertExists()
+    }
+
+    /** Groups start folded; one opens on tap, and the header opens them all. */
+    @Test fun overviewGroupsFold() {
+        val c = demoContainer()
+        shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        compose.onNodeWithText("农行①").assertDoesNotExist()
+        compose.onNode(hasScrollAction()).performScrollToIndex(2)
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.onRoot().captureRoboImage("build/screenshots/01c-overview-accounts.png")
+        // [0] is the hero's legend row, [1] the group in the accounts card.
+        compose.onAllNodesWithText("储蓄账户")[1].performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("农行①").assertExists()
+        compose.onNodeWithText("全部展开").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("全部收起").assertExists()
+        compose.onRoot().captureRoboImage("build/screenshots/01d-overview-accounts-open.png")
     }
 
     @Test fun overviewDark() {
@@ -278,12 +294,22 @@ class ScreenshotTest {
         shot("14-health-profile", c) { HealthScreen(noop) }
     }
 
+    /** A single weigh-in has no line yet: the tile shows a dashed level ending in that day's dot. */
+    @Test fun overviewOneWeighIn() {
+        val c = demoContainer()
+        runBlocking(c.gate.bound()) {
+            c.health.saveProfile(Sex.MALE, LocalDate.of(2001, 8, 2), 1820, null)
+            c.health.save(MeasurementDraft(null, LocalDate.now(), 92_100, null, null))
+        }
+        shot("01e-overview-one-weigh-in", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+    }
+
     @Test fun overviewCashAndHealth() {
         val c = withHealth(demoContainer())
-        shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
-        compose.onNodeWithText("个现金账户", substring = true).performClick()
-        compose.onNode(hasScrollAction()).performScrollToIndex(2)
+        shot("01a-overview-health", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        compose.onNodeWithText("可用现金").performClick()
         compose.mainClock.advanceTimeBy(2_000)
-        compose.onRoot().captureRoboImage("build/screenshots/01b-overview-cash-health.png")
+        compose.onNodeWithText("现金账户 · ", substring = true).assertExists()
+        compose.onRoot().captureRoboImage("build/screenshots/01b-overview-cash.png")
     }
 }

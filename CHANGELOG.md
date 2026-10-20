@@ -10,19 +10,26 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- **Health as an asset.** A health card on the assets tab and a health page: one weigh-in a day
+- **Health as an asset.** A health tile on the assets tab and a health page: one weigh-in a day
   (weight required, body fat optional), weight / body fat / BMI lines over 30 days, 90 days, a year
   or everything with a rolling 7-day average, the healthy band and the target behind them; BMI
   grade (WS/T 428-2013), body-fat grade by sex and age on the day (Gallagher 2000), fat and lean
   mass, progress to the target and the scale's nine body types. Days without a weigh-in stay
   empty. A profile (sex, birthday, height, optional target) is stored with the data.
-- **Cash at hand.** A card on the assets tab with the money that can be spent now: counted asset
-  accounts minus investments and balances still locked.
+- **Cash at hand.** A tile on the assets tab with the money that can be spent now: counted asset
+  accounts minus investments and balances still locked. Tapping it opens the split and every cash
+  account.
 - **Inline checklists.** A todo's checklist items show as small check points under its card and
   tick in place.
 
 ### Changed
 
+- A denser assets tab. Allocation moves into the net worth card as a small ring with a row per
+  group, so the total is no longer shown twice. Cash at hand and health sit side by side as two
+  tinted tiles; the health tile draws its last 30 weigh-ins (a dashed level while there is only
+  one). All accounts live in one card, folded by group to the subtotal, its share and a few
+  account tiles; a tap opens a group, the header opens them all. The health shortcut leaves the
+  header, so the date line no longer gets cut off.
 - The diary opens for reading on every day; the keyboard comes up only when you tap the page.
 - Database schema 4 (explicit migration from 3) and backup format 4; format 1–3 files still restore,
   with the health tables left empty.
