@@ -24,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.AppContainer
 import com.assetboard.data.BackupPreview
 import com.assetboard.data.PreRestoreCopy
@@ -92,13 +94,12 @@ fun PreRestoreScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) { vm.load() }
     RestoreConfirm(vm)
     val cs = MaterialTheme.colorScheme
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text("恢复前副本") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->

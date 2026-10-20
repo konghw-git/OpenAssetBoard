@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.assetboard.ui.components.GlassSheet
 import com.assetboard.data.NoteTopic
 import com.assetboard.ui.components.pressScale
 import com.assetboard.ui.components.LocalAmbient
@@ -82,7 +83,7 @@ fun TopicSheet(
     var naming by rememberSaveable { mutableStateOf<String?>(null) }
     val q = query.trim()
     val matches = if (q.isEmpty()) topics else topics.filter { it.name.contains(q, ignoreCase = true) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    GlassSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).imePadding().navigationBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

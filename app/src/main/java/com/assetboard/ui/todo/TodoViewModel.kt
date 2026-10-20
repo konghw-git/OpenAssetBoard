@@ -44,6 +44,11 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
 
     fun toggleChecklist(itemId: String) = action { repo.toggleChecklist(itemId) }
 
+    fun deleteChecklistItem(itemId: String) = action {
+        val item = repo.deleteChecklistItem(itemId) ?: return@action
+        _events.tryEmit(TodoEvent("已删除检查项「${item.text.take(14)}」") { repo.restoreChecklistItem(item) })
+    }
+
     fun complete(t: Todo) = action {
         val logged = repo.complete(t.id, t.stateSeq)
         _events.tryEmit(
@@ -129,6 +134,6 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
     fun isRepeat(t: Todo) = t.kind == TodoKind.REPEAT_SOURCE
 }
 
-/** Shows [TodoViewModel.events]; undo stays offered for 5 seconds. */
+/** Shows [TodoViewModel.events]; undo stays offered for [com.assetboard.ui.components.UNDO_MS]. */
 @Composable
 fun TodoSnackbars(vm: TodoViewModel, host: SnackbarHostState) = UndoMessages(vm.events, host, vm::undo)

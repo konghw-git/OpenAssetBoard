@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">强者之路</string>
+    <string name="app_name">日盈</string>
     <string name="widget_name">净资产</string>
     <string name="widget_description">显示净资产，一键开始盘点</string>
     <string name="todo_widget_name">今天待办</string>

@@ -48,6 +48,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.domain.Dates
 import com.assetboard.domain.LedgerData
 import com.assetboard.domain.Money
@@ -83,14 +85,13 @@ fun TrendScreen(onBack: () -> Unit, onOpenStocktake: (String) -> Unit, onNewStoc
     var selected by remember(period) { mutableStateOf<Int?>(null) }
     val cs = MaterialTheme.colorScheme
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text("净值趋势") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = { StocktakeAction(onNewStocktake) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->
@@ -172,7 +173,7 @@ private fun Headline(p: NetWorthTrend.Period, range: ChartRange) {
                 ) {
                     Icon(if (c >= 0) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, null, tint = extra.onHero, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    val ratio = p.changeRatio?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.US, "%.1f", it * 100) + "%)" }.orEmpty()
+                    val ratio = p.changeRatio?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.US, "%.2f", it * 100) + "%)" }.orEmpty()
                     Text(Money.format(c, signed = true) + ratio, color = extra.onHero, style = MaterialTheme.typography.labelLarge.merge(NumberStyle))
                 }
                 Spacer(Modifier.width(8.dp))
@@ -203,7 +204,7 @@ private fun HeadStat(label: String, p: NetWorthPoint, modifier: Modifier) {
     val extra = AppTheme.extra
     Column(modifier) {
         Text("$label · ${Dates.short(p.snapshot.at)}", color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall)
-        Text(Money.compact(p.netWorth), color = extra.onHero, style = MaterialTheme.typography.titleSmall.merge(NumberStyle))
+        Text(Money.short(p.netWorth), color = extra.onHero, style = MaterialTheme.typography.titleSmall.merge(NumberStyle))
     }
 }
 
@@ -255,7 +256,7 @@ private fun Legend(label: String, cents: Long, color: Color, modifier: Modifier)
             Spacer(Modifier.width(6.dp))
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text(Money.compact(cents), style = MaterialTheme.typography.titleSmall.merge(NumberStyle), maxLines = 1)
+        Text(Money.short(cents), style = MaterialTheme.typography.titleSmall.merge(NumberStyle), maxLines = 1)
     }
 }
 
@@ -293,7 +294,7 @@ private fun ChangeCard(p: NetWorthTrend.Period, ledger: LedgerData?) {
                             Box(Modifier.fillMaxWidth(abs(g.effect).toFloat() / biggest).height(5.dp).clip(RoundedCornerShape(50)).background(extra.signed(g.effect).copy(alpha = 0.7f)))
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text("${Money.compact(g.start)} → ${Money.compact(g.end)}", style = MaterialTheme.typography.labelSmall.merge(NumberStyle), color = cs.onSurfaceVariant)
+                        Text("${Money.short(g.start)} → ${Money.short(g.end)}", style = MaterialTheme.typography.labelSmall.merge(NumberStyle), color = cs.onSurfaceVariant)
                     }
                 }
             }
@@ -328,7 +329,7 @@ private fun Stocktakes(all: List<NetWorthPoint>, onOpen: (String) -> Unit) {
             val prev = desc.getOrNull(i + 1)
             ListRow(
                 title = Dates.date(p.snapshot.at),
-                subtitle = "资产 ${Money.compact(p.assets)} · 负债 ${Money.compact(p.liabilities)}",
+                subtitle = "资产 ${Money.short(p.assets)} · 负债 ${Money.short(p.liabilities)}",
                 onClick = { onOpen(p.snapshot.id) },
                 trailing = {
                     Column(horizontalAlignment = Alignment.End) {

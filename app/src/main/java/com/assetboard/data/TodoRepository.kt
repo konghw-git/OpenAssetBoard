@@ -543,10 +543,20 @@ class TodoRepository(
         dao.updateTodo(t.bump(seq = false))
     }
 
-    suspend fun deleteChecklistItem(itemId: String) = tx {
-        val item = dao.checklistItem(itemId) ?: return@tx
+    /** Returns the item as it was, for [restoreChecklistItem]; null if it was already gone. */
+    suspend fun deleteChecklistItem(itemId: String): ChecklistItem? = tx {
+        val item = dao.checklistItem(itemId) ?: return@tx null
         val t = live(item.todoId)
         dao.deleteChecklistItem(itemId)
+        dao.updateTodo(t.bump(seq = false))
+        item
+    }
+
+    /** Undoes [deleteChecklistItem]: the item comes back in its place, if its todo is still there. */
+    suspend fun restoreChecklistItem(item: ChecklistItem) = tx {
+        val t = live(item.todoId)
+        if (dao.checklistItem(item.id) != null) return@tx
+        dao.insertChecklistItem(item)
         dao.updateTodo(t.bump(seq = false))
     }
 

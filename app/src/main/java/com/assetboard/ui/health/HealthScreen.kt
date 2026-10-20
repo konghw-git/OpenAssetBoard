@@ -79,6 +79,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.AppContainer
 import com.assetboard.data.BodyMeasurement
 import com.assetboard.data.HealthProfile
@@ -187,8 +189,7 @@ fun HealthScreen(onBack: () -> Unit, startRecording: Boolean = false) {
         }
     }
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text("健康资产") },
@@ -197,14 +198,14 @@ fun HealthScreen(onBack: () -> Unit, startRecording: Boolean = false) {
                     IconButton(onClick = { profileOpen = true }) { Icon(Icons.Outlined.ManageAccounts, "健康档案") }
                     RecordAction { editing = NEW }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->
         val s = state
         if (s == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            return@Scaffold
+            return@GlassScaffold
         }
         HealthContent(
             s,

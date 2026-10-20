@@ -1,8 +1,10 @@
 <div align="center">
 
-<img src="docs/images/icon.png" width="96" alt="强者之路">
+<img src="docs/images/icon.png" width="96" alt="日盈 Gain">
 
-# 强者之路 · OpenAssetBoard
+# 日盈 Gain · OpenAssetBoard
+
+*Act every day, gain every day.*
 
 **A fully local Android app: a personal asset board, a Things-style todo manager, a one-entry-a-day diary, and notes.**
 
@@ -17,7 +19,7 @@ Open it and you know exactly what you're worth; jot down what you have to do tod
 
 </div>
 
-<img src="docs/images/banner.webp" width="100%" alt="强者之路 — asset board, todo and diary">
+<img src="docs/images/banner.webp" width="100%" alt="日盈 Gain — asset board, todo and diary">
 
 <img src="docs/images/24-overview-fold.webp" width="100%" alt="Asset overview on a foldable, two-pane layout">
 
@@ -115,7 +117,7 @@ Download the latest `OpenAssetBoard-x.y.z.apk` from [Releases](https://github.co
 - **Android 10 (API 29) and up.**
 - The app is written for Chinese Android phones (vivo, Xiaomi, OPPO and friends). **Reminder punctuality depends on background permissions**: after installing, open Settings → reminder setup and follow the checklist for autostart, background running, notifications and exact alarms. It works without Google services.
 - There is no store listing. From 0.8.0 the app upgrades itself from Settings › 应用更新 (download, signature check, a backup first, then the system installer); older versions need one manual install.
-- The launcher name is 「强者之路」 and the package is `com.assetboard`; the repository is OpenAssetBoard. Same app.
+- The launcher name is 「日盈」 (Gain; 「强者之路」 before 0.9.0) and the package is `com.assetboard`; the repository is OpenAssetBoard. Same app.
 
 > ⚠️ This is a personal project, not audited financial software. Try it with a few days of test data before you trust it with real balances, and back up regularly.
 

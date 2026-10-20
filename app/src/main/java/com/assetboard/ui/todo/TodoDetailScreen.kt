@@ -40,7 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHost
+
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
@@ -48,6 +48,10 @@ import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -83,6 +87,13 @@ import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.ConfirmDialog
+import com.assetboard.ui.components.DustHost
+import com.assetboard.ui.components.DustState
+import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.components.LocalDust
+import com.assetboard.ui.components.UndoEvent
+import com.assetboard.ui.components.UndoMessages
+import com.assetboard.ui.components.dissolvable
 import com.assetboard.ui.components.DatePickDialog
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.ListPickerDialog
@@ -128,7 +139,7 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, DetailState(null, emptyList(), emptyList(), emptyList(), null, false))
 
-    val events = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val events = MutableSharedFlow<UndoEvent>(extraBufferCapacity = 4)
     val confirmRecord = MutableStateFlow(false)
     private val title = MutableStateFlow<String?>(null)
     private val notes = MutableStateFlow<String?>(null)
@@ -165,7 +176,15 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
     fun addItem(text: String) = action { if (text.isNotBlank()) repo.addChecklistItem(id, text) }
     fun toggleItem(itemId: String) = action { repo.toggleChecklist(itemId) }
     fun editItem(itemId: String, text: String) = action { repo.setChecklistText(itemId, text) }
-    fun deleteItem(itemId: String) = action { repo.deleteChecklistItem(itemId) }
+    fun deleteItem(itemId: String) = action {
+        val item = repo.deleteChecklistItem(itemId) ?: return@action
+        events.tryEmit(UndoEvent("已删除检查项「${item.text.take(14)}」") { repo.restoreChecklistItem(item) })
+    }
+
+    fun undo(e: UndoEvent) {
+        val u = e.undo ?: return
+        action { u() }
+    }
 
     // Completing and skipping copy the title into the record and fix the undo revision, so the
     // typed text goes in first.
@@ -173,7 +192,7 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
         val t = state.value.todo ?: return@action
         commitText()
         repo.complete(t.id, t.stateSeq)
-        events.tryEmit(if (t.kind == TodoKind.REPEAT_SOURCE) "本期已完成，已排到下一期" else "已完成")
+        events.tryEmit(UndoEvent(if (t.kind == TodoKind.REPEAT_SOURCE) "本期已完成，已排到下一期" else "已完成"))
     }
 
     fun uncomplete(deleteOnly: Boolean = false) = action {
@@ -184,7 +203,7 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
         val t = state.value.todo ?: return@action
         commitText()
         repo.skip(t.id, t.stateSeq)
-        events.tryEmit("已跳过本期")
+        events.tryEmit(UndoEvent("已跳过本期"))
     }
 
     fun delete(onDeleted: () -> Unit) = action(onSuccess = onDeleted) { repo.delete(id) }
@@ -209,7 +228,9 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
     val snackbar = remember { SnackbarHostState() }
     val today = rememberToday()
     ErrorDialog(error) { vm.error.value = null }
-    LaunchedEffect(vm) { vm.events.collect { snackbar.showSnackbar(it) } }
+    UndoMessages(vm.events, snackbar, vm::undo)
+    // The detail is usually a sheet, a window over the app's dust overlay: it has dust of its own.
+    val dust = remember { DustState() }
     DisposableEffect(vm) { onDispose { vm.flush(container) } }
     LaunchedEffect(state.loaded, state.todo) { if (state.loaded && state.todo == null) onClose() }
     val t = state.todo ?: return
@@ -224,6 +245,7 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
     val editable = !record && !ended
 
     Box(modifier.fillMaxWidth()) {
+        CompositionLocalProvider(LocalDust provides dust) {
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onClose) {
@@ -321,7 +343,9 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
                 }
             }
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+        }
+        DustHost(dust)
+        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
     }
 
     when (dialog) {
@@ -453,10 +477,14 @@ private fun Schedule(t: Todo, today: LocalDate, editable: Boolean, onDialog: (St
 @Composable
 private fun Checklist(items: List<ChecklistItem>, editable: Boolean, vm: TodoDetailViewModel) {
     val cs = MaterialTheme.colorScheme
+    val dust = LocalDust.current
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
     SectionCard {
         SectionHeader("检查项" + if (items.isNotEmpty()) "  ${items.count { it.done }}/${items.size}" else "")
         items.forEach { item ->
-            Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            key(item.id) {
+            Row(Modifier.fillMaxWidth().dissolvable(checklistKey(item.id)).padding(start = 4.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 CheckCircle(item.done, false, onToggle = { if (editable) vm.toggleItem(item.id) })
                 var text by remember(item.id) { mutableStateOf(item.text) }
                 var focused by remember(item.id) { mutableStateOf(false) }
@@ -476,7 +504,19 @@ private fun Checklist(items: List<ChecklistItem>, editable: Boolean, vm: TodoDet
                         focused = f.isFocused
                     },
                 )
-                if (editable) IconButton(onClick = { vm.deleteItem(item.id) }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Close, "删除检查项", Modifier.size(16.dp), tint = cs.outline) }
+                if (editable) {
+                    IconButton(
+                        onClick = {
+                            // The item alone turns to dust, as a swiped todo does.
+                            scope.launch {
+                                dust?.dissolve(listOf(checklistKey(item.id)), cell = with(density) { 2.5.dp.toPx() })
+                                vm.deleteItem(item.id)
+                            }
+                        },
+                        modifier = Modifier.size(36.dp),
+                    ) { Icon(Icons.Default.Close, "删除检查项", Modifier.size(16.dp), tint = cs.outline) }
+                }
+            }
             }
         }
         if (editable) {

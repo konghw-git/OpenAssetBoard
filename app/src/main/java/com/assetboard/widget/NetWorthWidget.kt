@@ -84,7 +84,7 @@ private fun Content(totals: Ledger.Totals, lastAt: Long?) {
             )
             if (wide) {
                 Text(
-                    "资产 ${Money.compact(totals.assets)} · 负债 ${Money.compact(-totals.liabilities)}",
+                    "资产 ${Money.short(totals.assets)} · 负债 ${Money.short(-totals.liabilities)}",
                     style = TextStyle(color = colors.onPrimaryContainer, fontSize = 11.sp),
                     maxLines = 1,
                 )

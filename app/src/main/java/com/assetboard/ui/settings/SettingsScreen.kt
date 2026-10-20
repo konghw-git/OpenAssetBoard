@@ -11,6 +11,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.draw.shadow
+import com.assetboard.R
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,7 +31,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Backup
-import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EditNote
@@ -44,6 +49,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.ui.components.GlassSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -160,14 +167,13 @@ fun SettingsScreen(
     val cs = MaterialTheme.colorScheme
     val palette = AppTheme.extra
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         snackbarHost = { GlassSnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text("设置") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->
@@ -381,15 +387,21 @@ private fun AboutCard(version: String, lastBackup: Long?, onBackup: () -> Unit) 
             .padding(20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The launcher icon itself: its foreground is drawn on a 108 grid with the art inside 66,
+        // so it is drawn larger than the tile and clipped to it.
         Box(
-            Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(extra.onHero.copy(alpha = 0.16f)),
+            Modifier.size(52.dp).shadow(6.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).background(colorResource(R.color.ic_launcher_background)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Outlined.Bolt, null, tint = extra.onHero, modifier = Modifier.size(30.dp))
+            Image(painterResource(R.drawable.ic_launcher_foreground), null, modifier = Modifier.requiredSize(52.dp * 108f / 66f))
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text("强者之路", style = MaterialTheme.typography.titleLarge, color = extra.onHero)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("日盈", style = MaterialTheme.typography.titleLarge, color = extra.onHero)
+                Text(" Gain", style = MaterialTheme.typography.titleSmall, color = extra.onHeroMuted, modifier = Modifier.padding(bottom = 2.dp))
+            }
+            Text("日日行动，日日有盈", style = MaterialTheme.typography.labelMedium, color = extra.onHero.copy(alpha = 0.85f))
             Text("$version · 数据只保存在本机", style = MaterialTheme.typography.bodySmall, color = extra.onHeroMuted)
             Text(
                 lastBackup?.let { "上次备份 " + Dates.relative(it) + " " + Dates.time(it) } ?: "还没有备份过",

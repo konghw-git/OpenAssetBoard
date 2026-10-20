@@ -28,6 +28,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.assetboard.ui.components.FieldShape
+import com.assetboard.ui.components.glassFieldColors
+import com.assetboard.ui.components.GlassSheet
 import com.assetboard.data.HealthProfile
 import com.assetboard.data.Sex
 import com.assetboard.domain.health.Health
@@ -71,7 +74,7 @@ fun HealthProfileSheet(
     val ready = birth != null && heightMm != null && heightError == null && targetError == null
     val bmi22 = if (heightMm != null && heightError == null) Health.bmiWeightG(heightMm, Health.TARGET_BMI) else null
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    GlassSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).imePadding().navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -98,6 +101,8 @@ fun HealthProfileSheet(
                 supportingText = heightError?.let { { Text(it) } },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+                colors = glassFieldColors(),
             )
             OutlinedTextField(
                 value = target,
@@ -109,6 +114,8 @@ fun HealthProfileSheet(
                 supportingText = { Text(targetError ?: (bmi22?.let { "留空就按 BMI 22 计算：${Health.kg(it)} kg" } ?: "留空就按 BMI 22 计算")) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+                colors = glassFieldColors(),
             )
             Spacer(Modifier.height(4.dp))
             Button(

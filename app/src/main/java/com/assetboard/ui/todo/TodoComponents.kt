@@ -51,6 +51,7 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -73,6 +74,8 @@ import com.assetboard.domain.todo.DateBadge
 import com.assetboard.domain.todo.Recurrence
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.components.DatePickDialog
+import com.assetboard.ui.components.SwipeActionsBox
+import com.assetboard.ui.components.SwipeGroup
 import com.assetboard.ui.components.glass
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
@@ -186,6 +189,9 @@ fun TodoRow(
     checklist: List<ChecklistItem> = emptyList(),
     /** Null makes the check points read-only (selecting, sorting). */
     onToggleItem: ((String) -> Unit)? = null,
+    /** A check point swiped left turns to dust on its own and goes; null keeps them in place. */
+    onDeleteItem: ((String) -> Unit)? = null,
+    swipe: SwipeGroup? = null,
     /** Picked up and being dragged. */
     lifted: Boolean = false,
     trailing: @Composable (() -> Unit)? = null,
@@ -254,7 +260,7 @@ fun TodoRow(
                     }
                 }
             }
-            if (points.isNotEmpty()) InlineChecklist(points, onToggleItem)
+            if (points.isNotEmpty()) InlineChecklist(points, onToggleItem, onDeleteItem, swipe)
         }
         if (badge != null) {
             val c = badgeColor(badge.tone)
@@ -299,14 +305,30 @@ private fun ChecklistProgress(done: Int, total: Int) {
 
 /**
  * The todo's checklist under its title, every item on a strip of its own. Tapping one ticks it
- * in place; adding and editing stay in the detail page.
+ * in place; swiping it left deletes just that item, in dust of its own (a right swipe still
+ * goes to the card). Adding and editing stay in the detail page.
  */
 @Composable
-private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> Unit)?) {
+private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> Unit)?, onDelete: ((String) -> Unit)?, swipe: SwipeGroup?) {
     Column(Modifier.padding(top = 8.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        items.forEach { item -> CheckPoint(item, onToggle) }
+        items.forEach { item ->
+            key(item.id) {
+                if (onDelete == null) {
+                    CheckPoint(item, onToggle)
+                } else {
+                    SwipeActionsBox(checklistKey(item.id), swipe, CheckPointShape, onDelete = { onDelete(item.id) }, compact = true) {
+                        CheckPoint(item, onToggle)
+                    }
+                }
+            }
+        }
     }
 }
+
+/** The dust and swipe key of a checklist item, in the list and in the detail. */
+internal fun checklistKey(id: String) = "check:$id"
+
+private val CheckPointShape = RoundedCornerShape(10.dp)
 
 @Composable
 private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
@@ -316,7 +338,7 @@ private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
     val text by animateColorAsState(if (item.done) cs.outline else cs.onSurface.copy(alpha = 0.88f), tween(200), label = "pointText")
     // A strip a shade off the card: light on glass, dimmer once done.
     val strip by animateColorAsState(cs.onSurface.copy(alpha = if (item.done) 0.03f else 0.055f), tween(200), label = "strip")
-    val shape = RoundedCornerShape(10.dp)
+    val shape = CheckPointShape
     Row(
         Modifier
             .fillMaxWidth()

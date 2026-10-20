@@ -51,7 +51,13 @@ import kotlin.math.abs
 /** A short message, optionally with an undo (or another [action]) offered for [UNDO_MS]. */
 data class UndoEvent(val text: String, val action: String = "撤销", val undo: (suspend () -> Unit)? = null)
 
-const val UNDO_MS = 5_000L
+/**
+ * Long enough to reach the button, short enough not to hang over the list. It must outlast the
+ * dust ([DUST_SECONDS] plus the hold), which it does by far: an undo before the dust settles shows
+ * the row at once anyway (see [DustState.register]).
+ */
+const val UNDO_MS = 3_000L
+private const val MESSAGE_MS = 2_500L
 
 /** Snackbar content that knows how long its action stays, for the countdown ring. */
 class TimedVisuals(
@@ -65,14 +71,14 @@ class TimedVisuals(
 
 /**
  * Shows [events] one at a time; a newer one replaces the one on screen. Undo stays offered for
- * five seconds, plain messages for three.
+ * [UNDO_MS], plain messages a little less.
  */
 @Composable
 fun UndoMessages(events: Flow<UndoEvent>, host: SnackbarHostState, onUndo: (UndoEvent) -> Unit) {
     val undo by rememberUpdatedState(onUndo)
     LaunchedEffect(events, host) {
         events.collectLatest { e ->
-            val millis = if (e.undo != null) UNDO_MS else 3_000L
+            val millis = if (e.undo != null) UNDO_MS else MESSAGE_MS
             val result = withTimeoutOrNull(millis) {
                 host.showSnackbar(TimedVisuals(e.text, if (e.undo != null) e.action else null, millis))
             }

@@ -189,23 +189,23 @@ fun SelectField(
     icon: @Composable (() -> Unit)? = { Icon(Icons.Default.UnfoldMore, null) },
 ) {
     val cs = MaterialTheme.colorScheme
+    val well = glassFieldColors()
     OutlinedTextField(
         value = value,
         onValueChange = {},
         readOnly = true,
         enabled = false,
+        shape = FieldShape,
         label = { Text(label) },
         trailingIcon = icon,
         supportingText = supportingText?.let { { Text(it) } },
         singleLine = true,
         modifier = modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick),
-        colors = OutlinedTextFieldDefaults.colors(
+        colors = well.copy(
             disabledTextColor = if (enabled) cs.onSurface else cs.onSurface.copy(alpha = 0.45f),
-            disabledBorderColor = cs.outline,
             disabledLabelColor = cs.onSurfaceVariant,
             disabledTrailingIconColor = cs.onSurfaceVariant,
             disabledSupportingTextColor = cs.onSurfaceVariant,
-            disabledContainerColor = Color.Transparent,
         ),
     )
 }

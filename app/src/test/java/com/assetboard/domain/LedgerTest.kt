@@ -162,5 +162,13 @@ class MoneyTest {
         assertEquals("+32.40", Money.format(3_240, signed = true))
         assertEquals("1660.24", Money.toInput(166_024))
         assertEquals("1.85万", Money.compact(1_848_213))
+        assertEquals("1.8万", Money.compact(1_800_000))
+        assertEquals("8532", Money.compact(853_210))
+        assertEquals("1.80万", Money.short(1_800_000))
+        assertEquals("8,532.10", Money.short(853_210))
+        assertEquals("-2.50亿", Money.short(-25_000_000_000))
+        assertEquals("12.50%", Money.percent(125, 1_000))
+        assertEquals("0.33%", Money.percent(1, 300))
+        assertEquals("0.00%", Money.percent(5, 0))
     }
 }

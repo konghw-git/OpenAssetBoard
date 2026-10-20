@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.assetboard.ui.components.GlassSheet
 import com.assetboard.data.Note
 import com.assetboard.data.NoteText
 import com.assetboard.data.NoteTopic
@@ -89,7 +90,7 @@ fun ExtractSheet(
     val chosen = paragraphs.filterIndexed { i, _ -> i in picked }
     val all = picked.size == paragraphs.size
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    GlassSheet(onDismissRequest = onDismiss) {
         // Back from the picker returns to the paragraphs, not out of the sheet.
         BackHandler(choosing) { choosing = false }
         AnimatedContent(

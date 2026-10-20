@@ -22,15 +22,25 @@ object Money {
     }
 
     /** "1.86万" style for chart axes. */
-    fun compact(cents: Long): String {
-        val yuan = BigDecimal.valueOf(cents, 2)
-        val abs = yuan.abs()
+    fun compact(cents: Long): String = scaled(cents, strip = true) ?: run {
         val sign = if (cents < 0) "-" else ""
-        return when {
-            abs >= BigDecimal(100_000_000) -> sign + abs.divide(BigDecimal(100_000_000)).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + "亿"
-            abs >= BigDecimal(10_000) -> sign + abs.divide(BigDecimal(10_000)).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + "万"
-            else -> sign + abs.setScale(0, RoundingMode.HALF_UP).toPlainString()
+        sign + BigDecimal.valueOf(cents, 2).abs().setScale(0, RoundingMode.HALF_UP).toPlainString()
+    }
+
+    /** [compact] for reading rather than axes: always two decimals ("1.80万"), and below 1万 the full amount. */
+    fun short(cents: Long): String = scaled(cents, strip = false) ?: format(cents)
+
+    /** In 万 or 亿 with two decimals, or null below 1万. */
+    private fun scaled(cents: Long, strip: Boolean): String? {
+        val abs = BigDecimal.valueOf(cents, 2).abs()
+        val sign = if (cents < 0) "-" else ""
+        val (unit, name) = when {
+            abs >= BigDecimal(100_000_000) -> BigDecimal(100_000_000) to "亿"
+            abs >= BigDecimal(10_000) -> BigDecimal(10_000) to "万"
+            else -> return null
         }
+        val v = abs.divide(unit).setScale(2, RoundingMode.HALF_UP)
+        return sign + (if (strip) v.stripTrailingZeros() else v).toPlainString() + name
     }
 
     /** Accepts "1,660.24", "1660.2", "¥12". Returns null for anything that is not a plain amount. */
@@ -51,9 +61,10 @@ object Money {
     /** Plain editable text, e.g. 166024 -> "1660.24". */
     fun toInput(cents: Long): String = BigDecimal.valueOf(cents, 2).toPlainString()
 
+    /** Always two decimals, "12.50%", so shares and ratios line up and small ones still show. */
     fun percent(part: Long, whole: Long): String {
-        if (whole == 0L) return "0%"
-        val p = BigDecimal(part).multiply(BigDecimal(100)).divide(BigDecimal(whole.absoluteValue), 1, RoundingMode.HALF_UP)
-        return p.stripTrailingZeros().toPlainString() + "%"
+        if (whole == 0L) return "0.00%"
+        val p = BigDecimal(part).multiply(BigDecimal(100)).divide(BigDecimal(whole.absoluteValue), 2, RoundingMode.HALF_UP)
+        return p.toPlainString() + "%"
     }
 }

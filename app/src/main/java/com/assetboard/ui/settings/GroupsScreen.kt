@@ -48,6 +48,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.ui.components.FieldShape
+import com.assetboard.ui.components.glassFieldColors
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.AppContainer
 import com.assetboard.data.AccountGroup
 import com.assetboard.ui.ActionViewModel
@@ -82,13 +86,12 @@ fun GroupsScreen(onBack: () -> Unit) {
     val extra = AppTheme.extra
     val cs = MaterialTheme.colorScheme
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text("分组管理") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
         floatingActionButton = {
@@ -150,7 +153,7 @@ private fun GroupDialog(
         title = { Text(if (group == null) "新建分组" else "编辑分组") },
         text = {
             Column {
-                OutlinedTextField(name, { name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(name, { name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = FieldShape, colors = glassFieldColors())
                 Spacer(Modifier.height(14.dp))
                 Text("颜色", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))

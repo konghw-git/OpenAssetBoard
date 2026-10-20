@@ -41,6 +41,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.ui.components.FieldShape
+import com.assetboard.ui.components.glassFieldColors
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.AppContainer
 import com.assetboard.data.Account
 import com.assetboard.data.FeeOn
@@ -199,20 +203,19 @@ fun FlowEditScreen(accountId: String?, flowId: String?, initialKind: String?, on
     var picking by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text(if (vm.isNew) "记一笔" + vm.kind.label else "编辑流水") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = { TextButton(onClick = { vm.save(onBack) }, enabled = vm.loaded) { Text("保存") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->
         if (!vm.loaded) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            return@Scaffold
+            return@GlassScaffold
         }
         Column(
             Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp),
@@ -241,6 +244,8 @@ fun FlowEditScreen(accountId: String?, flowId: String?, initialKind: String?, on
                     textStyle = MaterialTheme.typography.headlineSmall.merge(NumberStyle),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                    colors = glassFieldColors(),
                 )
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
@@ -251,6 +256,8 @@ fun FlowEditScreen(accountId: String?, flowId: String?, initialKind: String?, on
                     isError = vm.feeInput.isNotEmpty() && Money.parse(vm.feeInput) == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                    colors = glassFieldColors(),
                 )
                 val fee = Money.parse(vm.feeInput) ?: 0L
                 if (fee > 0) {
@@ -282,7 +289,7 @@ fun FlowEditScreen(accountId: String?, flowId: String?, initialKind: String?, on
             SectionCard(contentPadding = PaddingValues(20.dp)) {
                 DateField("时间", vm.at, { vm.at = it }, supportingText = "只选日期时记为当天 23:59:59")
                 Spacer(Modifier.height(4.dp))
-                OutlinedTextField(vm.note, { vm.note = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(vm.note, { vm.note = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), shape = FieldShape, colors = glassFieldColors())
             }
             if (!vm.isNew) {
                 SectionCard {

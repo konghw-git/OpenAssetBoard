@@ -143,7 +143,8 @@ class ModuleScreenshotTest {
         }
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("交水电费")).fetchSemanticsNodes().isNotEmpty() }
         compose.mainClock.advanceTimeBy(2_000)
-        compose.onNodeWithText("交水电费").performTouchInput { down(center); moveBy(Offset(60f, 0f)); moveBy(Offset(220f, 0f)); moveBy(Offset(200f, 0f)) }
+        // Eased past touch slop first: a deliberate drag, which the row takes (a flick goes to the pager).
+        compose.onNodeWithText("交水电费").performTouchInput { down(center); repeat(8) { moveBy(Offset(10f, 0f)) }; moveBy(Offset(200f, 0f)); moveBy(Offset(200f, 0f)) }
         compose.mainClock.advanceTimeBy(500)
         compose.onRoot().captureRoboImage("build/screenshots/26-todo-swipe-right.png")
         compose.onNodeWithText("交水电费").performTouchInput { up() }
@@ -151,7 +152,7 @@ class ModuleScreenshotTest {
         // A long left swipe: the card turns to dust, the undo bar comes up. The clock is driven
         // by hand, or waiting for idle would run the dust to its end.
         compose.mainClock.autoAdvance = false
-        compose.onNodeWithText("给导师发周报").performTouchInput { down(center); moveBy(Offset(-60f, 0f)); moveBy(Offset(-300f, 0f)); moveBy(Offset(-300f, 0f)); up() }
+        compose.onNodeWithText("给导师发周报").performTouchInput { down(center); repeat(8) { moveBy(Offset(-10f, 0f)) }; moveBy(Offset(-300f, 0f)); moveBy(Offset(-300f, 0f)); up() }
         repeat(30) { compose.mainClock.advanceTimeByFrame() }
         compose.onRoot().captureRoboImage("build/screenshots/27-todo-dust.png")
         repeat(120) { compose.mainClock.advanceTimeByFrame() }

@@ -65,7 +65,12 @@ class SwipeDeleteTest {
     }
 
     private fun swipeAway(text: String) {
-        compose.onNodeWithText(text).performTouchInput { down(center); moveBy(Offset(-60f, 0f)); moveBy(Offset(-400f, 0f)); moveBy(Offset(-400f, 0f)); up() }
+        // Put down and pushed: a deliberate drag, which the row takes (a flick would go to the pager).
+        compose.onNodeWithText(text).performTouchInput {
+            down(center)
+            repeat(8) { moveBy(Offset(-10f, 0f)) }
+            moveBy(Offset(-400f, 0f)); moveBy(Offset(-400f, 0f)); up()
+        }
     }
 
     @Test fun aRowBroughtBackAfterTheDustIsVisible() {

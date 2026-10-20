@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.AppContainer
 import com.assetboard.data.DiaryEntry
 import com.assetboard.data.NoteText
@@ -135,23 +137,22 @@ fun TrashScreen(onBack: () -> Unit) {
     ErrorDialog(error) { vm.error.value = null }
     val cs = MaterialTheme.colorScheme
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text("回收站") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = { if (!batches.isNullOrEmpty()) TextButton(onClick = { emptyAsk = true }) { Text("清空", color = cs.error) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->
-        val list = batches ?: return@Scaffold
+        val list = batches ?: return@GlassScaffold
         if (list.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Text("回收站是空的。删除的待办、清单、日记、周复盘和笔记会在这里保留 30 天。", color = cs.onSurfaceVariant, modifier = Modifier.padding(40.dp))
             }
-            return@Scaffold
+            return@GlassScaffold
         }
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),

@@ -56,6 +56,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.data.Account
 import com.assetboard.data.AccountGroup
 import com.assetboard.data.FlowKind
@@ -209,14 +211,13 @@ fun AccountDetailScreen(
     val detail = remember(ledger, accountId) { ledger?.let { buildDetail(it, accountId) } }
     val cs = MaterialTheme.colorScheme
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text(detail?.account?.name.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = { IconButton(onClick = onEdit) { Icon(Icons.Default.Tune, "账户设置") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->
@@ -225,7 +226,7 @@ fun AccountDetailScreen(
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 if (ledger == null) CircularProgressIndicator() else Text("账户不存在")
             }
-            return@Scaffold
+            return@GlassScaffold
         }
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),

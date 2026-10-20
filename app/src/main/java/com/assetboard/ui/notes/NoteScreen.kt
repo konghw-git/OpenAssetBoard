@@ -12,6 +12,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +51,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import com.assetboard.ui.components.glass
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.ui.components.GlassSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -153,8 +157,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
     val cs = MaterialTheme.colorScheme
     val exists = note != null && note?.deletedAt == null
     val topicId = if (exists) note?.topicId else pendingTopic
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         snackbarHost = { GlassSnackbarHost(snackbar) },
         topBar = {
             Row(
@@ -190,7 +193,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
     ) { padding ->
         if (missing) {
             Gone(Modifier.padding(padding), onBack)
-            return@Scaffold
+            return@GlassScaffold
         }
         Column(
             Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState())
@@ -358,13 +361,9 @@ private fun Editor(session: NoteSession, autoFocus: Boolean, onInput: (String) -
         lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
     )
     val look = remember(cs.primary) { NoteBodyLook(21.sp, cs.primary) }
-    Surface(
-        shape = RoundedCornerShape(26.dp),
-        color = cs.surfaceContainer,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, border),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    // A sheet of glass with a little more body than a card, so long text stays easy to read.
+    val paper = RoundedCornerShape(26.dp)
+    Box(Modifier.fillMaxWidth().glass(paper, glass, cs.surface.copy(alpha = 0.30f)).border(1.dp, border, paper)) {
         Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 12.dp)) {
             Box(Modifier.fillMaxWidth().heightIn(min = 360.dp)) {
                 if (value.text.isEmpty()) {

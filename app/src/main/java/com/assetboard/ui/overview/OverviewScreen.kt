@@ -1,6 +1,7 @@
 package com.assetboard.ui.overview
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.KeyboardOptions
@@ -13,6 +14,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
+import com.assetboard.ui.components.GlassSheet
 import com.assetboard.domain.GoalProgress
 import com.assetboard.ui.components.LocalAmbient
 import com.assetboard.ui.components.ambient
@@ -33,6 +35,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
@@ -526,10 +529,10 @@ private fun HeroAllocation(allocation: List<AllocationUi>) {
                     Dot(shades[i], 7.dp)
                     Spacer(Modifier.width(8.dp))
                     Text(a.group.name, color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(Money.compact(a.value), color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium.merge(NumberStyle))
+                    Text(Money.short(a.value), color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium.merge(NumberStyle))
                     Text(
                         Money.percent(a.value, total), color = extra.onHero, style = MaterialTheme.typography.labelLarge.merge(NumberStyle),
-                        textAlign = TextAlign.End, modifier = Modifier.width(50.dp),
+                        textAlign = TextAlign.End, modifier = Modifier.width(62.dp),
                     )
                 }
             }
@@ -598,9 +601,9 @@ private fun GoalBar(p: GoalProgress, onClick: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Text(
             when {
-                p.reached && p.remaining < 0 -> "超出 ¥${Money.compact(-p.remaining)}，点这里设个新目标"
+                p.reached && p.remaining < 0 -> "超出 ¥${Money.short(-p.remaining)}，点这里设个新目标"
                 p.reached -> "刚好达成，点这里设个新目标"
-                else -> "还差 ¥${Money.compact(p.remaining)}" + (p.monthsToGo?.let { " · 照近半年的速度约 ${monthsText(it)}" } ?: "")
+                else -> "还差 ¥${Money.short(p.remaining)}" + (p.monthsToGo?.let { " · 照近半年的速度约 ${monthsText(it)}" } ?: "")
             },
             color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall.merge(NumberStyle),
             maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -683,8 +686,9 @@ private fun AccountsCard(s: OverviewState, onOpenAccount: (String) -> Unit, onAd
     var open by rememberSaveable { mutableStateOf(listOf<String>()) }
     val all = s.groups.map { it.group.id }
     val allOpen = all.isNotEmpty() && open.containsAll(all)
-    SectionCard(contentPadding = PaddingValues(top = 6.dp, bottom = 6.dp)) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    // A heading over the groups, then each group a glass card of its own.
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth().padding(start = 6.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("账户", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.width(8.dp))
             Text("${s.groups.sumOf { it.rows.size }} 个", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
@@ -694,8 +698,7 @@ private fun AccountsCard(s: OverviewState, onOpenAccount: (String) -> Unit, onAd
                 modifier = Modifier.clip(RoundedCornerShape(50)).clickable { open = if (allOpen) emptyList() else all }.padding(horizontal = 10.dp, vertical = 6.dp),
             )
         }
-        s.groups.forEachIndexed { i, g ->
-            if (i > 0) RowDivider()
+        s.groups.forEach { g ->
             val id = g.group.id
             GroupSection(
                 g, s.totals.assets, id in open,
@@ -718,12 +721,17 @@ private fun GroupSection(
     val cs = MaterialTheme.colorScheme
     val color = AppTheme.extra.group(g.group.colorIndex)
     val turn by animateFloatAsState(if (open) 180f else 0f, label = "fold")
+    val shape = MaterialTheme.shapes.large
+    // Open, the card takes a wash of the group's colour, so its accounts read as one set.
+    val wash by animateColorAsState(if (open) color.copy(alpha = 0.07f) else Color.Transparent, tween(240), label = "wash")
+    val source = remember { MutableInteractionSource() }
+    Column(Modifier.fillMaxWidth().pressScale(source, 0.99f).glass(shape, glass, wash).clip(shape)) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+        Modifier.fillMaxWidth().clickable(interactionSource = source, indication = null, onClick = onToggle).padding(start = 16.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(color.copy(alpha = 0.22f), color.copy(alpha = 0.08f)))),
+            Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Brush.linearGradient(listOf(color.copy(alpha = 0.30f), color.copy(alpha = 0.10f)))),
             contentAlignment = Alignment.Center,
         ) {
             Text(g.group.name.take(1), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
@@ -758,25 +766,38 @@ private fun GroupSection(
         Icon(Icons.Default.ExpandMore, if (open) "收起" else "展开", tint = cs.onSurfaceVariant, modifier = Modifier.size(20.dp).rotate(turn))
     }
     AnimatedVisibility(open) {
-        // The accounts sit in a tinted well, so it reads which group they belong to.
+        // Each account on a pane of its own inside the group's card.
         Column(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
-                .clip(MaterialTheme.shapes.medium).background(cs.onSurface.copy(alpha = 0.045f)),
+            Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (g.rows.isEmpty()) {
-                ListRow(
-                    title = "添加账户",
-                    onClick = { onAddAccount(g.group.id) },
-                    leading = { Icon(Icons.Default.Add, null, tint = cs.primary) },
-                    chevron = false,
-                )
+                Box(Modifier.fillMaxWidth().clip(AccountPaneShape).background(accountPane())) {
+                    ListRow(
+                        title = "添加账户",
+                        onClick = { onAddAccount(g.group.id) },
+                        leading = { Icon(Icons.Default.Add, null, tint = cs.primary) },
+                        chevron = false,
+                    )
+                }
             }
-            g.rows.forEachIndexed { i, r ->
-                if (i > 0) RowDivider(startIndent = 66.dp)
-                AccountRow(r, onClick = { onOpenAccount(r.account.id) }, horizontalPadding = 12.dp)
+            g.rows.forEach { r ->
+                Box(Modifier.fillMaxWidth().clip(AccountPaneShape).background(accountPane())) {
+                    AccountRow(r, onClick = { onOpenAccount(r.account.id) }, horizontalPadding = 12.dp)
+                }
             }
         }
     }
+    }
+}
+
+private val AccountPaneShape = RoundedCornerShape(16.dp)
+
+/** A pane lighter than the glass under it (darker in the dark theme), the way checklist items sit on a todo. */
+@Composable
+private fun accountPane(): Color {
+    val cs = MaterialTheme.colorScheme
+    return if (cs.background.luminance() < 0.5f) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.50f)
 }
 
 /** Up to four account tiles overlapping, each ringed in the card colour so the overlap reads as a stack. */
@@ -953,8 +974,8 @@ private fun CashTile(l: Liquidity, onClick: () -> Unit, modifier: Modifier) {
         if (l.total > 0) {
             LiquidityBar(l, 6.dp)
             val rest = listOfNotNull(
-                l.invested.takeIf { it > 0 }?.let { "投资 ${Money.compact(it)}" },
-                l.locked.takeIf { it > 0 }?.let { "锁定 ${Money.compact(it)}" },
+                l.invested.takeIf { it > 0 }?.let { "投资 ${Money.short(it)}" },
+                l.locked.takeIf { it > 0 }?.let { "锁定 ${Money.short(it)}" },
             )
             if (rest.isNotEmpty()) {
                 Text(
@@ -1056,7 +1077,7 @@ private fun CashSheet(s: OverviewState, onOpenAccount: (String) -> Unit, onDismi
     val extra = AppTheme.extra
     val l = s.liquidity
     val colorOf = remember(s) { s.groups.flatMap { g -> g.rows.map { it.account.id to g.group.colorIndex } }.toMap() }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    GlassSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding()) {
             Text("可用现金", style = MaterialTheme.typography.titleLarge)
             Text("手里随时能用的钱，不含基金投资和锁定资金", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
@@ -1077,7 +1098,7 @@ private fun CashSheet(s: OverviewState, onOpenAccount: (String) -> Unit, onDismi
                         MoneyText(p.cents, style = MaterialTheme.typography.bodyMedium)
                         Text(
                             Money.percent(p.cents, l.total), style = MaterialTheme.typography.labelMedium.merge(NumberStyle), color = cs.onSurfaceVariant,
-                            textAlign = TextAlign.End, modifier = Modifier.width(56.dp),
+                            textAlign = TextAlign.End, modifier = Modifier.width(62.dp),
                         )
                     }
                 }

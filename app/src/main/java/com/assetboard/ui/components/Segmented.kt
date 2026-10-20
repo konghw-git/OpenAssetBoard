@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -79,13 +80,17 @@ fun <T> SegmentedControl(
         spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
         label = "thumb",
     )
-    val track = when (style) {
-        SegmentStyle.SOFT -> cs.surfaceContainerHigh
-        SegmentStyle.SOLID -> cs.surfaceContainer
-        SegmentStyle.TINT -> Color.Transparent
+    // On glass the track is a faint well and the soft thumb a bright pane, not opaque card.
+    val onGlass = LocalAmbient.current != null
+    val dark = cs.background.luminance() < 0.5f
+    val track = when {
+        style == SegmentStyle.TINT -> Color.Transparent
+        onGlass -> cs.onSurface.copy(alpha = if (dark) 0.08f else 0.06f)
+        style == SegmentStyle.SOFT -> cs.surfaceContainerHigh
+        else -> cs.surfaceContainer
     }
     val thumb = when (style) {
-        SegmentStyle.SOFT -> cs.surfaceContainer
+        SegmentStyle.SOFT -> if (onGlass) (if (dark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.85f)) else cs.surfaceContainer
         SegmentStyle.SOLID -> cs.primary
         SegmentStyle.TINT -> cs.primary.copy(alpha = 0.12f)
     }

@@ -79,12 +79,16 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.assetboard.data.TodoData
 import com.assetboard.domain.Habit
@@ -227,13 +231,15 @@ private fun SegmentLabel(v: TodoView, d: TodoData?, today: LocalDate, fill: Floa
     val n = d?.let { TodoViews.count(v, it.todos, today) } ?: 0
     val overdue = v == TodoView.TODAY && d != null && d.todos.any { TodoViews.isOpen(it) && TodoViews.isOverdue(it, today) }
     val fg = lerp(cs.onSurface, Color.White, fill)
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    // Line boxes trimmed to the glyphs, so the two lines sit together in the middle of the band
+    // instead of the icon riding its outer edge and the name its inner one.
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(style.icon, null, tint = lerp(style.end, Color.White, fill), modifier = Modifier.size(15.dp))
+            Icon(style.icon, null, tint = lerp(style.end, Color.White, fill), modifier = Modifier.size(14.dp))
             if (v != TodoView.LOGBOOK) {
                 Spacer(Modifier.width(3.dp))
                 AnimatedContent(n, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "count") {
-                    Text(it.toString(), fontSize = ringSp(13f), fontWeight = FontWeight.Bold, color = fg)
+                    Text(it.toString(), fontSize = ringSp(13f), fontWeight = FontWeight.Bold, color = fg, style = TightLines)
                 }
             }
             if (overdue) {
@@ -241,9 +247,15 @@ private fun SegmentLabel(v: TodoView, d: TodoData?, today: LocalDate, fill: Floa
                 Box(Modifier.size(6.dp).clip(CircleShape).background(if (fill > 0.5f) Color.White else cs.error))
             }
         }
-        Text(ringLabel(v), fontSize = ringSp(11f), color = lerp(cs.onSurfaceVariant, Color.White.copy(alpha = 0.9f), fill), maxLines = 1, softWrap = false)
+        Text(ringLabel(v), fontSize = ringSp(11f), color = lerp(cs.onSurfaceVariant, Color.White.copy(alpha = 0.9f), fill), maxLines = 1, softWrap = false, style = TightLines)
     }
 }
+
+private val TightLines = TextStyle(
+    lineHeight = 1.em,
+    lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+)
 
 /** Two characters, the same weight as the others; the full name stays in the content description. */
 private fun ringLabel(v: TodoView): String = if (v == TodoView.SOMEDAY) "以后" else v.label

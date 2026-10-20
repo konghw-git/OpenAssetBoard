@@ -39,6 +39,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.ui.components.FieldShape
+import com.assetboard.ui.components.glassFieldColors
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.AppContainer
 import com.assetboard.data.Account
 import com.assetboard.domain.Dates
@@ -136,20 +140,19 @@ fun ValuationEditScreen(accountId: String, valuationId: String?, onBack: () -> U
         else -> "余额"
     }
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text(if (valuationId == null) "更新$noun" else "编辑记录") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = { TextButton(onClick = { vm.save(onBack) }, enabled = vm.loaded && !vm.isBaseline) { Text("保存") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->
         if (!vm.loaded || a == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            return@Scaffold
+            return@GlassScaffold
         }
         Column(
             Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
@@ -180,6 +183,8 @@ fun ValuationEditScreen(accountId: String, valuationId: String?, onBack: () -> U
                     textStyle = MaterialTheme.typography.headlineSmall.merge(NumberStyle),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                    colors = glassFieldColors(),
                 )
                 val implied = vm.implied()
                 val parsed = Money.parse(vm.input)
@@ -206,7 +211,7 @@ fun ValuationEditScreen(accountId: String, valuationId: String?, onBack: () -> U
                     },
                 )
                 Spacer(Modifier.height(4.dp))
-                OutlinedTextField(vm.note, { vm.note = it }, label = { Text("备注") }, enabled = !vm.isBaseline, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(vm.note, { vm.note = it }, label = { Text("备注") }, enabled = !vm.isBaseline, modifier = Modifier.fillMaxWidth(), shape = FieldShape, colors = glassFieldColors())
             }
             if (valuationId != null && !vm.inStocktake && !vm.isBaseline) {
                 SectionCard {

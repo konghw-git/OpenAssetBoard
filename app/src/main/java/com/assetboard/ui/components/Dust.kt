@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -20,6 +21,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -170,8 +172,11 @@ fun DustHost(state: DustState, modifier: Modifier = Modifier) {
         }
     }
     val wobble = with(LocalDensity.current) { 3f * density }
-    Canvas(modifier.fillMaxSize()) {
+    // Bursts are placed in root coordinates; a host not at the root (inside a sheet) shifts back.
+    var at by remember { mutableStateOf(Offset.Zero) }
+    Canvas(modifier.fillMaxSize().onGloballyPositioned { at = it.positionInRoot() }) {
         val now = frame
+        translate(-at.x, -at.y) {
         for (b in state.bursts) {
             val t = if (b.start < 0 || now < b.start) 0f else (now - b.start) / 1e9f
             val p = b.p
@@ -198,6 +203,7 @@ fun DustHost(state: DustState, modifier: Modifier = Modifier) {
                 }
                 i += STRIDE
             }
+        }
         }
     }
 }

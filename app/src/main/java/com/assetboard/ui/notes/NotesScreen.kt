@@ -1,5 +1,6 @@
 package com.assetboard.ui.notes
 
+import com.assetboard.ui.components.GlassSheet
 import com.assetboard.ui.components.LocalAmbient
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.background
@@ -704,7 +705,7 @@ private fun DraftsSheet(
 ) {
     val cs = MaterialTheme.colorScheme
     var discarding by remember { mutableStateOf<NoteDraft?>(null) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    GlassSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),

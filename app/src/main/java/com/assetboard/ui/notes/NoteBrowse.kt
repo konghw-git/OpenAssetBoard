@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.AppContainer
 import com.assetboard.data.Note
 import com.assetboard.data.NoteText
@@ -92,8 +94,7 @@ fun NoteSearchScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         results = if (q.isBlank()) null else container.notes.search(q)
     }
     val cs = MaterialTheme.colorScheme
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = {
@@ -108,7 +109,7 @@ fun NoteSearchScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                     )
                 },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->
@@ -219,13 +220,12 @@ fun NoteTopicsScreen(onBack: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val extra = AppTheme.extra
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text("笔记主题") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
         floatingActionButton = {

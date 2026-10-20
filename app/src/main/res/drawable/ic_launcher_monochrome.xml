@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The themed icon: the disc as a ring, the rising stroke whole. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M54,35 a19,19 0 1,1 -0.01,0 z"
+        android:strokeWidth="5"
+        android:strokeColor="#FFFFFFFF" />
+    <path
+        android:pathData="M30,66 L45,53 L53,60 L74,39 M62.5,38 L75,38 L75,50.5"
+        android:strokeWidth="5.5"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

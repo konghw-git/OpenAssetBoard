@@ -1,20 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  日盈 · Gain: a sun rising, cut by one stroke that ticks and climbs out of it. The gap around the
+  stroke is the background green, so it reads as cut through the disc. Everything stays inside the
+  adaptive icon's 66dp safe zone (21..87).
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <path android:pathData="M54,32 a22,22 0 1,1 -0.01,0 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="42" android:startY="32"
+                android:endX="66" android:endY="76">
+                <item android:offset="0" android:color="#FFF3D898" />
+                <item android:offset="0.55" android:color="#FFE2B45E" />
+                <item android:offset="1" android:color="#FFC28E3A" />
+            </gradient>
+        </aapt:attr>
+    </path>
     <path
-        android:pathData="M54,32 A22,22 0 1,1 32.1,56.3"
-        android:strokeWidth="7"
-        android:strokeColor="#F7F5EF"
-        android:strokeLineCap="round" />
+        android:pathData="M30,66 L45,53 L53,60 L74,39 M62.5,38 L75,38 L75,50.5"
+        android:strokeWidth="12"
+        android:strokeColor="@color/ic_launcher_background"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
     <path
-        android:pathData="M33.5,45.6 A22,22 0 0,1 45.2,33.8"
-        android:strokeWidth="7"
-        android:strokeColor="#E6BA66"
-        android:strokeLineCap="round" />
-    <path
-        android:fillColor="#F7F5EF"
-        android:pathData="M46,58 h4 v6 h-4 z M52,52 h4 v12 h-4 z M58,46 h4 v18 h-4 z" />
+        android:pathData="M30,66 L45,53 L53,60 L74,39 M62.5,38 L75,38 L75,50.5"
+        android:strokeWidth="5.5"
+        android:strokeColor="#FFF7F5EF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>

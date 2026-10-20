@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.AppContainer
 import com.assetboard.data.Account
 import com.assetboard.data.AccountGroup
@@ -198,8 +200,7 @@ fun StocktakeScreen(snapshotId: String?, onBack: () -> Unit) {
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     ErrorDialog(error) { vm.error.value = null }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text(if (ui.editing) "编辑盘点" else "盘点") },
@@ -207,7 +208,7 @@ fun StocktakeScreen(snapshotId: String?, onBack: () -> Unit) {
                 actions = {
                     if (ui.editing) IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Outlined.Delete, "删除这次盘点") }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                colors = glassBarColors(),
             )
         },
         bottomBar = {
@@ -232,13 +233,13 @@ fun StocktakeScreen(snapshotId: String?, onBack: () -> Unit) {
     ) { padding ->
         if (!ui.loaded) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            return@Scaffold
+            return@GlassScaffold
         }
         if (ui.rows.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
                 Text("这个时刻没有可盘点的账户。账户只能在期初之后盘点。", color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             }
-            return@Scaffold
+            return@GlassScaffold
         }
         Column(
             Modifier

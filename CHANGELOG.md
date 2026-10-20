@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-21
+
+### Changed
+
+- **A new name and icon: 日盈 · Gain** (日日行动，日日有盈). The icon is a gold sun cut by one
+  stroke that ticks and climbs out of it, on deep green; the themed icon follows. Settings › 关于
+  shows it with the slogan.
+- **Glass on every page.** Pages opened over the tabs (new account and account settings, account
+  details, settings and its pages, stocktake, trend, body data, records, note pages and search)
+  and the bottom sheets (recording body data, the body profile, cash, topics, extract, the todo
+  sheet) sit on the same colour fields, with frosted cards, fields and segmented controls.
+- **Account groups are glass cards of their own** on the assets tab; opened, a group takes a wash
+  of its colour and each account sits on a pane of its own.
+- **Swiping across a todo or note flicks the tabs.** A quick flick over a row turns the page; a
+  row only opens its actions when the finger is put down and pushed. An open row still closes
+  with any stroke.
+- **Checklist items delete on their own**: swipe one left under its todo (or tap × in the
+  detail) and only that item turns to dust, with an undo.
+- **Undo stays 3 seconds** instead of 5 (plain messages 2.5); an undo before the dust settles
+  still brings the row back whole.
+- **Two decimals for every percentage** (shares, debt ratio, goal, trend change), and amounts in
+  万 keep two decimals where they are read ("1.80万"); under 1万 the full amount shows.
+- The todo ring's labels sit together in the middle of each segment, away from its edges.
+
 ## [0.8.0] - 2026-10-20
 
 ### Added

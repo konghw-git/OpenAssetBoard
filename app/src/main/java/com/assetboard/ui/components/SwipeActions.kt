@@ -6,10 +6,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,13 +36,19 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -52,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sign
 
 /** Keeps one row of a list open at a time; opening another closes the last. */
 @Stable
@@ -70,8 +77,15 @@ class SwipeAction(val label: String, val icon: ImageVector, val color: Color, va
 
 private val ActionWidth = 66.dp
 private val DeleteWidth = 74.dp
+private val CompactDeleteWidth = 52.dp
 private val Gap = 8.dp
 private const val FLING = 900f
+
+/**
+ * A sideways stroke on a row that is already this fast when it leaves touch slop is a flick
+ * meant for the tab pager around the list; slower, the finger was put down to move the row.
+ */
+private val FlickSpeed = 500.dp
 
 /**
  * One list row with the app's swipe gestures, the same for todos and notes:
@@ -80,7 +94,11 @@ private const val FLING = 900f
  *   calls [onDelete];
  * - right reveals [actions]; swiping on past the threshold runs the first one.
  *
- * An open row closes when another opens, when it is tapped, or when [group] closes all.
+ * An open row closes when another opens, when it is tapped, or when [group] closes all. A quick
+ * flick across a closed row is not taken: it goes on to the tab pager, so the tabs still change
+ * with a swipe over a list full of rows (see [rowDrag]). A row inside another (a checklist item
+ * in its todo) takes only the directions it has something for; the rest go to the outer row.
+ * [compact] is for short rows: the delete button shows its icon only.
  */
 @Composable
 fun SwipeActionsBox(
@@ -91,6 +109,7 @@ fun SwipeActionsBox(
     actions: List<SwipeAction> = emptyList(),
     onDelete: (() -> Unit)? = null,
     enabled: Boolean = true,
+    compact: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -105,7 +124,7 @@ fun SwipeActionsBox(
 
     val gap = with(density) { Gap.toPx() }
     val startOpen = if (actions.isEmpty()) 0f else with(density) { (ActionWidth + Gap).toPx() } * actions.size + gap
-    val endOpen = if (onDelete == null) 0f else with(density) { (DeleteWidth + Gap).toPx() } + gap
+    val endOpen = if (onDelete == null) 0f else with(density) { ((if (compact) CompactDeleteWidth else DeleteWidth) + Gap).toPx() } + gap
     val startFull = maxOf(startOpen + with(density) { 64.dp.toPx() }, width * 0.58f)
     val endFull = maxOf(endOpen + with(density) { 64.dp.toPx() }, width * 0.52f)
     val x = offset.value
@@ -138,7 +157,7 @@ fun SwipeActionsBox(
         a.onClick()
     }
 
-    val drag = rememberDraggableState { d ->
+    fun dragBy(d: Float) {
         val next = offset.value + d
         val clamped = when {
             next > 0 && actions.isEmpty() -> 0f
@@ -149,6 +168,18 @@ fun SwipeActionsBox(
             else -> next
         }.coerceIn(-width, width)
         scope.launch { offset.snapTo(clamped) }
+    }
+
+    fun stopped(v: Float) {
+        dragging = false
+        val now = offset.value
+        when {
+            now < 0 && (-now > endFull || (v < -FLING * 3 && -now > endOpen)) && onDelete != null -> runDelete()
+            now < 0 && (-now > endOpen * 0.5f || v < -FLING) && v < FLING -> settle(-endOpen)
+            now > 0 && now > startFull && actions.isNotEmpty() -> runFirst()
+            now > 0 && (now > startOpen * 0.5f || v > FLING) && v > -FLING -> settle(startOpen)
+            else -> settle(0f)
+        }
     }
 
     Box(
@@ -162,29 +193,21 @@ fun SwipeActionsBox(
                 a.onClick()
             }
         } else if (x < -0.5f) {
-            DeleteAction(-x, endOpen, armedEnd, shape, Modifier.matchParentSize()) { runDelete() }
+            DeleteAction(-x, endOpen, armedEnd, shape, compact, Modifier.matchParentSize()) { runDelete() }
         }
         Box(
             Modifier
                 .offset { IntOffset(offset.value.roundToInt(), 0) }
-                .draggable(
-                    drag, Orientation.Horizontal,
+                .rowDrag(
                     enabled = enabled && (actions.isNotEmpty() || onDelete != null),
-                    onDragStarted = {
+                    open = { offset.value != 0f },
+                    claims = { dx -> if (dx > 0) actions.isNotEmpty() else onDelete != null },
+                    onStart = {
                         dragging = true
                         if (group != null && group.open != key) group.open = key
                     },
-                    onDragStopped = { v ->
-                        dragging = false
-                        val now = offset.value
-                        when {
-                            now < 0 && (-now > endFull || (v < -FLING * 3 && -now > endOpen)) && onDelete != null -> runDelete()
-                            now < 0 && (-now > endOpen * 0.5f || v < -FLING) && v < FLING -> settle(-endOpen)
-                            now > 0 && now > startFull && actions.isNotEmpty() -> runFirst()
-                            now > 0 && (now > startOpen * 0.5f || v > FLING) && v > -FLING -> settle(startOpen)
-                            else -> settle(0f)
-                        }
-                    },
+                    onDelta = ::dragBy,
+                    onStop = ::stopped,
                 )
                 .dissolvable(key),
         ) {
@@ -225,12 +248,12 @@ private fun StartActions(actions: List<SwipeAction>, x: Float, open: Float, arme
 }
 
 @Composable
-private fun DeleteAction(x: Float, open: Float, armed: Boolean, shape: RoundedCornerShape, modifier: Modifier, onClick: () -> Unit) {
+private fun DeleteAction(x: Float, open: Float, armed: Boolean, shape: RoundedCornerShape, compact: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val density = LocalDensity.current
     val cs = MaterialTheme.colorScheme
     val progress = (x / open).coerceIn(0f, 1f)
     val gap = with(density) { Gap.toPx() }
-    val base = with(density) { DeleteWidth.toPx() }
+    val base = with(density) { (if (compact) CompactDeleteWidth else DeleteWidth).toPx() }
     val pop by animateFloatAsState(if (armed) 1.12f else 1f, spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium), label = "pop")
     // The button fills the space the card left, so a long swipe reads as one red stretch.
     val w = (x - gap * 2).coerceAtLeast(base * progress).coerceAtLeast(1f)
@@ -246,13 +269,14 @@ private fun DeleteAction(x: Float, open: Float, armed: Boolean, shape: RoundedCo
                     scaleY = s
                 },
             iconScale = pop,
+            iconOnly = compact,
             onClick = onClick,
         )
     }
 }
 
 @Composable
-private fun ActionButton(label: String, icon: ImageVector, color: Color, shape: RoundedCornerShape, modifier: Modifier, iconScale: Float = 1f, onClick: () -> Unit) {
+private fun ActionButton(label: String, icon: ImageVector, color: Color, shape: RoundedCornerShape, modifier: Modifier, iconScale: Float = 1f, iconOnly: Boolean = false, onClick: () -> Unit) {
     val on = Color.White
     Box(
         modifier
@@ -262,8 +286,73 @@ private fun ActionButton(label: String, icon: ImageVector, color: Color, shape: 
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, label, tint = on, modifier = Modifier.size(21.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale })
-            Text(label, color = on, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.padding(top = 3.dp))
+            Icon(icon, label, tint = on, modifier = Modifier.size(if (iconOnly) 18.dp else 21.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale })
+            if (!iconOnly) Text(label, color = on, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.padding(top = 3.dp))
+        }
+    }
+}
+
+/**
+ * A row's sideways drag, shared with the scrollers around it. Nothing is taken until the stroke
+ * leaves touch slop; then the row takes it only when it was put down deliberately (slower than
+ * [FlickSpeed]) and [claims] the direction, or when the row is [open] already and the stroke
+ * closes it. Otherwise the stroke is left alone: a flick goes on to the tab pager, a direction
+ * the row has nothing for to an outer row, a vertical stroke to the list.
+ */
+private fun Modifier.rowDrag(
+    enabled: Boolean,
+    open: () -> Boolean,
+    claims: (Float) -> Boolean,
+    onStart: () -> Unit,
+    onDelta: (Float) -> Unit,
+    onStop: (Float) -> Unit,
+): Modifier = composed {
+    // The node stays while disabled (a drag to reorder turns rows off mid-gesture); removing it
+    // would disturb the gesture under way.
+    val on by rememberUpdatedState(enabled)
+    val isOpen by rememberUpdatedState(open)
+    val wants by rememberUpdatedState(claims)
+    val start by rememberUpdatedState(onStart)
+    val delta by rememberUpdatedState(onDelta)
+    val stop by rememberUpdatedState(onStop)
+    pointerInput(Unit) {
+        val flick = FlickSpeed.toPx()
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            if (!on) return@awaitEachGesture
+            val slop = viewConfiguration.touchSlop
+            val tracker = VelocityTracker().apply { addPointerInputChange(down) }
+            var moved = Offset.Zero
+            while (true) {
+                val event = awaitPointerEvent()
+                val c = event.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+                // Lifted, or a row inside this one took it.
+                if (!c.pressed || c.isConsumed) return@awaitEachGesture
+                tracker.addPointerInputChange(c)
+                moved += c.positionChange()
+                if (abs(moved.y) > slop && abs(moved.y) >= abs(moved.x)) return@awaitEachGesture
+                if (abs(moved.x) > slop) {
+                    // The tracker needs a few samples; a flick may cross slop on the first move,
+                    // so the average since touch down counts too.
+                    val elapsed = (c.uptimeMillis - down.uptimeMillis).coerceAtLeast(1L)
+                    val speed = maxOf(abs(tracker.calculateVelocity().x), abs(moved.x) * 1000f / elapsed)
+                    val take = if (isOpen()) true else speed < flick && wants(moved.x)
+                    if (!take) return@awaitEachGesture
+                    c.consume()
+                    start()
+                    delta(moved.x - sign(moved.x) * slop)
+                    break
+                }
+                // The list or the pager may have taken this move after us.
+                awaitPointerEvent(PointerEventPass.Final)
+                if (c.isConsumed) return@awaitEachGesture
+            }
+            val ended = horizontalDrag(down.id) { c ->
+                tracker.addPointerInputChange(c)
+                delta(c.positionChange().x)
+                c.consume()
+            }
+            stop(if (ended) tracker.calculateVelocity().x else 0f)
         }
     }
 }

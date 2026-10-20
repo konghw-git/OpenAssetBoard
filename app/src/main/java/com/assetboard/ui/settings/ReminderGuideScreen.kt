@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.reminder.ReminderScheduler
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.SectionCard
@@ -92,13 +94,12 @@ fun ReminderGuideScreen(onBack: () -> Unit) {
         )
     }
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text("提醒设置检查") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->
@@ -120,14 +121,14 @@ fun ReminderGuideScreen(onBack: () -> Unit) {
             Step("3. 全屏通知", "强提醒要在锁屏上全屏显示，需要这个权限。", fullScreen) {
                 if (Build.VERSION.SDK_INT >= 34) context.openFirst(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:$pkg")))
             }
-            Step("4. 自启动", "i 管家 → 应用管理 → 自启动，打开「强者之路」。重启后才能补发提醒。", Check.UNKNOWN) {
+            Step("4. 自启动", "i 管家 → 应用管理 → 自启动，打开「日盈」。重启后才能补发提醒。", Check.UNKNOWN) {
                 context.openFirst(
                     Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
                     Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager")),
                     Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")),
                 )
             }
-            Step("5. 后台耗电", "设置 → 电池 → 后台耗电管理 → 强者之路 → 允许后台高耗电。", battery) {
+            Step("5. 后台耗电", "设置 → 电池 → 后台耗电管理 → 日盈 → 允许后台高耗电。", battery) {
                 context.openFirst(
                     Intent().setComponent(ComponentName("com.vivo.abe", "com.vivo.applicationbehaviorengine.ui.ExcessivePowerManagerActivity")),
                     Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),

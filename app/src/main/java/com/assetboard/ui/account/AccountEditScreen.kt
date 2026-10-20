@@ -48,6 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.ui.components.FieldShape
+import com.assetboard.ui.components.glassFieldColors
+import com.assetboard.ui.components.GlassScaffold
+import com.assetboard.ui.components.glassBarColors
 import com.assetboard.AppContainer
 import com.assetboard.data.Account
 import com.assetboard.data.AccountDraft
@@ -214,27 +218,26 @@ fun AccountEditScreen(
     var disableDialog by rememberSaveable { mutableStateOf(false) }
     var deleteDialog by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold(
-        containerColor = cs.background,
+    GlassScaffold(
         topBar = {
             TopAppBar(
                 title = { Text(if (isNew) "新建账户" else "账户设置") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = { TextButton(onClick = { vm.save(onCreated, onBack) }, enabled = vm.loaded) { Text("保存") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = glassBarColors(),
             )
         },
     ) { padding ->
         if (!vm.loaded) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            return@Scaffold
+            return@GlassScaffold
         }
         Column(
             Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             SectionCard(contentPadding = PaddingValues(20.dp)) {
-                OutlinedTextField(vm.name, { vm.name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(vm.name, { vm.name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = FieldShape, colors = glassFieldColors())
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     vm.purpose, { vm.purpose = it },
@@ -243,6 +246,8 @@ fun AccountEditScreen(
                     supportingText = { Text("显示在名称下方的灰字") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                    colors = glassFieldColors(),
                 )
                 Spacer(Modifier.height(4.dp))
                 SelectField(
@@ -290,6 +295,8 @@ fun AccountEditScreen(
                         isError = Money.parse(vm.baselineInput) == null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth(),
+                        shape = FieldShape,
+                        colors = glassFieldColors(),
                     )
                     if (vm.kind == AccountKind.INVESTMENT) {
                         Spacer(Modifier.height(10.dp))
@@ -302,6 +309,8 @@ fun AccountEditScreen(
                             isError = vm.costInput.isNotBlank() && Money.parse(vm.costInput) == null,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.fillMaxWidth(),
+                            shape = FieldShape,
+                            colors = glassFieldColors(),
                         )
                     }
                 }
@@ -330,15 +339,17 @@ fun AccountEditScreen(
                 )
                 AnimatedVisibility(moreOpen) {
                     Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedTextField(vm.institution, { vm.institution = it }, label = { Text("机构") }, placeholder = { Text("如：中国农业银行、支付宝") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(vm.institution, { vm.institution = it }, label = { Text("机构") }, placeholder = { Text("如：中国农业银行、支付宝") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = FieldShape, colors = glassFieldColors())
                         OutlinedTextField(
                             vm.cardTail, { t -> vm.cardTail = t.filter { it.isDigit() }.take(4) },
                             label = { Text("卡号后四位") }, singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(),
+                            shape = FieldShape,
+                            colors = glassFieldColors(),
                         )
                         if (vm.kind == AccountKind.INVESTMENT) {
-                            OutlinedTextField(vm.code, { vm.code = it }, label = { Text("基金 / 股票代码") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(vm.code, { vm.code = it }, label = { Text("基金 / 股票代码") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = FieldShape, colors = glassFieldColors())
                             SelectField(
                                 label = "锁定至",
                                 value = vm.lockedUntil?.let { Dates.date(it) } ?: "不锁定",
@@ -362,7 +373,7 @@ fun AccountEditScreen(
                 )
                 RowDivider()
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-                    OutlinedTextField(vm.note, { vm.note = it }, label = { Text("备注") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(vm.note, { vm.note = it }, label = { Text("备注") }, minLines = 2, modifier = Modifier.fillMaxWidth(), shape = FieldShape, colors = glassFieldColors())
                 }
             }
 
@@ -476,6 +487,8 @@ private fun BaselineDialog(vm: AccountEditViewModel, onDismiss: () -> Unit) {
                     singleLine = true,
                     isError = Money.parse(value) == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = FieldShape,
+                    colors = glassFieldColors(),
                 )
                 if (a.isInvestment) {
                     OutlinedTextField(
@@ -484,6 +497,8 @@ private fun BaselineDialog(vm: AccountEditViewModel, onDismiss: () -> Unit) {
                         placeholder = { Text("留空则等于期初金额") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        shape = FieldShape,
+                        colors = glassFieldColors(),
                     )
                 }
             }

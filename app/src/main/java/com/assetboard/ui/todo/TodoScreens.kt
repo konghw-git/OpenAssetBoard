@@ -1,5 +1,6 @@
 package com.assetboard.ui.todo
 
+import com.assetboard.ui.components.GlassSheet
 import com.assetboard.ui.components.glass
 import com.assetboard.ui.components.LocalAmbient
 import com.assetboard.ui.components.ReorderState
@@ -753,6 +754,8 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             inUpcoming = c.view == TodoView.UPCOMING,
                             checklist = if (logbook) emptyList() else items.sortedBy { it.sortOrder },
                             onToggleItem = if (selecting) null else c.vm::toggleChecklist,
+                            onDeleteItem = if (selecting || c.reorder.dragging != null) null else c.vm::deleteChecklistItem,
+                            swipe = c.swipe,
                         )
                     }
                 }
@@ -840,12 +843,7 @@ private fun ViewHeader(c: ViewContext) {
 @Composable
 fun TodoDetailSheet(todoId: String, onDismiss: () -> Unit, onOpenTodo: (String) -> Unit) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = state,
-        containerColor = MaterialTheme.colorScheme.background,
-        dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 4.dp).size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.outlineVariant)) },
-    ) {
+    GlassSheet(onDismissRequest = onDismiss, sheetState = state) {
         TodoDetailContent(todoId, onClose = onDismiss, onOpenTodo = onOpenTodo, inSheet = true)
     }
 }

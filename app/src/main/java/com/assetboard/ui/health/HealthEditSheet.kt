@@ -37,6 +37,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.assetboard.ui.components.FieldShape
+import com.assetboard.ui.components.glassFieldColors
+import com.assetboard.ui.components.GlassSheet
 import com.assetboard.data.BodyMeasurement
 import com.assetboard.data.HealthProfile
 import com.assetboard.data.MeasurementDraft
@@ -92,7 +95,7 @@ fun HealthEditSheet(
     val ready = weightG != null && weightError == null && fatError == null
     val draft = { MeasurementDraft(existing?.id, LocalDate.parse(date), weightG!!, fatBp.takeIf { fat.isNotBlank() }, note.takeIf { showNote }) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    GlassSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).imePadding().navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -122,6 +125,8 @@ fun HealthEditSheet(
                 supportingText = weightError?.let { { Text(it) } },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                shape = FieldShape,
+                colors = glassFieldColors(),
             )
             OutlinedTextField(
                 value = fat,
@@ -133,6 +138,8 @@ fun HealthEditSheet(
                 supportingText = (fatError ?: "只有普通体重秤时留空").let { { Text(it) } },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+                colors = glassFieldColors(),
             )
             SelectField(
                 label = "日期",
@@ -142,7 +149,7 @@ fun HealthEditSheet(
                 supportingText = "出差回来可以补录之前的日子",
             )
             AnimatedVisibility(showNote) {
-                OutlinedTextField(note, { note = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+                OutlinedTextField(note, { note = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), maxLines = 3, shape = FieldShape, colors = glassFieldColors())
             }
             if (!showNote) TextButton(onClick = { showNote = true }) { Text("添加备注") }
             if (profile != null && weightG != null && weightError == null) {
