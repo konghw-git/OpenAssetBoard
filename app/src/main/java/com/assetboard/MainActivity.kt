@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         if (savedInstanceState == null) open = requestOf(intent)
         val container = (application as AssetBoardApp).container
+        if (savedInstanceState == null) container.updater.checkAuto()
         setContent {
             val theme by container.settings.themeMode.collectAsStateWithLifecycle()
             val upIsRed by container.settings.upIsRed.collectAsStateWithLifecycle()

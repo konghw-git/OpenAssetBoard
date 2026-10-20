@@ -48,6 +48,8 @@ class SettingsStore(context: Context) {
     /** Minutes after midnight. */
     val diaryReminderMinutes = MutableStateFlow(prefs.getInt(KEY_DIARY_REMINDER_AT, 22 * 60))
     val reminderGuideSeen = bool(KEY_GUIDE_SEEN, false)
+    /** Look for a new version once a day on start (only while networking is on). */
+    val autoUpdateCheck = bool(KEY_AUTO_UPDATE, true)
 
     fun setBool(flow: MutableStateFlow<Boolean>, value: Boolean) {
         val key = when (flow) {
@@ -57,6 +59,7 @@ class SettingsStore(context: Context) {
             allRemindersAsAlarms -> KEY_ALL_ALARMS
             diaryReminderEnabled -> KEY_DIARY_REMINDER
             reminderGuideSeen -> KEY_GUIDE_SEEN
+            autoUpdateCheck -> KEY_AUTO_UPDATE
             else -> error("unknown setting")
         }
         prefs.edit { putBoolean(key, value) }
@@ -117,6 +120,7 @@ class SettingsStore(context: Context) {
         private const val KEY_DIARY_REMINDER = "diary_reminder_enabled"
         private const val KEY_DIARY_REMINDER_AT = "diary_reminder_minutes"
         private const val KEY_GUIDE_SEEN = "reminder_guide_seen"
+        private const val KEY_AUTO_UPDATE = "auto_update_check"
         private const val KEY_RESCHEDULE = "reschedule_needed"
     }
 }

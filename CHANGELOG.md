@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-20
+
+### Added
+
+- **A net worth goal.** Set an amount on the net worth card (tap 设个攒钱目标; "100万" works):
+  the card shows a gold bar of how far along it is, what is left, and how long the stocktakes of
+  the last half year say it will take. No new card; the goal is backed up (format 7).
+- **Updates inside the app.** Settings › 应用更新 checks the GitHub releases (and, on its own,
+  once a day while networking is on), downloads the APK, checks that it is this app, newer and
+  signed with the same key, backs up, and opens the system installer; data stays as with any
+  upgrade. A download mirror can be set for slow networks.
+- **Todos sort by hand.** Long press a todo and drag it, in Today, Upcoming, the inbox, someday
+  and lists; a long press held still still selects. Rows only trade places with rows of the same
+  standing (in Today, overdue and flagged ones keep their groups). The separate sort page is gone.
+
+### Changed
+
+- **Glass on every tab.** The assets and diary tabs (and the diary's calendar and search) get
+  the same colour fields and frosted cards as todos and notes.
+- **Checklists show in full** under a todo, each item on a strip of its own; the done/total count
+  moved onto the title line, next to a small progress ring.
+- **The dial's labels face its middle**, turning with their segments, so none crosses the edge.
+- Today no longer orders by list first: the hand-set order decides after overdue and flagged.
+
+### Fixed
+
+- The daily card's ⚡ count and 每日 no longer overlap the habit cells.
+
 ## [0.7.1] - 2026-10-20
 
 ### Fixed
@@ -154,7 +182,8 @@ between minor versions; backup format v3 reads v1 and v2.
 - Reminder punctuality depends on the phone's autostart and background permissions; the in-app
   checklist walks through them.
 
-[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.5.0...v0.6.0

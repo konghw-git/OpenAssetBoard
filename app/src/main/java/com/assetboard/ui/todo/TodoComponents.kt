@@ -10,10 +10,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
@@ -185,6 +186,8 @@ fun TodoRow(
     checklist: List<ChecklistItem> = emptyList(),
     /** Null makes the check points read-only (selecting, sorting). */
     onToggleItem: ((String) -> Unit)? = null,
+    /** Picked up and being dragged. */
+    lifted: Boolean = false,
     trailing: @Composable (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -192,10 +195,12 @@ fun TodoRow(
     val points = if (done) emptyList() else checklist
     val content by animateFloatAsState(if (done) 0.55f else 1f, tween(260), label = "done")
     val tint by animateColorAsState(if (selected) cs.primary.copy(alpha = 0.16f) else Color.Transparent, tween(200), label = "tint")
+    val lift by animateFloatAsState(if (lifted) 1f else 0f, spring(stiffness = Spring.StiffnessMediumLow), label = "lift")
     Row(
         modifier
             .fillMaxWidth()
-            .glass(TodoCardShape, glass, tint, elevation = if (done) 0.dp else 10.dp)
+            .graphicsLayer { scaleX = 1f + 0.03f * lift; scaleY = scaleX }
+            .glass(TodoCardShape, glass, tint, elevation = if (done) 0.dp else 10.dp + 18.dp * lift)
             .clip(TodoCardShape)
             .then(if (selected) Modifier.border(1.5.dp, cs.primary, TodoCardShape) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
@@ -219,9 +224,15 @@ fun TodoRow(
                     textDecoration = if (done) TextDecoration.LineThrough else null,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                // The checklist's progress rides on the title line, where it costs no room.
+                if (extras.checklistTotal > 0) {
+                    Spacer(Modifier.width(8.dp))
+                    ChecklistProgress(extras.checklistDone, extras.checklistTotal)
+                }
             }
-            val hasMeta = extras.listName != null || extras.checklistTotal > 0 || todo.notes.isNotBlank() ||
+            val hasMeta = extras.listName != null || todo.notes.isNotBlank() ||
                 todo.kind == TodoKind.REPEAT_SOURCE || (todo.remindTime != null && !done)
             if (hasMeta) {
                 Row(
@@ -233,7 +244,6 @@ fun TodoRow(
                         MetaChip(if (todo.strongRemind) Icons.Outlined.Alarm else Icons.Outlined.Notifications, todo.remindTime, if (todo.strongRemind) cs.error else cs.primary)
                     }
                     if (todo.kind == TodoKind.REPEAT_SOURCE) MetaChip(Icons.Outlined.Repeat, null, cs.tertiary)
-                    if (extras.checklistTotal > 0) MetaChip(Icons.Outlined.Checklist, "${extras.checklistDone}/${extras.checklistTotal}", cs.onSurfaceVariant)
                     if (todo.notes.isNotBlank()) Icon(Icons.Outlined.StickyNote2, null, tint = cs.outline, modifier = Modifier.size(14.dp))
                     extras.listName?.let { name ->
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f, fill = false)) {
@@ -244,7 +254,7 @@ fun TodoRow(
                     }
                 }
             }
-            if (points.isNotEmpty()) InlineChecklist(points, onToggleItem, onMore = onClick)
+            if (points.isNotEmpty()) InlineChecklist(points, onToggleItem)
         }
         if (badge != null) {
             val c = badgeColor(badge.tone)
@@ -264,37 +274,37 @@ fun TodoRow(
     }
 }
 
-/** How many check points a card shows before folding the rest into "还有 N 项". */
-private const val INLINE_CHECKLIST_MAX = 6
+/** A small ring filling as the checklist gets done, and "done/total" beside it. */
+@Composable
+private fun ChecklistProgress(done: Int, total: Int) {
+    val cs = MaterialTheme.colorScheme
+    val all = done == total
+    val shown by animateFloatAsState(done.toFloat() / total, tween(400), label = "checklist")
+    val color = if (all) cs.primary else cs.onSurfaceVariant
+    val track = cs.outlineVariant
+    val fill = cs.primary
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(14.dp).drawBehind {
+                val w = 2.dp.toPx()
+                val arc = Size(size.width - w, size.height - w)
+                drawArc(track, 0f, 360f, false, Offset(w / 2, w / 2), arc, style = Stroke(w))
+                if (shown > 0f) drawArc(fill, -90f, 360f * shown, false, Offset(w / 2, w / 2), arc, style = Stroke(w, cap = StrokeCap.Round))
+            },
+        )
+        Spacer(Modifier.width(4.dp))
+        Text("$done/$total", style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (all) FontWeight.SemiBold else null)
+    }
+}
 
 /**
- * The todo's checklist as small check points under its title, hung off a thin guide line so they
- * read as part of the card. Tapping one ticks it in place; the rest stays in the detail page.
+ * The todo's checklist under its title, every item on a strip of its own. Tapping one ticks it
+ * in place; adding and editing stay in the detail page.
  */
 @Composable
-private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> Unit)?, onMore: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val shown = items.take(INLINE_CHECKLIST_MAX)
-    val guide = cs.outlineVariant
-    Column(
-        Modifier
-            .padding(top = 6.dp)
-            .fillMaxWidth()
-            .drawBehind {
-                val x = 1.dp.toPx()
-                drawLine(guide, Offset(x, 6.dp.toPx()), Offset(x, size.height - 6.dp.toPx()), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
-            }
-            .padding(start = 6.dp),
-    ) {
-        shown.forEach { item -> CheckPoint(item, onToggle) }
-        if (items.size > shown.size) {
-            Text(
-                "还有 ${items.size - shown.size} 项",
-                style = MaterialTheme.typography.labelSmall,
-                color = cs.outline,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onMore).padding(horizontal = 6.dp, vertical = 4.dp),
-            )
-        }
+private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> Unit)?) {
+    Column(Modifier.padding(top = 8.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        items.forEach { item -> CheckPoint(item, onToggle) }
     }
 }
 
@@ -303,19 +313,23 @@ private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
     val cs = MaterialTheme.colorScheme
     val scale by animateFloatAsState(if (item.done) 1f else 0.9f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium), label = "point")
     val fill by animateColorAsState(if (item.done) cs.primary else Color.Transparent, tween(200), label = "pointFill")
-    val text by animateColorAsState(if (item.done) cs.outline else cs.onSurface.copy(alpha = 0.85f), tween(200), label = "pointText")
+    val text by animateColorAsState(if (item.done) cs.outline else cs.onSurface.copy(alpha = 0.88f), tween(200), label = "pointText")
+    // A strip a shade off the card: light on glass, dimmer once done.
+    val strip by animateColorAsState(cs.onSurface.copy(alpha = if (item.done) 0.03f else 0.055f), tween(200), label = "strip")
+    val shape = RoundedCornerShape(10.dp)
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(shape)
+            .background(strip)
             .then(if (onToggle != null) Modifier.clickable { onToggle(item.id) } else Modifier)
-            .heightIn(min = 30.dp)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
+            .heightIn(min = 36.dp)
+            .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier
-                .size(16.dp)
+                .size(17.dp)
                 .scale(scale)
                 .clip(RoundedCornerShape(5.dp))
                 .background(fill)
@@ -323,7 +337,7 @@ private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
             contentAlignment = Alignment.Center,
         ) {
             androidx.compose.animation.AnimatedVisibility(item.done, enter = scaleIn(spring(dampingRatio = 0.4f)) + fadeIn(), exit = fadeOut()) {
-                Icon(Icons.Default.Check, null, tint = cs.onPrimary, modifier = Modifier.size(11.dp))
+                Icon(Icons.Default.Check, null, tint = cs.onPrimary, modifier = Modifier.size(12.dp))
             }
         }
         Spacer(Modifier.width(10.dp))
@@ -332,13 +346,11 @@ private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
             style = MaterialTheme.typography.bodyMedium,
             color = text,
             textDecoration = if (item.done) TextDecoration.LineThrough else null,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
-/** A tinted icon with optional text: reminder time, repeat, checklist progress. */
+/** A tinted icon with optional text: reminder time, repeat. */
 @Composable
 private fun MetaChip(icon: ImageVector, text: String?, color: Color) {
     Row(

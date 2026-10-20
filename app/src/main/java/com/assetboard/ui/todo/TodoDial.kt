@@ -106,7 +106,8 @@ private const val GAP_DEG = 2.4f
 
 /**
  * The five smart views as one ring of curved segments, close together and turning slowly, with
- * the new-todo button in the middle. Labels stay upright; a tap picks the segment under it.
+ * the new-todo button in the middle. Each label turns with its segment, its foot toward the
+ * middle like the numbers on a dial, so it never leaves the band; a tap picks the segment under it.
  */
 @Composable
 internal fun ViewRing(
@@ -182,6 +183,7 @@ internal fun ViewRing(
                         val rr = (inner + band / 2 - 2.dp).toPx()
                         IntOffset((rr * cos(mid)).roundToInt(), (rr * sin(mid)).roundToInt())
                     }
+                    .graphicsLayer { rotationZ = 72f * i + spin }
                     .semantics {
                         contentDescription = v.label
                         role = Role.Tab
@@ -243,10 +245,7 @@ private fun SegmentLabel(v: TodoView, d: TodoData?, today: LocalDate, fill: Floa
     }
 }
 
-/**
- * The ring turns, so a label passes the sides where only the band's depth is left for it: two
- * characters at most. The full name stays in the segment's content description.
- */
+/** Two characters, the same weight as the others; the full name stays in the content description. */
 private fun ringLabel(v: TodoView): String = if (v == TodoView.SOMEDAY) "以后" else v.label
 
 /** Text inside the ring's fixed geometry follows the system font size only up to 1.15×. */
@@ -319,20 +318,21 @@ internal fun HabitBattery(checked: Set<Habit>, onToggle: (Habit) -> Unit, modifi
     val edge = if (full) charge.copy(alpha = glow) else cs.outlineVariant
     val body = RoundedCornerShape(18.dp)
     Column(modifier) {
-        Box(Modifier.fillMaxWidth().height(16.dp)) {
-            Box(
-                Modifier.align(Alignment.BottomCenter).width(34.dp).height(7.dp)
-                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                    .background(if (full) charge else cs.outlineVariant),
-            )
-            Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
-                AnimatedVisibility(level > 0, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
-                    Icon(Icons.Rounded.Bolt, null, tint = charge, modifier = Modifier.size(14.dp))
-                }
-                Text("$level/${Habit.entries.size}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (level > 0) charge else cs.onSurfaceVariant)
+        // The count and the name sit above the cap's height, clear of the body and its shadow.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            AnimatedVisibility(level > 0, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+                Icon(Icons.Rounded.Bolt, null, tint = charge, modifier = Modifier.size(14.dp))
             }
-            Text(if (full) "满格" else "每日", fontSize = 11.sp, color = cs.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterEnd))
+            Text("$level/${Habit.entries.size}", fontSize = ringSp(12f), fontWeight = FontWeight.SemiBold, color = if (level > 0) charge else cs.onSurfaceVariant)
+            Spacer(Modifier.weight(1f))
+            Text(if (full) "满格" else "每日", fontSize = ringSp(12f), color = cs.onSurfaceVariant)
         }
+        Spacer(Modifier.height(5.dp))
+        Box(
+            Modifier.align(Alignment.CenterHorizontally).width(34.dp).height(7.dp)
+                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                .background(if (full) charge else cs.outlineVariant),
+        )
         Column(
             Modifier
                 .weight(1f)

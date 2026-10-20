@@ -1,7 +1,10 @@
 package com.assetboard.ui.components
 
 import android.os.Build
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
@@ -243,6 +246,15 @@ private fun DrawScope.drawAmbient(a: Ambient, w: Float, h: Float) {
     orb(a.palette[2], 0.26f * k, w * 1.00f, h * 0.26f, w * 0.62f)
     orb(a.palette[1], 0.22f * k, w * 0.02f, h * 0.58f, w * 0.72f)
     orb(a.palette[5], 0.22f * k, w * 0.92f, h * 0.88f, w * 0.68f)
+}
+
+/** A page with [Ambient] colour behind [content], for the glass on it. */
+@Composable
+fun AmbientPage(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val a = rememberAmbient()
+    Box(modifier.fillMaxSize().ambient(a)) {
+        CompositionLocalProvider(LocalAmbient provides a, content = content)
+    }
 }
 
 /** The page background; also makes [a] the one the glass on the page blurs, through [LocalAmbient]. */

@@ -53,7 +53,7 @@ class TodoWidget : GlanceAppWidget() {
         val container = (context.applicationContext as AssetBoardApp).container
         val data = runCatching { container.todos.loadOnce() }.getOrNull()
         val today = TodoViews.localDate(System.currentTimeMillis())
-        val rows = data?.let { TodoViews.today(it.todos, it.lists, today) }.orEmpty()
+        val rows = data?.let { TodoViews.today(it.todos, today) }.orEmpty()
         val open = rows.count { !it.done }
         // The token's epoch is bound here, when the widget is drawn.
         val epoch = container.gate.epochNow()

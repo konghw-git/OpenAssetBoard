@@ -24,7 +24,9 @@ import com.assetboard.ui.todo.TodoHomeScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import com.assetboard.ui.components.DustHost
@@ -78,6 +80,7 @@ class ModuleScreenshotTest {
             t.addChecklistItem(detail, "实验结果表")
             t.toggleChecklist(t.addChecklistItem(detail, "消融实验图"))
             t.addChecklistItem(detail, "下一步计划")
+            for (x in listOf("相关工作两页", "复现基线的坑", "时间线", "问导师的三个问题")) t.addChecklistItem(detail, x)
             t.create(TodoDraft("买猫粮"))
             t.create(TodoDraft("看《置身事内》", someday = true))
             t.create(TodoDraft("办护照", planDate = today.plusDays(5)))
@@ -180,6 +183,37 @@ class ModuleScreenshotTest {
         shot("24-todo-detail", d.c) { TodoDetailScreen(d.detailId, onBack = {}, onOpenTodo = {}) }
     }
 
+    /** Long press and drag: the lower row of a band moves above the upper one, and stays there. */
+    @Test fun todoDragReorders() {
+        val d = demo()
+        shot("21-todo-today", d.c) { TodoHomeScreen({}, {}, initialView = "today") }
+        compose.onAllNodes(hasScrollToIndexAction())[0].performScrollToIndex(6)
+        compose.mainClock.advanceTimeBy(500)
+        fun top(text: String) = compose.onNodeWithText(text).fetchSemanticsNode().boundsInRoot.top
+        val (upper, lower) = listOf("准备组会 PPT", "整理数据集").sortedBy(::top)
+        val gap = top(lower) - top(upper)
+        // While a row is held the list keeps watching its edges every frame: step the clock by hand.
+        compose.mainClock.autoAdvance = false
+        val row = compose.onNodeWithText(lower)
+        row.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(800)
+        row.performTouchInput { moveBy(Offset(0f, -gap / 2)) }
+        compose.mainClock.advanceTimeBy(100)
+        row.performTouchInput { moveBy(Offset(0f, -gap / 2 - 20f)) }
+        compose.mainClock.advanceTimeBy(300)
+        compose.onRoot().captureRoboImage("build/screenshots/29-todo-drag.png")
+        row.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(100)
+        compose.mainClock.autoAdvance = true
+        compose.waitUntil(5_000) {
+            val order = runBlocking { d.c.todos.loadOnce().todos }.associate { it.title to it.sortOrder }
+            order.getValue(lower) < order.getValue(upper)
+        }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        assert(top(lower) < top(upper)) { "$lower should now be above $upper" }
+    }
+
     @Test fun todoTodayDark() {
         val d = demo()
         shot("25-todo-today-dark", d.c, dark = true) { TodoHomeScreen({}, {}, initialView = "today") }
@@ -209,6 +243,16 @@ class ModuleScreenshotTest {
     @Test fun trash() {
         val d = demo()
         shot("40-trash", d.c) { TrashScreen(onBack = {}) }
+    }
+
+    @Test fun updateDialog() {
+        val d = demo()
+        d.c.updater.present(
+            com.assetboard.data.UpdateState.Available(
+                com.assetboard.data.Release("0.8.1", "## 新功能\n- **目标资产**：净资产卡片上的进度条\n- 待办可以长按拖动排序\n\n## 修复\n- 每日卡片的标题不再和格子重叠", "", 12_345_678, ""),
+            ),
+        )
+        shot("43-update-dialog", d.c) { com.assetboard.ui.settings.UpdatePrompt() }
     }
 
     @Test fun settingsFull() {

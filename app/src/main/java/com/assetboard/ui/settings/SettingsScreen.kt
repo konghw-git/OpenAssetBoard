@@ -34,6 +34,9 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Autorenew
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.WbSunny
@@ -129,6 +132,10 @@ fun SettingsScreen(
     val diaryAt by settings.diaryReminderMinutes.collectAsStateWithLifecycle()
     val holidayYears = container.holidays.table.collectAsStateWithLifecycle().value.years
     var pickDiaryTime by remember { mutableStateOf(false) }
+    val updater = container.updater
+    val update by updater.state.collectAsStateWithLifecycle()
+    val autoUpdate by settings.autoUpdateCheck.collectAsStateWithLifecycle()
+    var editMirror by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     ErrorDialog(error) { vm.error.value = null }
     RestoreConfirm(vm)
@@ -274,6 +281,27 @@ fun SettingsScreen(
             }
 
             SectionCard {
+                SectionHeader("应用更新")
+                ListRow(
+                    title = "检查更新",
+                    subtitle = updateSummary(update, updater.currentVersion),
+                    leading = { IconTile(Icons.Outlined.SystemUpdate, palette.group(0)) },
+                    onClick = updater::checkNow,
+                )
+                RowDivider(startIndent = 68.dp)
+                SwitchRow(Icons.Outlined.Autorenew, palette.group(2), "自动检查", "每天第一次打开时看看有没有新版本，有才提示", autoUpdate) {
+                    settings.setBool(settings.autoUpdateCheck, it)
+                }
+                RowDivider(startIndent = 68.dp)
+                ListRow(
+                    title = "下载镜像",
+                    subtitle = updater.mirror.ifEmpty { "未设置，直连 GitHub" },
+                    leading = { IconTile(Icons.Outlined.Speed, palette.group(5)) },
+                    onClick = { editMirror = true },
+                )
+            }
+
+            SectionCard {
                 SectionHeader("账户")
                 ListRow(
                     title = "分组管理",
@@ -303,7 +331,7 @@ fun SettingsScreen(
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text("卡片玻璃", style = MaterialTheme.typography.bodyMedium)
-                            Text("待办和笔记的卡片：清透能看见背后的颜色，深色更沉稳、对比更高", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("各页的卡片：清透能看见背后的颜色，深色更沉稳、对比更高", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     SegmentedControl(listOf(SettingsStore.GLASS_CLEAR, SettingsStore.GLASS_DEEP), glassMode, { if (it == SettingsStore.GLASS_DEEP) "深色" else "清透" }, settings::setGlass)
@@ -313,6 +341,9 @@ fun SettingsScreen(
         }
     }
 
+    if (editMirror) {
+        MirrorDialog(updater.mirror, onDismiss = { editMirror = false }) { updater.mirror = it; editMirror = false }
+    }
     if (pickDiaryTime) {
         com.assetboard.ui.todo.TimePickDialog(
             initial = java.time.LocalTime.of(diaryAt / 60, diaryAt % 60),

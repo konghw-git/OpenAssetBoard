@@ -41,4 +41,4 @@
 1. 更新 `CHANGELOG.md` 与 `app/build.gradle.kts` 里的 `versionCode` / `versionName`。
 2. 跑全量测试，并用 `scripts/compare-backups.py` 对比升级前后的账本。
 3. `./gradlew assembleRelease`，在真机上覆盖安装验证。
-4. 打 tag、创建 Release、上传 `app-release.apk`。
+4. `scripts/publish-release.sh`：打 tag、推送、创建 Release 并上传 `OpenAssetBoard-x.y.z.apk`（需要 `gh auth login`）。应用内升级读的是最新一个非预发布 Release 里第一个 `.apk`，tag 必须是 `v` + `versionName`。

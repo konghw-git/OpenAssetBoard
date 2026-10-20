@@ -292,11 +292,23 @@ class TodoRepository(
         }
     }
 
-    /** Manual order within the inbox or a list. */
+    /**
+     * A hand-set order for [idsInOrder], the rows of one view that trade places, leaving every
+     * other todo where it was: they swap the places they hold in the one order all views share.
+     * Places held twice (orders from before this rule) are first spread out over every todo.
+     */
     suspend fun reorder(idsInOrder: List<String>) = tx {
-        idsInOrder.forEachIndexed { i, id ->
-            val t = dao.todo(id) ?: return@forEachIndexed
-            if (t.sortOrder != i) dao.updateTodo(t.copy(sortOrder = i, revision = t.revision + 1))
+        val ids = idsInOrder.distinct()
+        var moved = ids.mapNotNull { dao.todo(it) }
+        if (moved.map { it.sortOrder }.toSet().size < moved.size) {
+            dao.allTodos().sortedWith(compareBy({ it.sortOrder }, { it.createdAt }, { it.id })).forEachIndexed { i, t ->
+                if (t.sortOrder != i) dao.updateTodo(t.copy(sortOrder = i, revision = t.revision + 1))
+            }
+            moved = ids.mapNotNull { dao.todo(it) }
+        }
+        val places = moved.map { it.sortOrder }.sorted()
+        moved.forEachIndexed { i, t ->
+            if (t.sortOrder != places[i]) dao.updateTodo(t.copy(sortOrder = places[i], revision = t.revision + 1))
         }
     }
 

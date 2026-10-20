@@ -93,6 +93,7 @@ import com.assetboard.ui.record.ValuationEditScreen
 import com.assetboard.ui.settings.GroupsScreen
 import com.assetboard.ui.settings.PreRestoreScreen
 import com.assetboard.ui.settings.ReminderGuideScreen
+import com.assetboard.ui.settings.UpdatePrompt
 import com.assetboard.ui.settings.SettingsScreen
 import com.assetboard.ui.settings.TrashScreen
 import com.assetboard.ui.stocktake.StocktakeScreen
@@ -208,6 +209,7 @@ fun AppNav(open: OpenRequest?, onOpenHandled: () -> Unit) {
         // Above every page, so a deleted card's dust can drift over the rest of the list.
         DustHost(dust)
         GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp), backdrop)
+        UpdatePrompt()
         if (frozen) {
             Box(
                 Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },

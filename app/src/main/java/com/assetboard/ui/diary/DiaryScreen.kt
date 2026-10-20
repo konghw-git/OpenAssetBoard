@@ -1,5 +1,10 @@
 package com.assetboard.ui.diary
 
+import androidx.compose.runtime.CompositionLocalProvider
+import com.assetboard.ui.components.LocalAmbient
+import com.assetboard.ui.components.ambient
+import com.assetboard.ui.components.glass
+import com.assetboard.ui.components.rememberAmbient
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.Lock
@@ -37,7 +42,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
@@ -252,8 +256,11 @@ fun DiaryScreen(
         extractingSelection = true
         extracting = date to picked
     }
+    val ambient = rememberAmbient()
+    Box(Modifier.fillMaxSize().ambient(ambient)) {
+    CompositionLocalProvider(LocalAmbient provides ambient) {
     Scaffold(
-        containerColor = cs.background,
+        containerColor = Color.Transparent,
         snackbarHost = { GlassSnackbarHost(snackbar) },
         // The system's selection menu puts app items last; this one is right above the keyboard.
         floatingActionButton = {
@@ -299,9 +306,9 @@ fun DiaryScreen(
                 val due by vm.dueWeek.collectAsStateWithLifecycle()
                 due?.takeIf { !editing && date == today }?.let { w -> DuePrompt(w, today) { onOpenWeek(w) } }
                 if (pastMidnight) {
-                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+                    Box(Modifier.fillMaxWidth().glass(MaterialTheme.shapes.large, glass, cs.secondary.copy(alpha = 0.12f))) {
                         Row(Modifier.padding(start = 18.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("已过零点，这一页还是 ${date.monthValue}月${date.dayOfMonth}日", modifier = Modifier.weight(1f), color = cs.onSecondaryContainer)
+                            Text("已过零点，这一页还是 ${date.monthValue}月${date.dayOfMonth}日", modifier = Modifier.weight(1f), color = cs.onSurface)
                             TextButton(onClick = vm::goToday) { Text("去今天") }
                         }
                     }
@@ -332,10 +339,10 @@ fun DiaryScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 drafts.forEach { d ->
-                    Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+                    Box(Modifier.fillMaxWidth().glass(MaterialTheme.shapes.large, glass, cs.tertiary.copy(alpha = 0.12f))) {
                         Column(Modifier.padding(start = 18.dp, end = 8.dp, top = 12.dp)) {
-                            Text("有一段没能保存进正文的文字（${d.reason}）", style = MaterialTheme.typography.titleSmall, color = cs.onTertiaryContainer)
-                            Text(d.text, style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, end = 10.dp))
+                            Text("有一段没能保存进正文的文字（${d.reason}）", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                            Text(d.text, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, end = 10.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                 TextButton(onClick = { vm.discardDraft(d) }) { Text("丢弃") }
                                 TextButton(onClick = { vm.appendDraft(d) }) { Text("追加到正文") }
@@ -358,6 +365,8 @@ fun DiaryScreen(
                 }
             }
         }
+    }
+    }
     }
 
     if (askDelete) {
@@ -507,13 +516,9 @@ private fun Editor(
     val lineHeight = 30.sp
     val rule = cs.outlineVariant.copy(alpha = 0.7f)
     val border by animateColorAsState(if (focused) cs.primary.copy(alpha = 0.5f) else Color.Transparent, tween(220), label = "editor")
-    Surface(
-        shape = RoundedCornerShape(26.dp),
-        color = cs.surfaceContainer,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, border),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    val shape = RoundedCornerShape(26.dp)
+    // The page's glass, a shade denser so the ruled lines and the text stay calm over the colour.
+    Box(Modifier.fillMaxWidth().glass(shape, glass, cs.surface.copy(alpha = 0.18f)).border(1.dp, border, shape)) {
         Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 12.dp)) {
             header()
             val style = MaterialTheme.typography.bodyLarge.copy(
@@ -630,7 +635,7 @@ private fun DayHeader(
             }
             // Day stepping around the calendar: previous, the month view, back to today when away, next up to today.
             Row(
-                Modifier.clip(RoundedCornerShape(50)).background(cs.surfaceContainer),
+                Modifier.glass(RoundedCornerShape(50), glass, elevation = 6.dp).clip(RoundedCornerShape(50)),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onPrev, modifier = Modifier.size(40.dp)) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "前一天") }
@@ -713,8 +718,9 @@ private fun StocktakeStrip(vm: DiaryViewModel, date: LocalDate, today: LocalDate
     Row(
         Modifier
             .fillMaxWidth()
+            .then(if (last != null) Modifier.shadow(10.dp, shape, ambientColor = extra.heroStart, spotColor = extra.heroStart) else Modifier.glass(shape, glass))
             .clip(shape)
-            .background(if (last != null) Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd)) else SolidColor(cs.surfaceContainer))
+            .then(if (last != null) Modifier.background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd))) else Modifier)
             .clickable(onClick = onStocktake)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -817,13 +823,13 @@ private fun WeekRow(vm: DiaryViewModel, date: LocalDate, onClick: () -> Unit) {
 @Composable
 private fun DuePrompt(week: LocalDate, today: LocalDate, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+    Box(Modifier.fillMaxWidth().glass(MaterialTheme.shapes.large, glass, cs.secondary.copy(alpha = 0.14f))) {
         Row(Modifier.padding(start = 18.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.ViewWeek, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(18.dp))
+            Icon(Icons.Outlined.ViewWeek, null, tint = cs.secondary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(10.dp))
             Text(
                 if (week == Weeks.start(today)) "这周快过完了，写写复盘？" else "上周的复盘还没写",
-                color = cs.onSecondaryContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
+                color = cs.onSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onClick) { Text("去写") }
         }

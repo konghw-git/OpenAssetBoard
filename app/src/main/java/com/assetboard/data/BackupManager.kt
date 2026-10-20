@@ -21,7 +21,8 @@ import java.io.File
 
 /**
  * Format 2 adds the todo and diary tables, format 3 the daily habit checks, format 4 the health
- * profile and weigh-ins, format 5 the notes, format 6 the notes' order and the weekly reviews; older files read with the newer tables empty. Device-local
+ * profile and weigh-ins, format 5 the notes, format 6 the notes' order and the weekly reviews,
+ * format 7 the net worth goal; older files read with the newer tables empty. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -50,6 +51,8 @@ data class BackupFile(
     val noteDrafts: List<NoteDraft> = emptyList(),
     val weeklyReviews: List<WeeklyReview> = emptyList(),
     val weeklyDrafts: List<WeeklyDraft> = emptyList(),
+    /** Cents; null for none. */
+    val netWorthGoal: Long? = null,
 )
 
 /**
@@ -147,6 +150,7 @@ class BackupManager(
                 noteSources = db.noteDao().allSources(),
                 noteDrafts = db.noteDao().allDrafts(),
                 weeklyReviews = db.weekDao().all(),
+                netWorthGoal = GoalRepository.parse(db.metaDao().get(GoalRepository.KEY)),
                 weeklyDrafts = db.weekDao().allDrafts(),
             )
         }
@@ -299,6 +303,7 @@ class BackupManager(
         TodoInvariants.checkAll(file.todoLists, file.todoSections, file.todos, file.checklistItems, file.diaryEntries, file.diaryDrafts, calendar())
         NoteRepository.checkBackup(file.noteTopics, file.notes, file.noteSources, file.noteDrafts)
         WeekRepository.checkBackup(file.weeklyReviews, file.weeklyDrafts)
+        ensure(file.netWorthGoal == null || file.netWorthGoal > 0) { "备份里的目标资产无效" }
     }
 
     /**
@@ -402,6 +407,8 @@ class BackupManager(
         n.insertDrafts(file.noteDrafts)
         db.weekDao().insertAll(file.weeklyReviews)
         db.weekDao().insertDrafts(file.weeklyDrafts)
+        db.metaDao().delete(GoalRepository.KEY)
+        file.netWorthGoal?.let { db.metaDao().put(AppMeta(GoalRepository.KEY, it.toString())) }
     }
 
     // ------------------------------------------------------------ the coordinator's private write channel
@@ -562,7 +569,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 6
+        const val FORMAT_VERSION = 7
     }
 }
 

@@ -68,6 +68,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.assetboard.data.DiaryEntry
 import com.assetboard.domain.calendar.ChineseCalendar
 import com.assetboard.ui.LocalContainer
+import com.assetboard.ui.components.AmbientPage
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.highlight
 import com.assetboard.ui.components.snippet
@@ -107,14 +108,15 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
         if (next <= lastMonth) month = next.atDay(1).toString()
     }
 
+    AmbientPage {
     Scaffold(
-        containerColor = cs.background,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("日记日历") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = { if (YearMonth.from(today) != ym) TextButton(onClick = { month = today.withDayOfMonth(1).toString() }) { Text("回到本月") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
     ) { padding ->
@@ -181,6 +183,7 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
                 Text("  周复盘", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         }
+    }
     }
 }
 
@@ -307,8 +310,9 @@ fun DiarySearchScreen(onBack: () -> Unit, onPick: (LocalDate) -> Unit) {
         results = if (q.isBlank()) null else container.diary.search(q)
     }
     val cs = MaterialTheme.colorScheme
+    AmbientPage {
     Scaffold(
-        containerColor = cs.background,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
@@ -320,7 +324,7 @@ fun DiarySearchScreen(onBack: () -> Unit, onPick: (LocalDate) -> Unit) {
                     )
                 },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
     ) { padding ->
@@ -332,11 +336,12 @@ fun DiarySearchScreen(onBack: () -> Unit, onPick: (LocalDate) -> Unit) {
         ) {
             if (r != null && r.isEmpty()) item { Text("没有找到「$q」", color = cs.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
             items(r.orEmpty(), key = { it.id }) { e ->
-                SectionCard(Modifier.clickable { onPick(LocalDate.parse(e.date)) }, contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)) {
+                SectionCard(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp), onClick = { onPick(LocalDate.parse(e.date)) }) {
                     Text(e.date, style = MaterialTheme.typography.labelLarge, color = cs.primary)
                     Text(highlight(snippet(e.body, q), q, cs.primary), style = MaterialTheme.typography.bodyMedium, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
+    }
     }
 }

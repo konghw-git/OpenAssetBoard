@@ -163,6 +163,8 @@ interface DiaryDao {
 @Dao
 interface MetaDao {
     @Query("SELECT value FROM app_meta WHERE `key` = :key") suspend fun get(key: String): String?
+    @Query("SELECT value FROM app_meta WHERE `key` = :key") fun observe(key: String): Flow<String?>
+    @Query("DELETE FROM app_meta WHERE `key` = :key") suspend fun delete(key: String)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(meta: AppMeta)
 
     @Query("SELECT * FROM holidays WHERE date >= :from AND date <= :to") suspend fun holidaysBetween(from: String, to: String): List<Holiday>

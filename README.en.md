@@ -40,6 +40,7 @@ This app is built for it. One stocktake walks every account, you change the thre
 ### Assets
 
 - **Net worth**: net worth, total assets / liabilities, debt ratio, accounts grouped with subtotals, a small allocation ring inside the net worth card; groups fold to their subtotal and open to show each account.
+- **Savings goal**: set a target net worth on the net worth card; it shows a progress bar, what is left, and roughly how long at the pace of the last half year's stocktakes.
 - **Stocktake**: edit every account inline, touch only the ones that moved, backfill historical dates; each stocktake becomes a point on the net worth line.
 - **Trend**: 3 months / 6 months / 1 year / all time, with period high, low, change and change ratio; a bar-and-line chart of assets vs liabilities.
 - **Investment accounts**: buy, redeem, dividend, transfer, repay, borrow, external in/out. Fees have a payer, so the P&L arithmetic stays honest. Market value and net invested drawn as two lines.
@@ -52,7 +53,8 @@ This app is built for it. One stocktake walks every account, you change the thre
 
 ### Todo
 
-- **Things 3 structure**: inbox → today → upcoming → someday, plus lists with sections. Items carry deadlines, an important flag, notes and checklists; checklist items sit right under the todo's card and tick with one tap.
+- **Things 3 structure**: inbox → today → upcoming → someday, plus lists with sections. Items carry deadlines, an important flag, notes and checklists; every checklist item sits on its own strip under the todo's card and ticks with one tap.
+- **Drag to sort**: long press a todo and drag it in Today, Upcoming, the inbox, someday and lists; overdue and flagged todos keep their groups.
 - **A radial dial**: the home screen puts views on a wheel with live counts, one tap to switch; today's five daily habits sit beside it.
 - **Daily habits**: supplements, workout, diet, water, early sleep. Ticked on the todo page, shown read-only at the top of the diary.
 - **Reminders that fire**: normal notifications, a strong reminder (full screen, ring, vibrate — still on time in deep doze), per-occurrence reminders for repeating todos, catch-up after reboot, and recovery after the permission is revoked.
@@ -83,9 +85,10 @@ This app is built for it. One stocktake walks every account, you change the thre
 ### Shared
 
 - **Local first**: everything lives in SQLite on the phone. The backup is one JSON file written to a folder you pick and overwritten each time.
-- **Versioned backup and restore**: format v6, reads v1–v5. Restore replaces the whole database, copies the current data aside first, and runs behind a write gate so an in-flight old operation can't land in the restored data.
+- **Versioned backup and restore**: format v7, reads v1–v6. Restore replaces the whole database, copies the current data aside first, and runs behind a write gate so an in-flight old operation can't land in the restored data.
 - **Networking is optional and one switch away**: turn it off and the app makes no request at all — holidays come from built-in data and no weather is shown.
-- **Dark mode**, system theme, adjustable up/down colours (red-up by default, as in Chinese markets), and a two-pane layout on foldables.
+- **Dark mode**, system theme, adjustable up/down colours (red-up by default, as in Chinese markets), and a two-pane layout on foldables; frosted-glass cards on every tab, clear or deep.
+- **In-app updates**: Settings › 应用更新 downloads the latest GitHub release, checks its signature and hands it to the system installer, keeping your data; checks once a day by default, can be turned off.
 - **Launcher shortcuts** straight to stocktake, quick capture and the diary.
 
 <details>
@@ -111,7 +114,7 @@ Download the latest `OpenAssetBoard-x.y.z.apk` from [Releases](https://github.co
 
 - **Android 10 (API 29) and up.**
 - The app is written for Chinese Android phones (vivo, Xiaomi, OPPO and friends). **Reminder punctuality depends on background permissions**: after installing, open Settings → reminder setup and follow the checklist for autostart, background running, notifications and exact alarms. It works without Google services.
-- There is no store listing and no auto-update; new versions are installed by hand. **Back up before you upgrade.**
+- There is no store listing. From 0.8.0 the app upgrades itself from Settings › 应用更新 (download, signature check, a backup first, then the system installer); older versions need one manual install.
 - The launcher name is 「强者之路」 and the package is `com.assetboard`; the repository is OpenAssetBoard. Same app.
 
 > ⚠️ This is a personal project, not audited financial software. Try it with a few days of test data before you trust it with real balances, and back up regularly.
@@ -120,9 +123,10 @@ Download the latest `OpenAssetBoard-x.y.z.apk` from [Releases](https://github.co
 
 - The **contents** of your assets, todos and diary never leave the phone. No accounts, no server, no sync, no telemetry, no ads.
 - Every write goes through a write gate (`WriteGate`): restores reject new writes while they run, and an operation carrying a stale data epoch cannot write into restored data.
-- **Networking is on by default**, but you can switch it off, and only two things ever make a request:
+- **Networking is on by default**, but you can switch it off, and only three things ever make a request:
   - To attach the day's weather when you write a diary entry, rough coordinates go to [Open-Meteo](https://open-meteo.com/) (open, no API key). Coordinates only — never your text.
   - From November each year, a weekly check for next year's public holidays: one public JSON from [NateScarlet/holiday-cn](https://github.com/NateScarlet/holiday-cn).
+  - Update checks: at most once a day, the latest release's details from this repository; the APK is downloaded only when you ask. Nothing is uploaded.
 - The backup file is plain JSON in a folder you choose, **unencrypted**. Keep it somewhere you trust.
 
 ## Build from source

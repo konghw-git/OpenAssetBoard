@@ -2,6 +2,9 @@ package com.assetboard.ui.todo
 
 import com.assetboard.ui.components.glass
 import com.assetboard.ui.components.LocalAmbient
+import com.assetboard.ui.components.ReorderState
+import com.assetboard.ui.components.rememberReorderState
+import com.assetboard.ui.components.reorderable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.text.style.LineBreak
 import android.content.Intent
@@ -32,7 +35,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,7 +73,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.outlined.OutlinedFlag
 import androidx.compose.material.icons.automirrored.outlined.Undo
-import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
@@ -83,7 +84,6 @@ import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.rounded.Add
@@ -107,7 +107,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -131,7 +130,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -240,7 +238,6 @@ fun TodoHomeScreen(
     var composer by rememberSaveable { mutableStateOf(false) }
     var detailId by rememberSaveable { mutableStateOf<String?>(null) }
     var selection by remember(selected) { mutableStateOf(setOf<String>()) }
-    var sorting by remember(selected) { mutableStateOf(false) }
     var rescheduleFor by remember { mutableStateOf<List<String>?>(null) }
     var moveFor by remember { mutableStateOf<List<String>?>(null) }
     var listDialog by remember { mutableStateOf<String?>(null) }
@@ -279,7 +276,6 @@ fun TodoHomeScreen(
     }
     BackHandler(composer) { closeComposer() }
     BackHandler(selection.isNotEmpty()) { selection = emptySet() }
-    BackHandler(sorting) { sorting = false }
 
     val d = data
     val view = ViewKey.view(selected)
@@ -288,7 +284,30 @@ fun TodoHomeScreen(
     // A deleted or archived list falls back to Today.
     LaunchedEffect(d, listId) { if (d != null && listId != null && list == null) selected = ViewKey.of(TodoView.TODAY) }
     val lines = remember(d, selected, today) { d?.let { buildLines(it, view, listId, today) }.orEmpty() }
-    val todayRows = remember(d, today) { d?.let { TodoViews.today(it.todos, it.lists, today) }.orEmpty() }
+    // The order on screen; a drag rearranges it here and saves its band on release.
+    var order by remember(lines) { mutableStateOf(lines) }
+    val reorder = rememberReorderState(
+        listState,
+        onMove = { from, to ->
+            val a = order.indexOfFirst { it.key == from }
+            val b = order.indexOfFirst { it.key == to }
+            val x = order.getOrNull(a) as? Line.Item
+            val y = order.getOrNull(b) as? Line.Item
+            if (x?.band == null || x.band != y?.band) {
+                false
+            } else {
+                order = order.toMutableList().apply { add(b, removeAt(a)) }
+                true
+            }
+        },
+        onDrop = { key ->
+            val band = (order.firstOrNull { it.key == key } as? Line.Item)?.band ?: return@rememberReorderState
+            vm.reorder(order.filter { it is Line.Item && it.band == band }.map { it.key })
+        },
+        // Held without moving: the long press selects, as on rows that cannot move.
+        onHold = { key -> if (order.any { it.key == key }) selection = selection.toggle(key as String) },
+    )
+    val todayRows = remember(d, today) { d?.let { TodoViews.today(it.todos, today) }.orEmpty() }
     val doneToday = todayRows.count { it.done }
     val dialGone by remember { derivedStateOf { listState.firstVisibleItemIndex > DIAL_ITEM } }
     val habits by remember(today) { vm.habitsOn(today) }.collectAsStateWithLifecycle(emptySet())
@@ -312,13 +331,12 @@ fun TodoHomeScreen(
     }
 
     val ctx = ViewContext(
-        data = d, view = view, list = list, today = today, lines = lines,
+        data = d, view = view, list = list, today = today, lines = order,
         selection = selection,
         onSelection = { selection = it },
         onOpen = { detailId = it },
         onReschedule = { rescheduleFor = it },
         onMove = { moveFor = it },
-        onSort = { sorting = !sorting },
         onListMenu = { listDialog = it },
         onSection = { sectionDialog = it },
         onAdd = if (dialGone && !composer) ({ openComposer() }) else null,
@@ -330,6 +348,7 @@ fun TodoHomeScreen(
             }
         },
         swipe = swipe,
+        reorder = reorder,
         ambient = ambient,
         vm = vm,
     )
@@ -355,12 +374,8 @@ fun TodoHomeScreen(
                     VerticalDivider(color = cs.outlineVariant)
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
-                            if (sorting) {
-                                SortMode(ctx, Modifier.statusBarsPadding())
-                            } else {
-                                LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
-                                    viewContent(ctx)
-                                }
+                            LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
+                                viewContent(ctx)
                             }
                         }
                         GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), backdrop)
@@ -368,9 +383,6 @@ fun TodoHomeScreen(
                 }
             } else {
                 Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
-                if (sorting) {
-                    SortMode(ctx, Modifier.statusBarsPadding())
-                } else {
                     // Keep DIAL_ITEM in step with the item order here.
                     LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
                         item("title") { HomeTitle(today, doneToday, todayRows.size, onSettings) }
@@ -380,7 +392,6 @@ fun TodoHomeScreen(
                         item("lists") { ListStrip(d, selected, onSelect = { selected = it }, onCreate = { name -> vm.createList(name) { selected = ViewKey.list(it) } }) }
                         viewContent(ctx)
                     }
-                }
                 }
                 GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), backdrop)
             }
@@ -652,7 +663,8 @@ private fun InlineComposer(visible: Boolean, lists: List<TodoList>, defaults: Qu
 private sealed interface Line {
     val key: String
     data class Header(override val key: String, val title: String, val sectionId: String? = null) : Line
-    data class Item(val row: ViewRow, val sectionId: String? = null) : Line {
+    /** Rows with the same non-null [band] may trade places by hand. */
+    data class Item(val row: ViewRow, val sectionId: String? = null, val band: String? = null) : Line {
         override val key get() = row.todo.id
     }
 }
@@ -669,17 +681,16 @@ private class ViewContext(
     val onOpen: (String) -> Unit,
     val onReschedule: (List<String>) -> Unit,
     val onMove: (List<String>) -> Unit,
-    val onSort: () -> Unit,
     val onListMenu: (String) -> Unit,
     val onSection: (Pair<String, String>) -> Unit,
     /** Set while the dial is scrolled away: a + in the sticky header brings the field back. */
     val onAdd: (() -> Unit)?,
     val onDelete: (List<String>) -> Unit,
     val swipe: SwipeGroup,
+    val reorder: ReorderState,
     val ambient: Ambient,
     val vm: TodoViewModel,
 ) {
-    val manual get() = view == TodoView.INBOX || list != null
     val title get() = view?.label ?: list?.name.orEmpty()
 }
 
@@ -700,12 +711,20 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                 val t = line.row.todo
                 val selecting = c.selection.isNotEmpty()
                 val logbook = c.view == TodoView.LOGBOOK
-                Box(Modifier.animateItem().padding(horizontal = 16.dp, vertical = 5.dp)) {
+                val movable = line.band != null
+                val dragged = c.reorder.dragging == t.id
+                Box(
+                    Modifier
+                        .zIndex(if (dragged) 1f else 0f)
+                        .graphicsLayer { translationY = if (dragged) c.reorder.offset else 0f }
+                        .then(if (dragged) Modifier else Modifier.animateItem())
+                        .padding(horizontal = 16.dp, vertical = 5.dp),
+                ) {
                     SwipeActionsBox(
                         key = todoKey(t.id),
                         group = c.swipe,
                         shape = TodoCardShape,
-                        enabled = !selecting && !logbook,
+                        enabled = !selecting && !logbook && c.reorder.dragging == null,
                         actions = todoActions(t, line.row.done, c),
                         onDelete = { c.vm.delete(listOf(t.id)) },
                     ) {
@@ -726,7 +745,10 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             extras = extras,
                             onToggle = { if (selecting) c.onSelection(c.selection.toggle(t.id)) else c.vm.toggle(t) },
                             onClick = { if (selecting) c.onSelection(c.selection.toggle(t.id)) else c.onOpen(t.id) },
-                            onLongClick = if (logbook || line.row.done) null else ({ c.onSelection(c.selection.toggle(t.id)) }),
+                            // A movable row is picked up by a long press; held still, that selects it.
+                            onLongClick = if (logbook || line.row.done || movable) null else ({ c.onSelection(c.selection.toggle(t.id)) }),
+                            modifier = Modifier.reorderable(c.reorder, t.id, enabled = movable),
+                            lifted = dragged,
                             selected = t.id in c.selection,
                             inUpcoming = c.view == TodoView.UPCOMING,
                             checklist = if (logbook) emptyList() else items.sortedBy { it.sortOrder },
@@ -795,9 +817,6 @@ private fun ViewHeader(c: ViewContext) {
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Rounded.Add, "新待办", tint = AppTheme.extra.onHero, modifier = Modifier.size(22.dp)) }
                     }
-                    if (c.manual) {
-                        IconButton(onClick = c.onSort) { Icon(Icons.Outlined.SwapVert, "排序", tint = cs.onSurfaceVariant) }
-                    }
                     if (c.list != null) {
                         Box {
                             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreHoriz, "清单菜单", tint = cs.onSurfaceVariant) }
@@ -814,26 +833,6 @@ private fun ViewHeader(c: ViewContext) {
                 }
             }
         }
-    }
-}
-
-/** Sort mode for the inbox and lists: a page of its own until 完成. */
-@Composable
-private fun SortMode(c: ViewContext, modifier: Modifier = Modifier) {
-    val cs = MaterialTheme.colorScheme
-    Column(modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(c.title, style = MaterialTheme.typography.titleLarge)
-                Text("按住右侧把手拖动排序", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            }
-            TextButton(onClick = c.onSort) { Text("完成") }
-        }
-        val d = c.data ?: return@Column
-        SortableList(c.lines, c.today, extras = { t ->
-            val items = d.checklistByTodo[t.id].orEmpty()
-            RowExtras(checklistDone = items.count { it.done }, checklistTotal = items.size)
-        }, onCommit = c.vm::reorder)
     }
 }
 
@@ -947,12 +946,12 @@ fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, onSave: (S
 private fun Set<String>.toggle(id: String) = if (id in this) this - id else this + id
 
 private fun buildLines(d: TodoData, view: TodoView?, listId: String?, today: LocalDate): List<Line> = when {
-    view == TodoView.TODAY -> TodoViews.today(d.todos, d.lists, today).map { Line.Item(it) }
+    view == TodoView.TODAY -> TodoViews.today(d.todos, today).map { Line.Item(it, band = TodoViews.todayBand(it, today)) }
     view == TodoView.UPCOMING -> TodoViews.upcoming(d.todos, today).flatMap { (date, rows) ->
-        listOf(Line.Header("h-$date", dayTitle(date, today))) + rows.map { Line.Item(it) }
+        listOf(Line.Header("h-$date", dayTitle(date, today))) + rows.map { Line.Item(it, band = if (it.done) null else "$date|${it.todo.important}") }
     }
-    view == TodoView.INBOX -> TodoViews.inbox(d.todos, today).map { Line.Item(it) }
-    view == TodoView.SOMEDAY -> TodoViews.someday(d.todos, today).map { Line.Item(it) }
+    view == TodoView.INBOX -> TodoViews.inbox(d.todos, today).map { Line.Item(it, band = if (it.done) null else "inbox") }
+    view == TodoView.SOMEDAY -> TodoViews.someday(d.todos, today).map { Line.Item(it, band = if (it.done) null else "someday") }
     view == TodoView.LOGBOOK -> TodoViews.logbook(d.todos).groupBy { TodoViews.localDate(it.completedAt!!) }.flatMap { (date, rows) ->
         listOf(Line.Header("h-$date", dayTitle(date, today))) + rows.map { Line.Item(ViewRow(it, done = true, overdue = false)) }
     }
@@ -960,8 +959,9 @@ private fun buildLines(d: TodoData, view: TodoView?, listId: String?, today: Loc
         val rows = TodoViews.list(listId, d.todos, today)
         val sections = d.sections.filter { it.listId == listId }.sortedBy { it.sortOrder }
         val loose = rows.filter { it.todo.sectionId == null || sections.none { s -> s.id == it.todo.sectionId } }
-        loose.map { Line.Item(it) } + sections.flatMap { s ->
-            listOf(Line.Header("s-${s.id}", s.name, s.id)) + rows.filter { it.todo.sectionId == s.id }.map { Line.Item(it, s.id) }
+        fun band(r: ViewRow, section: String?) = if (r.done) null else "section|$section"
+        loose.map { Line.Item(it, band = band(it, null)) } + sections.flatMap { s ->
+            listOf(Line.Header("s-${s.id}", s.name, s.id)) + rows.filter { it.todo.sectionId == s.id }.map { Line.Item(it, s.id, band(it, s.id)) }
         }
     }
     else -> emptyList()
@@ -1034,74 +1034,6 @@ private fun EmptyView(view: TodoView?, modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(14.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-    }
-}
-
-/**
- * Sort mode for the inbox and lists: drag a row by its handle; it only moves among rows of the
- * same section. The new order is saved when the drag ends.
- */
-@Composable
-private fun SortableList(lines: List<Line>, today: LocalDate, extras: (Todo) -> RowExtras, onCommit: (List<String>) -> Unit) {
-    var order by remember(lines) { mutableStateOf(lines.filter { it !is Line.Item || !it.row.done }) }
-    var dragging by remember { mutableStateOf<String?>(null) }
-    var offset by remember { mutableFloatStateOf(0f) }
-    val state = rememberLazyListState()
-    LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp)) {
-        items(order, key = { it.key }) { line ->
-            when (line) {
-                is Line.Header -> Text(line.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 22.dp, top = 16.dp, bottom = 4.dp))
-                is Line.Item -> {
-                    val id = line.key
-                    val isDragged = dragging == id
-                    Box(
-                        Modifier
-                            .padding(horizontal = 16.dp, vertical = 5.dp)
-                            .zIndex(if (isDragged) 1f else 0f)
-                            .graphicsLayer { translationY = if (isDragged) offset else 0f; shadowElevation = if (isDragged) 24f else 0f; scaleX = if (isDragged) 1.02f else 1f; scaleY = scaleX; shape = TodoCardShape; clip = false }
-                            .then(if (isDragged) Modifier else Modifier.animateItem()),
-                    ) {
-                        TodoRow(
-                            todo = line.row.todo, done = false, today = today, extras = extras(line.row.todo),
-                            onToggle = {}, onClick = {},
-                            trailing = {
-                                Icon(
-                                    Icons.Default.DragHandle, "拖动排序",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(start = 12.dp).size(28.dp).pointerInput(id) {
-                                        detectDragGestures(
-                                            onDragStart = { dragging = id; offset = 0f },
-                                            onDragEnd = {
-                                                dragging = null
-                                                offset = 0f
-                                                onCommit(order.filterIsInstance<Line.Item>().map { it.key })
-                                            },
-                                            onDragCancel = { dragging = null; offset = 0f },
-                                            onDrag = { change, amount ->
-                                                change.consume()
-                                                offset += amount.y
-                                                val visible = state.layoutInfo.visibleItemsInfo
-                                                val me = visible.firstOrNull { it.key == id } ?: return@detectDragGestures
-                                                val center = me.offset + offset + me.size / 2
-                                                val target = visible.firstOrNull { it.key != id && center.toInt() in it.offset until it.offset + it.size }
-                                                    ?: return@detectDragGestures
-                                                val from = order.indexOfFirst { it.key == id }
-                                                val to = order.indexOfFirst { it.key == target.key }
-                                                val other = order[to]
-                                                if (other is Line.Item && other.sectionId == line.sectionId) {
-                                                    order = order.toMutableList().apply { add(to, removeAt(from)) }
-                                                    offset -= (target.offset - me.offset)
-                                                }
-                                            },
-                                        )
-                                    },
-                                )
-                            },
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 

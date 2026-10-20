@@ -1,6 +1,23 @@
 package com.assetboard.ui.overview
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
+import com.assetboard.domain.GoalProgress
+import com.assetboard.ui.components.LocalAmbient
+import com.assetboard.ui.components.ambient
+import com.assetboard.ui.components.glass
+import com.assetboard.ui.components.rememberAmbient
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.ColumnScope
@@ -11,13 +28,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
@@ -208,6 +223,10 @@ class OverviewViewModel(private val container: AppContainer) : ActionViewModel(c
     val health: StateFlow<HealthState?> = combine(container.health.profile, container.health.measurements, ::HealthState)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val goal: StateFlow<Long?> = container.goal.observe().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun setGoal(cents: Long?) = action { container.goal.set(cents) }
+
     fun seedSuishouji() = action { container.repository.seedFromSuishouji() }
     fun seedGroups() = action { container.repository.seedDefaultGroups() }
 }
@@ -226,21 +245,22 @@ fun OverviewScreen(
     val vm: OverviewViewModel = viewModel { OverviewViewModel(container) }
     val state by vm.state.collectAsStateWithLifecycle()
     val health by vm.health.collectAsStateWithLifecycle()
+    val goal by vm.goal.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     ErrorDialog(error) { vm.error.value = null }
     var cashOpen by rememberSaveable { mutableStateOf(false) }
     state?.takeIf { cashOpen }?.let { s ->
         CashSheet(s, onOpenAccount = { cashOpen = false; onOpenAccount(it) }, onDismiss = { cashOpen = false })
     }
+    var goalOpen by rememberSaveable { mutableStateOf(false) }
+    state?.takeIf { goalOpen }?.let { s ->
+        GoalDialog(goal, s.totals.netWorth, onDismiss = { goalOpen = false }) { goalOpen = false; vm.setGoal(it) }
+    }
+    val hero: @Composable (OverviewState) -> Unit = { s -> Hero(s, goal, onStocktake, onGoal = { goalOpen = true }) }
 
-    val wash = AppTheme.extra.heroStart
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            // A faint wash of the hero's green behind the top of the page, fading out.
-            .drawBehind { drawRect(Brush.verticalGradient(listOf(wash.copy(alpha = 0.10f), Color.Transparent), endY = 460.dp.toPx())) },
-    ) {
+    val ambient = rememberAmbient()
+    Box(Modifier.fillMaxSize().ambient(ambient)) {
+        CompositionLocalProvider(LocalAmbient provides ambient) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
@@ -265,7 +285,7 @@ fun OverviewScreen(
                     if (maxWidth >= 600.dp) {
                         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             LazyColumn(Modifier.weight(1.1f), contentPadding = PaddingValues(start = 16.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                item { Box(Modifier.appear(0)) { Hero(s, onStocktake) } }
+                                item { Box(Modifier.appear(0)) { hero(s) } }
                                 item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(s, health, { cashOpen = true }, onHealth) } }
                                 accountSections(s, onOpenAccount, onAddAccount, first = 2)
                             }
@@ -283,13 +303,14 @@ fun OverviewScreen(
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
-                            item { Box(Modifier.appear(0)) { Hero(s, onStocktake) } }
+                            item { Box(Modifier.appear(0)) { hero(s) } }
                             item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(s, health, { cashOpen = true }, onHealth) } }
                             accountSections(s, onOpenAccount, onAddAccount, first = 2)
                         }
                     }
                 }
             }
+        }
         }
     }
 }
@@ -305,7 +326,7 @@ private fun LazyListScope.accountSections(s: OverviewState, onOpenAccount: (Stri
  * corner: a stocktake is what moves this number.
  */
 @Composable
-private fun Hero(s: OverviewState, onStocktake: () -> Unit) {
+private fun Hero(s: OverviewState, goal: Long?, onStocktake: () -> Unit, onGoal: () -> Unit) {
     val extra = AppTheme.extra
     val motion = rememberInfiniteTransition(label = "hero")
     val drift by motion.animateFloat(0f, 1f, infiniteRepeatable(tween(14_000, easing = LinearEasing), RepeatMode.Reverse), label = "drift")
@@ -388,6 +409,11 @@ private fun Hero(s: OverviewState, onStocktake: () -> Unit) {
                         animate = true,
                     )
                 }
+            }
+            if (s.hasAccounts) {
+                val progress = remember(s, goal) { goal?.let { GoalProgress.of(it, s.totals.netWorth, s.history.map { p -> p.snapshot.at to p.netWorth }) } }
+                Spacer(Modifier.height(16.dp))
+                if (progress != null) GoalBar(progress, onGoal) else SetGoal(onGoal)
             }
             // Liabilities are carried negative.
             val debts = -s.totals.liabilities
@@ -511,9 +537,140 @@ private fun HeroAllocation(allocation: List<AllocationUi>) {
     }
 }
 
-/** A low, soft shadow that lifts a card off the page without a hard edge. */
-private fun Modifier.softShadow(color: Color = Color.Black, shape: Shape = RoundedCornerShape(24.dp)): Modifier =
-    shadow(10.dp, shape, ambientColor = color.copy(alpha = 0.10f), spotColor = color.copy(alpha = 0.14f))
+/** The goal's gold, warm against the hero's green. */
+private val GoalGold = Color(0xFFF2CF74)
+
+/**
+ * The net worth goal inside the hero: what it is and how much is done, a bar that fills in with
+ * a light running along it, quarter marks, and what is left with an estimate at the recent pace.
+ * Tapping it changes the goal.
+ */
+@Composable
+private fun GoalBar(p: GoalProgress, onClick: () -> Unit) {
+    val extra = AppTheme.extra
+    val shown = remember { Animatable(0f) }
+    LaunchedEffect(p.fraction) { shown.animateTo(p.fraction, tween(1_300, delayMillis = 300, easing = FastOutSlowInEasing)) }
+    val run by rememberInfiniteTransition(label = "goal").animateFloat(-0.3f, 1.3f, infiniteRepeatable(tween(2_600, easing = LinearEasing)), label = "run")
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) {}
+            .padding(vertical = 4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Flag, null, tint = GoalGold, modifier = Modifier.size(15.dp))
+            Spacer(Modifier.width(5.dp))
+            Text("目标 ¥${Money.compact(p.goal)}", color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium.merge(NumberStyle), modifier = Modifier.weight(1f))
+            Text(
+                if (p.reached) "已达成" else Money.percent(p.net.coerceAtLeast(0), p.goal),
+                color = if (p.reached) GoalGold else extra.onHero,
+                style = MaterialTheme.typography.labelLarge.merge(NumberStyle), fontWeight = FontWeight.SemiBold,
+            )
+        }
+        Spacer(Modifier.height(7.dp))
+        val track = extra.onHero.copy(alpha = 0.16f)
+        val mark = extra.onHero.copy(alpha = 0.35f)
+        Box(
+            Modifier.fillMaxWidth().height(10.dp).drawBehind {
+                val h = size.height
+                val r = androidx.compose.ui.geometry.CornerRadius(h / 2)
+                drawRoundRect(track, cornerRadius = r)
+                val w = size.width * shown.value
+                if (w > 0f) {
+                    val fill = Size(w.coerceAtLeast(h), h)
+                    drawRoundRect(Brush.horizontalGradient(listOf(GoalGold.copy(alpha = 0.75f), GoalGold), endX = fill.width), size = fill, cornerRadius = r)
+                    // A light running along the filled part.
+                    val x = fill.width * run
+                    drawRoundRect(
+                        Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.45f), Color.Transparent), startX = x - h * 3, endX = x + h * 3),
+                        size = fill, cornerRadius = r,
+                    )
+                }
+                // Quarter marks on the part still to go.
+                for (q in 1..3) {
+                    val mx = size.width * q / 4f
+                    if (mx > w + h / 2) drawCircle(mark, 1.6.dp.toPx(), Offset(mx, h / 2))
+                }
+            },
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            when {
+                p.reached && p.remaining < 0 -> "超出 ¥${Money.compact(-p.remaining)}，点这里设个新目标"
+                p.reached -> "刚好达成，点这里设个新目标"
+                else -> "还差 ¥${Money.compact(p.remaining)}" + (p.monthsToGo?.let { " · 照近半年的速度约 ${monthsText(it)}" } ?: "")
+            },
+            color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall.merge(NumberStyle),
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private fun monthsText(m: Int): String = when {
+    m < 12 -> "$m 个月"
+    m % 12 == 0 -> "${m / 12} 年"
+    else -> "${m / 12} 年 ${m % 12} 个月"
+}
+
+/** No goal yet: a quiet way to set one, where the bar will be. */
+@Composable
+private fun SetGoal(onClick: () -> Unit) {
+    val extra = AppTheme.extra
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .border(1.dp, extra.onHero.copy(alpha = 0.25f), RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(start = 10.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Flag, null, tint = GoalGold, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("设个攒钱目标", color = extra.onHero, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+/** Setting the goal: an amount in yuan ("100万" works too) or one of a few round amounts above today's net worth. */
+@Composable
+private fun GoalDialog(current: Long?, net: Long, onDismiss: () -> Unit, onSave: (Long?) -> Unit) {
+    var text by rememberSaveable { mutableStateOf(current?.let { Money.toInput(it).removeSuffix(".00") } ?: "") }
+    val parsed = GoalProgress.parseInput(text)
+    val suggestions = remember(net) { GoalProgress.suggestions(net) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (current == null) "设个攒钱目标" else "目标资产") },
+        text = {
+            Column {
+                Text("净资产达到多少？卡片上会显示进度和预计还要多久。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    text, { text = it.take(20) },
+                    singleLine = true,
+                    prefix = { Text("¥") },
+                    placeholder = { Text("如 1000000 或 100万") },
+                    isError = text.isNotBlank() && parsed == null,
+                    supportingText = parsed?.let { { Text(Money.compact(it) + " 元") } },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    suggestions.forEach { c ->
+                        FilterChip(parsed == c, onClick = { text = Money.toInput(c).removeSuffix(".00") }, label = { Text(Money.compact(c)) })
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(parsed) }, enabled = parsed != null) { Text("保存") } },
+        dismissButton = {
+            Row {
+                if (current != null) TextButton(onClick = { onSave(null) }) { Text("清除目标", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDismiss) { Text("取消") }
+            }
+        },
+    )
+}
 
 /**
  * Every group in one card, folded by default: a group shows its initial, a few account tiles, how
@@ -526,7 +683,7 @@ private fun AccountsCard(s: OverviewState, onOpenAccount: (String) -> Unit, onAd
     var open by rememberSaveable { mutableStateOf(listOf<String>()) }
     val all = s.groups.map { it.group.id }
     val allOpen = all.isNotEmpty() && open.containsAll(all)
-    SectionCard(Modifier.softShadow(), contentPadding = PaddingValues(top = 6.dp, bottom = 6.dp)) {
+    SectionCard(contentPadding = PaddingValues(top = 6.dp, bottom = 6.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("账户", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.width(8.dp))
@@ -604,7 +761,7 @@ private fun GroupSection(
         // The accounts sit in a tinted well, so it reads which group they belong to.
         Column(
             Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
-                .clip(MaterialTheme.shapes.medium).background(cs.surfaceContainerHigh.copy(alpha = 0.55f)),
+                .clip(MaterialTheme.shapes.medium).background(cs.onSurface.copy(alpha = 0.045f)),
         ) {
             if (g.rows.isEmpty()) {
                 ListRow(
@@ -730,7 +887,7 @@ private fun Tile(
     val cs = MaterialTheme.colorScheme
     val source = remember { MutableInteractionSource() }
     val shape = MaterialTheme.shapes.large
-    Surface(modifier.pressScale(source).softShadow(accent, shape), shape = shape, color = cs.surfaceContainer) {
+    Box(modifier.pressScale(source).glass(shape, glass).clip(shape)) {
         Column(
             Modifier
                 .fillMaxSize()

@@ -2,7 +2,6 @@ package com.assetboard.domain.todo
 
 import com.assetboard.data.Todo
 import com.assetboard.data.TodoKind
-import com.assetboard.data.TodoList
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -77,22 +76,31 @@ object TodoViews {
         todos.filter { (isOpen(it) || doneOn(it, today, zone)) && predicate(it) }
             .map { ViewRow(it, done = !isOpen(it), overdue = isOpen(it) && isOverdue(it, today)) }
 
+    private fun earliest(t: Todo, today: LocalDate): LocalDate = listOfNotNull(parse(t.planDate), parse(t.deadline)).minOrNull() ?: today
+
     /**
-     * Today: the overdue group first, then today's. Within a group important first, then list
-     * order, then order within the list; the overdue group additionally earliest date first.
+     * Today: the overdue group first, then today's. Within a group important first, then the
+     * hand-set order; the overdue group additionally earliest date first.
      */
-    fun today(todos: List<Todo>, lists: List<TodoList>, today: LocalDate, zone: ZoneId = ZoneId.systemDefault()): List<ViewRow> {
-        val listOrder = lists.associate { it.id to it.sortOrder }
-        fun earliest(t: Todo): LocalDate = listOfNotNull(parse(t.planDate), parse(t.deadline)).minOrNull() ?: today
+    fun today(todos: List<Todo>, today: LocalDate, zone: ZoneId = ZoneId.systemDefault()): List<ViewRow> {
         val cmp = compareBy<ViewRow>(
             { if (it.done) 1 else 0 },
             { if (isOverdue(it.todo, today)) 0 else 1 },
             { if (it.todo.important) 0 else 1 },
-            { if (isOverdue(it.todo, today)) earliest(it.todo) else LocalDate.MIN },
-            { it.todo.listId?.let { id -> listOrder[id] }?.plus(1) ?: 0 },
+            { if (isOverdue(it.todo, today)) earliest(it.todo, today) else LocalDate.MIN },
             { it.todo.sortOrder },
         )
         return rows(todos, today, zone) { inToday(it, today) }.sortedWith(cmp)
+    }
+
+    /**
+     * Which rows of [today] may trade places by hand: open rows that agree on every key above the
+     * hand-set order. Null for a row that stays put (a finished one).
+     */
+    fun todayBand(r: ViewRow, today: LocalDate): String? {
+        if (r.done) return null
+        val t = r.todo
+        return if (isOverdue(t, today)) "overdue|${t.important}|${earliest(t, today)}" else "today|${t.important}"
     }
 
     /** Upcoming, grouped by plan date, else by deadline. */

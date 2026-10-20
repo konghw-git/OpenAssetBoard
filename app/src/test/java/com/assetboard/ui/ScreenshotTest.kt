@@ -144,8 +144,15 @@ class ScreenshotTest {
         compose.onRoot().captureRoboImage("build/screenshots/01d-overview-accounts-open.png")
     }
 
+    @Test fun overviewGoal() {
+        val c = demoContainer()
+        runBlocking(c.gate.bound()) { c.goal.set(c.repository.loadOnce().currentTotals().netWorth * 5 / 2) }
+        shot("01f-overview-goal", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+    }
+
     @Test fun overviewDark() {
         val c = withHealth(demoContainer())
+        runBlocking(c.gate.bound()) { c.goal.set(c.repository.loadOnce().currentTotals().netWorth * 5 / 2) }
         shot("02-overview-dark", c, dark = true) { OverviewScreen({}, noop, {}, noop, noop, {}) }
     }
 
