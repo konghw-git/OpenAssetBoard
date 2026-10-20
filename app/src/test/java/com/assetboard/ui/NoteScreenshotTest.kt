@@ -208,6 +208,35 @@ class NoteScreenshotTest {
         capture("59-extract-pick")
     }
 
+    @Test fun weekReview() {
+        val c = demo()
+        runBlocking(c.gate.bound()) {
+            c.habits.toggle(com.assetboard.domain.Habit.WORKOUT)
+            c.habits.toggle(com.assetboard.domain.Habit.WATER)
+        }
+        show(c)
+        compose.onNodeWithText("日记").performClick()
+        compose.waitUntil(8_000) { compose.onAllNodes(hasText("周复盘 ·", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        capture("64-diary-week-row")
+        compose.onAllNodes(hasText("周复盘 ·", substring = true))[0].performClick()
+        waitFor("这一周的日记")
+        capture("65-week")
+        compose.onNodeWithContentDescription("上一周").performClick()
+        compose.waitUntil(8_000) { compose.onAllNodes(hasText("没写")).fetchSemanticsNodes().size >= 7 }
+        capture("66-week-before")
+    }
+
+    @Test fun calendarWeeks() {
+        val c = demo()
+        runBlocking(c.gate.bound()) { c.weeks.saveBody(com.assetboard.data.Weeks.start(today), null, null, "这周做成了：笔记功能上线。") }
+        show(c)
+        compose.onNodeWithText("日记").performClick()
+        compose.waitUntil(8_000) { compose.onAllNodes(hasContentDescription("日历")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("日历").performClick()
+        waitFor("日记日历")
+        capture("67-calendar-weeks")
+    }
+
     @Test fun diaryWithNotes() {
         show(demo())
         compose.onNodeWithText("日记").performClick()

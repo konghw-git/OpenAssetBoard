@@ -104,7 +104,7 @@ import java.time.LocalDate
  * up the keyboard; a new one starts typing at once. The text saves itself as on the diary page.
  */
 @Composable
-fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit) {
+fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek: (LocalDate) -> Unit = {}) {
     val container = LocalContainer.current
     val vm: NoteViewModel = viewModel { NoteViewModel(container, createSavedStateHandle()) }
     val session by vm.session.collectAsStateWithLifecycle()
@@ -204,9 +204,13 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit) {
                 Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("摘自", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        sources.filter { it.kind == SourceRef.DAY }.forEach { src ->
+                        sources.forEach { src ->
                             val d = runCatching { LocalDate.parse(src.ref) }.getOrNull() ?: return@forEach
-                            SourceChip(d) { leave(NoteViewModel.Leave.Diary(d)) }
+                            when (src.kind) {
+                                SourceRef.DAY -> SourceChip(d) { leave(NoteViewModel.Leave.Diary(d)) }
+                                // The week page goes on top of this one: nothing here is left behind.
+                                SourceRef.WEEK -> WeekSourceChip(d) { onOpenWeek(d) }
+                            }
                         }
                     }
                 }

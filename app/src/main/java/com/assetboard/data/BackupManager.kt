@@ -21,7 +21,7 @@ import java.io.File
 
 /**
  * Format 2 adds the todo and diary tables, format 3 the daily habit checks, format 4 the health
- * profile and weigh-ins, format 5 the notes; older files read with the newer tables empty. Device-local
+ * profile and weigh-ins, format 5 the notes, format 6 the notes' order and the weekly reviews; older files read with the newer tables empty. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -48,6 +48,8 @@ data class BackupFile(
     val notes: List<Note> = emptyList(),
     val noteSources: List<NoteSource> = emptyList(),
     val noteDrafts: List<NoteDraft> = emptyList(),
+    val weeklyReviews: List<WeeklyReview> = emptyList(),
+    val weeklyDrafts: List<WeeklyDraft> = emptyList(),
 )
 
 /**
@@ -77,6 +79,8 @@ data class BackupPreview(
     val currentHealthRecords: Int = 0,
     val notes: Int = 0,
     val currentNotes: Int = 0,
+    val weeks: Int = 0,
+    val currentWeeks: Int = 0,
 )
 
 /** A saved copy of the data as it was right before a restore. */
@@ -107,6 +111,7 @@ class BackupManager(
     private val effects: RestoreEffects,
     private val onRestored: () -> Unit,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val weeks: WeekRepository = WeekRepository(db, gate, editors, clock),
 ) {
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = false }
 
@@ -141,6 +146,8 @@ class BackupManager(
                 notes = db.noteDao().all(),
                 noteSources = db.noteDao().allSources(),
                 noteDrafts = db.noteDao().allDrafts(),
+                weeklyReviews = db.weekDao().all(),
+                weeklyDrafts = db.weekDao().allDrafts(),
             )
         }
         return json.encodeToString(BackupFile.serializer(), file)
@@ -235,6 +242,8 @@ class BackupManager(
             currentHealthRecords = db.healthDao().all().size,
             notes = file.notes.count { it.deletedAt == null },
             currentNotes = db.noteDao().all().count { it.deletedAt == null },
+            weeks = file.weeklyReviews.count { it.deletedAt == null && it.body.isNotBlank() },
+            currentWeeks = db.weekDao().all().count { it.deletedAt == null && it.body.isNotBlank() },
         )
     }
 
@@ -289,6 +298,7 @@ class BackupManager(
         for (f in file.flows) Rules.checkFlow(f, f.fromAccountId?.let(byId::get), f.toAccountId?.let(byId::get))
         TodoInvariants.checkAll(file.todoLists, file.todoSections, file.todos, file.checklistItems, file.diaryEntries, file.diaryDrafts, calendar())
         NoteRepository.checkBackup(file.noteTopics, file.notes, file.noteSources, file.noteDrafts)
+        WeekRepository.checkBackup(file.weeklyReviews, file.weeklyDrafts)
     }
 
     /**
@@ -366,6 +376,8 @@ class BackupManager(
         n.clearSources()
         n.clear()
         n.clearTopics()
+        db.weekDao().clearDrafts()
+        db.weekDao().clear()
         dao.insertGroups(file.groups)
         dao.insertAccounts(file.accounts)
         dao.insertSnapshots(file.snapshots)
@@ -388,6 +400,8 @@ class BackupManager(
         n.insertAll(if (file.formatVersion >= 6) file.notes else file.notes.sortedByDescending { it.updatedAt }.mapIndexed { i, x -> x.copy(position = i.toLong()) })
         n.insertSources(file.noteSources)
         n.insertDrafts(file.noteDrafts)
+        db.weekDao().insertAll(file.weeklyReviews)
+        db.weekDao().insertDrafts(file.weeklyDrafts)
     }
 
     // ------------------------------------------------------------ the coordinator's private write channel
@@ -407,10 +421,19 @@ class BackupManager(
                 continue
             }
             val drafted = runCatching { db.withTransaction { writeDraft(p) } }.isSuccess
-            if (!drafted) throw LedgerException(if (p is PendingText.Note) "有未保存的笔记，恢复已取消" else "有未保存的日记，恢复已取消")
+            if (!drafted) {
+                throw LedgerException(
+                    when (p) {
+                        is PendingText.Diary -> "有未保存的日记，恢复已取消"
+                        is PendingText.Note -> "有未保存的笔记，恢复已取消"
+                        is PendingText.Week -> "有未保存的周复盘，恢复已取消"
+                    },
+                )
+            }
             val id = when (p) {
                 is PendingText.Diary -> p.entryId
                 is PendingText.Note -> p.noteId
+                is PendingText.Week -> p.reviewId
             }
             editor.flushedByRestore(id, null)
         }
@@ -420,6 +443,7 @@ class BackupManager(
     private suspend fun writeBody(p: PendingText): Pair<String, Long>? = when (p) {
         is PendingText.Diary -> writeDiaryBody(p)
         is PendingText.Note -> writeNoteBody(p)
+        is PendingText.Week -> writeWeekBody(p)
     }
 
     private suspend fun writeDraft(p: PendingText) {
@@ -435,6 +459,31 @@ class BackupManager(
                 val n = db.noteDao()
                 n.insertDraft(NoteDraft(newId(), p.noteId?.takeIf { n.note(it) != null }, p.text, reason, clock()))
             }
+            is PendingText.Week -> {
+                if (weeks.failDraftWrites) throw IllegalStateException("模拟写盘失败")
+                val w = db.weekDao()
+                w.insertDraft(WeeklyDraft(newId(), p.weekStart, p.reviewId?.takeIf { w.review(it) != null }, p.text, reason, clock()))
+            }
+        }
+    }
+
+    /** Like a diary entry: an existing row at the session's version, or a new or empty one for the week. */
+    private suspend fun writeWeekBody(p: PendingText.Week): Pair<String, Long>? {
+        if (weeks.failBodyWrites) throw IllegalStateException("模拟写盘失败")
+        val w = db.weekDao()
+        val now = clock()
+        if (p.reviewId != null) {
+            return if (w.updateBody(p.reviewId, p.text, p.expectedRev ?: -1, now) == 1) p.reviewId to (p.expectedRev!! + 1) else null
+        }
+        val existing = w.liveByWeek(p.weekStart)
+        return when {
+            existing == null -> {
+                val r = WeeklyReview(newId(), p.weekStart, p.text, bodyRev = 1, createdAt = now, updatedAt = now)
+                w.insert(r)
+                r.id to 1L
+            }
+            existing.body.isEmpty() && w.updateBody(existing.id, p.text, existing.bodyRev, now) == 1 -> existing.id to existing.bodyRev + 1
+            else -> null
         }
     }
 

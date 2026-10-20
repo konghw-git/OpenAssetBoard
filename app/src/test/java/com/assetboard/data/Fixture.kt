@@ -32,6 +32,7 @@ class Fixture {
     /** The diary's registry, shared with the notes as in the app. */
     val editors: EditorRegistry get() = diary.editors
     val notes = NoteRepository(db, gate, diary.editors, clock = { now })
+    val weeks = WeekRepository(db, gate, diary.editors, clock = { now })
     val habits = HabitRepository(db, gate, clock = { now }, zone = { zone })
     val health = HealthRepository(db, gate, clock = { now }, zone = { zone })
     val settings = SettingsStore(context)
@@ -49,6 +50,7 @@ class Fixture {
         },
         onRestored = { restoredCount++ },
         clock = { now },
+        weeks = weeks,
     )
 
     fun at(date: String, time: String = "12:00"): Long =

@@ -118,6 +118,8 @@ interface DiaryDao {
     @Query("SELECT * FROM diary_entries WHERE date = :date AND deleted_at IS NULL LIMIT 1") suspend fun liveByDate(date: String): DiaryEntry?
     @Query("SELECT * FROM diary_entries WHERE date = :date AND deleted_at IS NULL LIMIT 1") fun observeByDate(date: String): Flow<DiaryEntry?>
     @Query("SELECT * FROM diary_entries WHERE id = :id") suspend fun entry(id: String): DiaryEntry?
+    @Query("SELECT * FROM diary_entries WHERE deleted_at IS NULL AND date >= :from AND date <= :to ORDER BY date")
+    fun observeLiveBetween(from: String, to: String): Flow<List<DiaryEntry>>
     @Query("SELECT * FROM diary_entries WHERE id = :id") fun observeEntry(id: String): Flow<DiaryEntry?>
     @Query("SELECT date FROM diary_entries WHERE deleted_at IS NULL AND body != '' AND date >= :from AND date <= :to")
     fun observeDatesWithText(from: String, to: String): Flow<List<String>>

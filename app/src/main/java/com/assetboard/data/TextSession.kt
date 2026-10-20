@@ -21,6 +21,8 @@ sealed interface PendingText {
 
     data class Diary(val date: String, val entryId: String?, val expectedRev: Long?, override val text: String) : PendingText
 
+    data class Week(val weekStart: String, val reviewId: String?, val expectedRev: Long?, override val text: String) : PendingText
+
     /** [topicId] is where a note that has no row yet goes; [sources] land with the text. */
     data class Note(
         val noteId: String?,

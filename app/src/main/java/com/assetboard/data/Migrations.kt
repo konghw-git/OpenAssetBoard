@@ -35,8 +35,8 @@ object Migrations {
     }
 
     /**
-     * Notes get a hand-set order. It starts as the list showed them before: most recently
-     * updated first.
+     * Notes get a hand-set order, starting as the list showed them before (most recently updated
+     * first); weekly reviews and their drafts get their tables. Nothing else changes.
      */
     val MIGRATION_5_6 = object : Migration(5, 6) {
         override fun migrate(db: SupportSQLiteDatabase) {
@@ -45,8 +45,18 @@ object Migrations {
                 "UPDATE notes SET position = (SELECT COUNT(*) FROM notes n2 WHERE n2.updated_at > notes.updated_at " +
                     "OR (n2.updated_at = notes.updated_at AND n2.id < notes.id))",
             )
+            for (sql in V6_TABLES) db.execSQL(sql)
         }
     }
+
+    private val V6_TABLES = listOf(
+        "CREATE TABLE IF NOT EXISTS `weekly_reviews` (`id` TEXT NOT NULL, `week_start` TEXT NOT NULL, `body` TEXT NOT NULL, `body_rev` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `delete_batch` TEXT, PRIMARY KEY(`id`))",
+        "CREATE INDEX IF NOT EXISTS `index_weekly_reviews_week_start` ON `weekly_reviews` (`week_start`)",
+        "CREATE INDEX IF NOT EXISTS `index_weekly_reviews_delete_batch` ON `weekly_reviews` (`delete_batch`)",
+        "CREATE TABLE IF NOT EXISTS `weekly_drafts` (`id` TEXT NOT NULL, `week_start` TEXT NOT NULL, `review_id` TEXT, `text` TEXT NOT NULL, `reason` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`review_id`) REFERENCES `weekly_reviews`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "CREATE INDEX IF NOT EXISTS `index_weekly_drafts_review_id` ON `weekly_drafts` (`review_id`)",
+        "CREATE INDEX IF NOT EXISTS `index_weekly_drafts_week_start` ON `weekly_drafts` (`week_start`)",
+    )
 
     private val V5_TABLES = listOf(
         "CREATE TABLE IF NOT EXISTS `note_topics` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `sort_order` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",

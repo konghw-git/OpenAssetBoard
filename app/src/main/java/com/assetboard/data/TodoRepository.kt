@@ -46,6 +46,7 @@ data class TrashBatch(
     val todos: List<Todo>,
     val diary: List<DiaryEntry>,
     val notes: List<Note> = emptyList(),
+    val weeks: List<WeeklyReview> = emptyList(),
 )
 
 /** The source's state before a period advanced it; restored by undo. */
@@ -106,16 +107,28 @@ class TodoRepository(
         .flowOn(Dispatchers.Default)
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    // Six sources: past the fixed-arity overloads of combine, so the list form, cast back per index.
+    @Suppress("UNCHECKED_CAST")
     val trash: Flow<List<TrashBatch>> = combine(
-        dao.observeDeletedLists(), dao.observeDeletedSections(), dao.observeDeletedTodos(), db.diaryDao().observeDeleted(), db.noteDao().observeDeleted(),
-    ) { l, s, t, d, n ->
+        listOf(
+            dao.observeDeletedLists(), dao.observeDeletedSections(), dao.observeDeletedTodos(),
+            db.diaryDao().observeDeleted(), db.noteDao().observeDeleted(), db.weekDao().observeDeleted(),
+        ),
+    ) { arr ->
+        val l = arr[0] as List<TodoList>
+        val s = arr[1] as List<TodoSection>
+        val t = arr[2] as List<Todo>
+        val d = arr[3] as List<DiaryEntry>
+        val n = arr[4] as List<Note>
+        val w = arr[5] as List<WeeklyReview>
         val batches = (l.map { it.deleteBatch!! to it.deletedAt!! } + s.map { it.deleteBatch!! to it.deletedAt!! } +
-            t.map { it.deleteBatch!! to it.deletedAt!! } + d.map { it.deleteBatch!! to it.deletedAt!! } + n.map { it.deleteBatch!! to it.deletedAt!! })
+            t.map { it.deleteBatch!! to it.deletedAt!! } + d.map { it.deleteBatch!! to it.deletedAt!! } + n.map { it.deleteBatch!! to it.deletedAt!! } +
+            w.map { it.deleteBatch!! to it.deletedAt!! })
             .groupBy({ it.first }, { it.second })
         batches.map { (b, at) ->
             TrashBatch(
                 b, at.max(), l.filter { it.deleteBatch == b }, s.filter { it.deleteBatch == b }, t.filter { it.deleteBatch == b },
-                d.filter { it.deleteBatch == b }, n.filter { it.deleteBatch == b },
+                d.filter { it.deleteBatch == b }, n.filter { it.deleteBatch == b }, w.filter { it.deleteBatch == b },
             )
         }.sortedByDescending { it.deletedAt }
     }.flowOn(Dispatchers.Default)
@@ -671,10 +684,11 @@ class TodoRepository(
         dao.purgeListsInBatch(batch)
         db.diaryDao().purgeBatch(batch)
         db.noteDao().purgeBatch(batch)
+        db.weekDao().purgeBatch(batch)
     }
 
     suspend fun emptyTrash() = tx {
-        val batches = dao.allTodoBatches() + dao.allSectionBatches() + dao.allListBatches() + db.diaryDao().allBatches() + db.noteDao().allBatches()
+        val batches = dao.allTodoBatches() + dao.allSectionBatches() + dao.allListBatches() + db.diaryDao().allBatches() + db.noteDao().allBatches() + db.weekDao().allBatches()
         for (b in batches.toSet()) purge(b)
     }
 
@@ -682,7 +696,7 @@ class TodoRepository(
     suspend fun purgeExpired() = tx {
         val before = now - TRASH_DAYS * 24 * 3600 * 1000
         val batches = dao.expiredTodoBatches(before) + dao.expiredSectionBatches(before) + dao.expiredListBatches(before) +
-            db.diaryDao().expiredBatches(before) + db.noteDao().expiredBatches(before)
+            db.diaryDao().expiredBatches(before) + db.noteDao().expiredBatches(before) + db.weekDao().expiredBatches(before)
         for (b in batches.toSet()) purge(b)
     }
 

@@ -49,6 +49,7 @@ class DiaryRepository(
     suspend fun entry(id: String): DiaryEntry? = dao.entry(id)
     fun observeDrafts() = dao.observeDrafts()
     fun observeDatesWithText(from: LocalDate, to: LocalDate) = dao.observeDatesWithText(from.toString(), to.toString())
+    fun observeBetween(from: LocalDate, to: LocalDate) = dao.observeLiveBetween(from.toString(), to.toString())
     fun observeOnThisDay(date: LocalDate) = dao.observeOnThisDay(date.toString().substring(5), date.toString())
 
     suspend fun search(query: String): List<DiaryEntry> {

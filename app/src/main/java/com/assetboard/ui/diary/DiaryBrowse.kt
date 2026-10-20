@@ -73,6 +73,8 @@ import com.assetboard.ui.components.highlight
 import com.assetboard.ui.components.snippet
 import com.assetboard.ui.theme.AppTheme
 import kotlinx.coroutines.delay
+import com.assetboard.data.Weeks
+import androidx.compose.foundation.shape.CircleShape
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -82,12 +84,15 @@ import java.time.YearMonth
  * current streak.
  */
 @Composable
-fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate) -> Unit) {
+fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate) -> Unit, onWeek: (LocalDate) -> Unit = {}) {
     val container = LocalContainer.current
     var month by rememberSaveable { mutableStateOf((initial?.let(LocalDate::parse) ?: LocalDate.now()).withDayOfMonth(1).toString()) }
     val ym = YearMonth.from(LocalDate.parse(month))
     val today = LocalDate.now()
     val written by remember(month) { container.diary.observeDatesWithText(ym.atDay(1), ym.atEndOfMonth()) }
+        .collectAsStateWithLifecycle(emptyList())
+    // Weeks that reach into this month from either side, so a week shared by two months shows its mark in both.
+    val reviewed by remember(month) { container.weeks.observeWeeksWithText(Weeks.start(ym.atDay(1)), ym.atEndOfMonth()) }
         .collectAsStateWithLifecycle(emptyList())
     val recent by remember(today) { container.diary.observeDatesWithText(today.minusDays(400), today) }
         .collectAsStateWithLifecycle(emptyList())
@@ -138,6 +143,7 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
                     listOf("一", "二", "三", "四", "五", "六", "日").forEach {
                         Text(it, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                     }
+                    Text("周", modifier = Modifier.width(WEEK_COLUMN), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium, color = cs.secondary)
                 }
                 AnimatedContent(ym, transitionSpec = {
                     val forward = targetState > initialState
@@ -154,6 +160,10 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
                                     }
                                 }
                                 repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+                                val start = Weeks.start(week.first { it != null }!!)
+                                Box(Modifier.width(WEEK_COLUMN).align(Alignment.CenterVertically), contentAlignment = Alignment.Center) {
+                                    if (!start.isAfter(today)) WeekMark(start.toString() in reviewed) { onWeek(start) }
+                                }
                             }
                         }
                     }
@@ -166,13 +176,31 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
                 Box(Modifier.size(14.dp).border(1.5.dp, cs.primary, MaterialTheme.shapes.extraSmall))
                 Text("  今天", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 Spacer(Modifier.width(16.dp))
-                Text("左右滑动换月份", style = MaterialTheme.typography.bodySmall, color = cs.outline)
+                Spacer(Modifier.width(16.dp))
+                Box(Modifier.size(14.dp).clip(CircleShape).background(cs.secondary))
+                Text("  周复盘", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         }
     }
 }
 
 private const val MONTHS_AHEAD = 12L
+private val WEEK_COLUMN = 30.dp
+
+/** A week's review in the calendar's last column: filled once written; tap to open the week. */
+@Composable
+private fun WeekMark(written: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Box(
+        Modifier.size(24.dp).clip(CircleShape)
+            .background(if (written) cs.secondary else Color.Transparent)
+            .border(1.5.dp, if (written) Color.Transparent else cs.secondary.copy(alpha = 0.5f), CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("复", style = MaterialTheme.typography.labelSmall, color = if (written) cs.onSecondary else cs.secondary)
+    }
+}
 
 /** This month counts the days so far, a past month all of its days, a future one none yet. */
 @Composable

@@ -304,11 +304,25 @@ fun NoteTopicsScreen(onBack: () -> Unit) {
 fun extractTitle(date: java.time.LocalDate): String = "${dayLabel(date)} 日记摘录"
 
 /**
- * The extract as it will read in the note: always a title line of its own ([title], or
- * [extractTitle] when it is blank), so a long paragraph never becomes the title.
+ * Where an extract comes from: how the sheet names it, the title a new note gets when none is
+ * typed, the header of an appended block and the source the note records.
  */
-fun extractBody(title: String, date: java.time.LocalDate, paragraphs: List<String>): String =
-    (title.trim().ifEmpty { extractTitle(date) }) + "\n\n" + paragraphs.joinToString("\n\n")
+data class ExtractOrigin(val label: String, val defaultTitle: String, val blockHeader: String, val source: com.assetboard.data.SourceRef) {
+    companion object {
+        fun day(date: java.time.LocalDate) = ExtractOrigin("${dayLabel(date)}的日记", extractTitle(date), date.toString(), com.assetboard.data.SourceRef.day(date))
+        fun week(start: java.time.LocalDate) = ExtractOrigin(
+            "${com.assetboard.data.Weeks.shortTitle(start)}复盘", "${com.assetboard.data.Weeks.shortTitle(start)}复盘摘录",
+            com.assetboard.data.Weeks.title(start), com.assetboard.data.SourceRef.week(start),
+        )
+    }
+}
 
-/** The block an append adds for [date]. */
-fun extractBlock(date: java.time.LocalDate, paragraphs: List<String>): String = NoteText.block(date.toString(), paragraphs.joinToString("\n\n"))
+/**
+ * The extract as it will read in the note: always a title line of its own ([title], or
+ * [fallback] when it is blank), so a long paragraph never becomes the title.
+ */
+fun extractBody(title: String, fallback: String, paragraphs: List<String>): String =
+    (title.trim().ifEmpty { fallback }) + "\n\n" + paragraphs.joinToString("\n\n")
+
+/** The block an append adds, headed by where it came from. */
+fun extractBlock(header: String, paragraphs: List<String>): String = NoteText.block(header, paragraphs.joinToString("\n\n"))

@@ -72,6 +72,7 @@ import com.assetboard.data.Epoch
 import com.assetboard.domain.LedgerException
 import com.assetboard.ui.account.AccountDetailScreen
 import com.assetboard.ui.components.DustHost
+import com.assetboard.ui.week.WeekScreen
 import com.assetboard.ui.components.DustState
 import com.assetboard.ui.components.GlassSnackbarHost
 import com.assetboard.ui.components.LocalDust
@@ -155,6 +156,8 @@ object Routes {
     fun flow(accountId: String? = null, id: String? = null, kind: String? = null) =
         "flow?accountId=${accountId.orEmpty()}&id=${id.orEmpty()}&kind=${kind.orEmpty()}"
     fun diaryCalendar(date: String) = "diary_calendar?date=$date"
+    /** A week's review page, by any day of the week. */
+    fun week(day: java.time.LocalDate) = "week?start=$day"
 }
 
 /** Something outside asked for a page: a shortcut, a notification, the widget. */
@@ -241,6 +244,7 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
         showTab(Tab.DIARY)
     }
     val openNote: (String) -> Unit = { id -> nav.navigate(Routes.note(id)) }
+    val openWeek: (java.time.LocalDate) -> Unit = { d -> nav.navigate(Routes.week(d)) }
     LaunchedEffect(open) {
         when (open) {
             null -> return@LaunchedEffect
@@ -333,6 +337,7 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                                 onStocktake = { nav.navigate(Routes.stocktake()) },
                                 onEditingChange = { diaryEditing = it },
                                 onOpenNote = openNote,
+                                onOpenWeek = openWeek,
                             )
                         }
                         Tab.NOTES -> NotesScreen(
@@ -350,11 +355,14 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                 nav.popBackStack(Routes.HOME, inclusive = false)
             }
             composable("diary_calendar?date={date}", arguments = listOf(optional("date"))) {
-                DiaryCalendarScreen(initial = it.arg("date"), onBack = back, onPick = pickDate)
+                DiaryCalendarScreen(initial = it.arg("date"), onBack = back, onPick = pickDate, onWeek = openWeek)
             }
             composable(Routes.DIARY_SEARCH) { DiarySearchScreen(onBack = back, onPick = pickDate) }
             composable("note?id={id}&topic={topic}", arguments = listOf(optional("id"), optional("topic"))) {
-                NoteScreen(onBack = back, onOpenDiary = openDiary)
+                NoteScreen(onBack = back, onOpenDiary = openDiary, onOpenWeek = openWeek)
+            }
+            composable("week?start={start}", arguments = listOf(optional("start"))) {
+                WeekScreen(onBack = back, onOpenDiary = openDiary, onOpenNote = openNote)
             }
             composable(Routes.NOTE_SEARCH) {
                 // The results stay underneath: back from a note returns to them.

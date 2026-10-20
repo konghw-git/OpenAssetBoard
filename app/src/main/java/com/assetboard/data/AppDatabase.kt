@@ -141,6 +141,7 @@ interface LedgerDao {
         Holiday::class, HolidayYear::class, AppMeta::class, HabitCheck::class,
         HealthProfile::class, BodyMeasurement::class,
         NoteTopic::class, Note::class, NoteSource::class, NoteDraft::class,
+        WeeklyReview::class, WeeklyDraft::class,
     ],
     version = AppDatabase.SCHEMA_VERSION,
     exportSchema = true,
@@ -153,6 +154,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun healthDao(): HealthDao
     abstract fun noteDao(): NoteDao
+    abstract fun weekDao(): WeekDao
 
     companion object {
         const val SCHEMA_VERSION = 6

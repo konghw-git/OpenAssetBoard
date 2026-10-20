@@ -504,8 +504,8 @@ class NoteTest {
 
     @Test fun extractedNotesAlwaysHaveATitleLine() {
         val d = date("2026-10-12")
-        assertEquals("10月12日 日记摘录\n\n一段很长的日记\n\n第二段", com.assetboard.ui.notes.extractBody(" ", d, listOf("一段很长的日记", "第二段")).replace(Regex("^\\d+年"), ""))
-        assertEquals("定投\n\n一段", com.assetboard.ui.notes.extractBody(" 定投 ", d, listOf("一段")))
+        assertEquals("10月12日 日记摘录\n\n一段很长的日记\n\n第二段", com.assetboard.ui.notes.extractBody(" ", com.assetboard.ui.notes.extractTitle(d), listOf("一段很长的日记", "第二段")).replace(Regex("^\\d+年"), ""))
+        assertEquals("定投\n\n一段", com.assetboard.ui.notes.extractBody(" 定投 ", "x", listOf("一段")))
     }
 
     // ------------------------------------------------------------ today's review

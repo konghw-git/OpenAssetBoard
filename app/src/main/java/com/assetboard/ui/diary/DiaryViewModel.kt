@@ -25,6 +25,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import com.assetboard.data.Weeks
+import com.assetboard.data.WeeklyReview
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -107,6 +110,24 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     /** Live notes with something taken from this day. */
     val fromDay: StateFlow<List<Note>> = _date.flatMapLatest { container.notes.observeFromDay(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** The review of the week the page is on, for its row under the entry. */
+    val weekReview: StateFlow<WeeklyReview?> = _date.flatMapLatest { container.weeks.observe(Weeks.start(it)) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * The week whose review is due and still empty: last week on a Monday, this week from
+     * Sunday 18:00. Null the rest of the time, or once it has text.
+     */
+    val dueWeek: StateFlow<LocalDate?> = _date.flatMapLatest {
+        val now = java.time.LocalDateTime.now()
+        val due = when {
+            now.dayOfWeek == java.time.DayOfWeek.MONDAY -> Weeks.start(now.toLocalDate()).minusWeeks(1)
+            now.dayOfWeek == java.time.DayOfWeek.SUNDAY && now.hour >= 18 -> Weeks.start(now.toLocalDate())
+            else -> null
+        }
+        if (due == null) flowOf(null) else container.weeks.observe(due).map { r -> due.takeIf { r == null || r.body.isBlank() } }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val extracted = MutableSharedFlow<Extracted>(extraBufferCapacity = 2)
 
     /** Days in a row with text, ending today (or yesterday while today is still empty). */

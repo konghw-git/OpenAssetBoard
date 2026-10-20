@@ -35,6 +35,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.assetboard.AppContainer
 import com.assetboard.data.DiaryEntry
 import com.assetboard.data.NoteText
+import com.assetboard.data.WeeklyReview
+import com.assetboard.data.Weeks
+import java.time.LocalDate
 import com.assetboard.data.TodoKind
 import com.assetboard.data.TodoRepository
 import com.assetboard.data.TrashBatch
@@ -54,9 +57,12 @@ class TrashViewModel(private val container: AppContainer) : ActionViewModel(cont
     private val todos = container.todos
     private val diary = container.diary
     private val notes = container.notes
+    private val weeks = container.weeks
     val batches: StateFlow<List<TrashBatch>?> = todos.trash.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     /** A diary restore that would collide with an entry written since: (batch, the current entry). */
     val diaryConflict = MutableStateFlow<Pair<String, DiaryEntry>?>(null)
+    /** The same for a weekly review: (batch, the week's current review). */
+    val weekConflict = MutableStateFlow<Pair<String, WeeklyReview>?>(null)
     /** Purging a list batch that takes earlier-deleted sections with it: (batch, how many). */
     val purgeConfirm = MutableStateFlow<Pair<String, Int>?>(null)
 
@@ -65,6 +71,10 @@ class TrashViewModel(private val container: AppContainer) : ActionViewModel(cont
             b.diary.isNotEmpty() -> {
                 val conflict = diary.restoreConflict(b.batch)
                 if (conflict != null) diaryConflict.value = b.batch to conflict else diary.restore(b.batch, replace = false)
+            }
+            b.weeks.isNotEmpty() -> {
+                val conflict = weeks.restoreConflict(b.batch)
+                if (conflict != null) weekConflict.value = b.batch to conflict else weeks.restore(b.batch, replace = false)
             }
             // Notes never collide with a live one; restoreBatch below knows only lists, sections and todos.
             b.notes.isNotEmpty() -> notes.restore(b.batch)
@@ -76,6 +86,12 @@ class TrashViewModel(private val container: AppContainer) : ActionViewModel(cont
         val (batch, _) = diaryConflict.value ?: return
         diaryConflict.value = null
         if (replace) action { diary.restore(batch, replace = true) }
+    }
+
+    fun resolveWeek(replace: Boolean) {
+        val (batch, _) = weekConflict.value ?: return
+        weekConflict.value = null
+        if (replace) action { weeks.restore(batch, replace = true) }
     }
 
     fun restoreTodo(id: String) = action { todos.restoreTodo(id) }
@@ -99,6 +115,7 @@ fun describe(b: TrashBatch): String {
         b.sections.isNotEmpty() -> "分区 · ${b.sections.first().name}" + if (open.isNotEmpty()) "（含 ${open.size} 条待办）" else ""
         b.diary.isNotEmpty() -> "日记 · ${b.diary.first().date}"
         b.notes.isNotEmpty() -> "笔记 · ${b.notes.first().title}"
+        b.weeks.isNotEmpty() -> "周复盘 · ${Weeks.title(LocalDate.parse(b.weeks.first().weekStart))}"
         b.todos.size == 1 -> "待办 · ${b.todos.first().title}"
         else -> "${b.todos.size} 条待办"
     }
@@ -111,6 +128,7 @@ fun TrashScreen(onBack: () -> Unit) {
     val batches by vm.batches.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val conflict by vm.diaryConflict.collectAsStateWithLifecycle()
+    val weekConflict by vm.weekConflict.collectAsStateWithLifecycle()
     val purge by vm.purgeConfirm.collectAsStateWithLifecycle()
     var emptyAsk by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(setOf<String>()) }
@@ -131,7 +149,7 @@ fun TrashScreen(onBack: () -> Unit) {
         val list = batches ?: return@Scaffold
         if (list.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                Text("回收站是空的。删除的待办、清单、日记和笔记会在这里保留 30 天。", color = cs.onSurfaceVariant, modifier = Modifier.padding(40.dp))
+                Text("回收站是空的。删除的待办、清单、日记、周复盘和笔记会在这里保留 30 天。", color = cs.onSurfaceVariant, modifier = Modifier.padding(40.dp))
             }
             return@Scaffold
         }
@@ -149,6 +167,7 @@ fun TrashScreen(onBack: () -> Unit) {
                     Text(describe(b), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 12.dp))
                     Text("删除于 ${Dates.dateTime(b.deletedAt)} · 还剩 ${left.coerceAtLeast(0)} 天", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     val preview = b.diary.firstOrNull()?.body?.lineSequence()?.firstOrNull() ?: b.notes.firstOrNull()?.let { NoteText.preview(it.body) }
+                        ?: b.weeks.firstOrNull()?.body?.lineSequence()?.firstOrNull { it.isNotBlank() }
                     preview?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, end = 12.dp)) }
                     Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                         val multi = b.todos.size + b.sections.size > 1 || (b.lists.isNotEmpty() && b.todos.isNotEmpty())
@@ -180,6 +199,15 @@ fun TrashScreen(onBack: () -> Unit) {
             text = { Text("保留现有的那篇，或者用回收站里的替换它（现有的那篇会进回收站）。两篇不会合并。") },
             confirmButton = { TextButton(onClick = { vm.resolveDiary(replace = true) }) { Text("用回收站里的替换") } },
             dismissButton = { TextButton(onClick = { vm.resolveDiary(replace = false) }) { Text("保留现有的") } },
+        )
+    }
+    weekConflict?.let { (_, current) ->
+        AlertDialog(
+            onDismissRequest = { vm.weekConflict.value = null },
+            title = { Text("${Weeks.title(LocalDate.parse(current.weekStart))}已经有一篇复盘") },
+            text = { Text("保留现有的那篇，或者用回收站里的替换它（现有的那篇会进回收站）。两篇不会合并。") },
+            confirmButton = { TextButton(onClick = { vm.resolveWeek(replace = true) }) { Text("用回收站里的替换") } },
+            dismissButton = { TextButton(onClick = { vm.resolveWeek(replace = false) }) { Text("保留现有的") } },
         )
     }
     purge?.let { (_, sections) ->

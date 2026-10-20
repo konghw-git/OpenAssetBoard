@@ -83,6 +83,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import com.assetboard.ui.notes.ExtractOrigin
+import androidx.compose.material.icons.outlined.ViewWeek
+import com.assetboard.data.Weeks
 import androidx.compose.foundation.text.contextmenu.builder.item
 import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
 import androidx.compose.foundation.verticalScroll
@@ -168,6 +171,8 @@ fun DiaryScreen(
     /** The text is being typed in; the shell stops tab swiping meanwhile. */
     onEditingChange: (Boolean) -> Unit = {},
     onOpenNote: (String) -> Unit = {},
+    /** A week's review page, by any day of that week. */
+    onOpenWeek: (LocalDate) -> Unit = {},
 ) {
     val container = LocalContainer.current
     val vm: DiaryViewModel = viewModel { DiaryViewModel(container) }
@@ -268,6 +273,8 @@ fun DiaryScreen(
         Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
             // Pinned: the day and its stocktake stay put while the text scrolls.
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val due by vm.dueWeek.collectAsStateWithLifecycle()
+                due?.takeIf { !editing && date == today }?.let { w -> DuePrompt(w, today) { onOpenWeek(w) } }
                 if (pastMidnight) {
                     Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(start = 18.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -325,7 +332,10 @@ fun DiaryScreen(
                         if (showHabits) HabitRecord(habits, live = date == today)
                     }
                 }
-                if (!editing) DayExtras(vm, onOpenNote)
+                if (!editing) {
+                    WeekRow(vm, date) { onOpenWeek(date) }
+                    DayExtras(vm, onOpenNote)
+                }
             }
         }
     }
@@ -340,7 +350,7 @@ fun DiaryScreen(
         val notes by remember { container.notes.observeNotes() }.collectAsStateWithLifecycle(emptyList())
         val topics by remember { container.notes.observeTopics() }.collectAsStateWithLifecycle(emptyList())
         ExtractSheet(
-            day, text, notes, topics,
+            ExtractOrigin.day(day), text, notes, topics,
             fromSelection = extractingSelection,
             onDismiss = { extracting = null },
             onSaveNew = { b -> vm.extractToNew(day, b) { id -> extracting = null; onOpenNote(id) } },
@@ -729,6 +739,45 @@ private fun CityDialog(vm: DiaryViewModel, onDismiss: () -> Unit, onPick: (Place
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
+}
+
+/** The week this day belongs to, and whether its review is written; opens the week's page. */
+@Composable
+private fun WeekRow(vm: DiaryViewModel, date: LocalDate, onClick: () -> Unit) {
+    val review by vm.weekReview.collectAsStateWithLifecycle()
+    val cs = MaterialTheme.colorScheme
+    val start = Weeks.start(date)
+    val first = review?.body?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
+    SectionCard(contentPadding = PaddingValues(start = 16.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)) {
+        Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(30.dp).clip(CircleShape).background(cs.secondary.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.ViewWeek, null, tint = cs.secondary, modifier = Modifier.size(16.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("${Weeks.shortTitle(start)}复盘 · ${Weeks.range(start)}", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(first ?: "还没写，回顾这一周", style = MaterialTheme.typography.bodySmall, color = if (first != null) cs.onSurfaceVariant else cs.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = cs.outline)
+        }
+    }
+}
+
+/** Monday for last week, Sunday evening for this one: a nudge while the review is empty. */
+@Composable
+private fun DuePrompt(week: LocalDate, today: LocalDate, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 18.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.ViewWeek, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(
+                if (week == Weeks.start(today)) "这周快过完了，写写复盘？" else "上周的复盘还没写",
+                color = cs.onSecondaryContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onClick) { Text("去写") }
+        }
+    }
 }
 
 /** Read-only: what got done that day, the notes taken from it and the same day in earlier years. */

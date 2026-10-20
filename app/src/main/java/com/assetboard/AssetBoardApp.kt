@@ -16,6 +16,7 @@ import com.assetboard.data.HolidayRepository
 import com.assetboard.data.LedgerRepository
 import com.assetboard.data.MaintenanceWorker
 import com.assetboard.data.NoteRepository
+import com.assetboard.data.WeekRepository
 import com.assetboard.data.SettingsStore
 import com.assetboard.data.TodoRepository
 import com.assetboard.data.WeatherService
@@ -59,6 +60,7 @@ class AppContainer(private val context: Context) {
     val editors = EditorRegistry()
     val diary by lazy { DiaryRepository(db, gate, editors = editors) }
     val notes by lazy { NoteRepository(db, gate, editors) }
+    val weeks by lazy { WeekRepository(db, gate, editors) }
     val habits by lazy { HabitRepository(db, gate) }
     val health by lazy { HealthRepository(db, gate) }
     val weather by lazy { WeatherService(context, settings) }
@@ -89,6 +91,7 @@ class AppContainer(private val context: Context) {
                 _restoreGeneration.value++
                 refreshWidget()
             },
+            weeks = weeks,
         )
     }
 }

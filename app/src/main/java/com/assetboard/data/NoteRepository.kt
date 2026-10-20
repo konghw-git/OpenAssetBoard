@@ -38,6 +38,8 @@ class NoteRepository(
     fun observeDrafts(): Flow<List<NoteDraft>> = dao.observeDrafts()
     /** Live notes with something taken from [date]'s diary, for that day's page. */
     fun observeFromDay(date: LocalDate): Flow<List<Note>> = dao.observeFromSource(SourceRef.DAY, date.toString())
+    /** Live notes taken from the week starting [start]: its days or its review. */
+    fun observeFromWeek(start: LocalDate): Flow<List<Note>> = dao.observeFromWeek(start.toString(), start.plusDays(6).toString())
     suspend fun note(id: String): Note? = dao.note(id)
 
     suspend fun search(query: String): List<Note> {
@@ -259,8 +261,9 @@ class NoteRepository(
             ensure(sources.map { Triple(it.noteId, it.kind, it.ref) }.toSet().size == sources.size) { "备份里有重复的笔记来源" }
             for (s in sources) {
                 ensure(s.noteId in noteIds) { "有笔记来源指向不存在的笔记" }
-                ensure(s.kind == SourceRef.DAY) { "备份里有未知的笔记来源「${s.kind}」" }
+                ensure(s.kind == SourceRef.DAY || s.kind == SourceRef.WEEK) { "备份里有未知的笔记来源「${s.kind}」" }
                 ensure(runCatching { LocalDate.parse(s.ref) }.isSuccess) { "备份里有日期无效的笔记来源" }
+                ensure(s.kind != SourceRef.WEEK || Weeks.isMonday(s.ref)) { "备份里有日期无效的笔记来源" }
             }
             ensure(drafts.map { it.id }.toSet().size == drafts.size) { "备份里有重复的笔记草稿" }
             for (d in drafts) ensure(d.noteId == null || d.noteId in noteIds) { "有笔记草稿指向不存在的笔记" }

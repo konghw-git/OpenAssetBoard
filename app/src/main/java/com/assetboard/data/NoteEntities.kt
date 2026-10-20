@@ -85,7 +85,10 @@ data class NoteDraft(
 data class SourceRef(val kind: String, val ref: String) {
     companion object {
         const val DAY = "DAY"
+        /** A weekly review; [ref] is the week's Monday. */
+        const val WEEK = "WEEK"
         fun day(date: java.time.LocalDate) = SourceRef(DAY, date.toString())
+        fun week(start: java.time.LocalDate) = SourceRef(WEEK, start.toString())
     }
 }
 
@@ -132,6 +135,14 @@ interface NoteDao {
             "WHERE note_sources.kind = :kind AND note_sources.ref = :ref AND notes.deleted_at IS NULL ORDER BY notes.updated_at DESC",
     )
     fun observeFromSource(kind: String, ref: String): Flow<List<Note>>
+
+    /** Live notes with something from the days of the week starting [from], or from its review. */
+    @Query(
+        "SELECT DISTINCT notes.* FROM note_sources JOIN notes ON notes.id = note_sources.note_id " +
+            "WHERE ((note_sources.kind = 'DAY' AND note_sources.ref >= :from AND note_sources.ref <= :to) " +
+            "OR (note_sources.kind = 'WEEK' AND note_sources.ref = :from)) AND notes.deleted_at IS NULL ORDER BY notes.updated_at DESC",
+    )
+    fun observeFromWeek(from: String, to: String): Flow<List<Note>>
 
     @Query("SELECT * FROM notes WHERE deleted_at IS NULL AND body LIKE '%' || :q || '%' ESCAPE '\\' ORDER BY pinned DESC, updated_at DESC LIMIT 200")
     suspend fun search(q: String): List<Note>

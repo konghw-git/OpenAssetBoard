@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.ViewWeek
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -177,6 +178,20 @@ fun NoteCard(
             }
             Text(whenLabel(note.updatedAt), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant.copy(alpha = 0.7f))
         }
+    }
+}
+
+/** A weekly review a note came from; tapping it opens that week. */
+@Composable
+fun WeekSourceChip(start: LocalDate, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(cs.secondary.copy(alpha = 0.12f)).clickable(onClick = onClick).padding(start = 9.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.ViewWeek, null, tint = cs.secondary, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(5.dp))
+        Text("${com.assetboard.data.Weeks.shortTitle(start)}复盘", style = MaterialTheme.typography.labelMedium, color = cs.secondary)
     }
 }
 
