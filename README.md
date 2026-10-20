@@ -48,7 +48,7 @@
 - **健康资产**：每天称一次，记体重（体脂率可选），看体重 / 体脂率 / BMI 三条曲线与 7 天平均；BMI、体脂分级、脂肪量、去脂体重、目标进度与九格身体类型。没称的日子就空着，不补点、不断签。
 - **桌面小组件**：净资产 + 一键盘点。
 
-<img src="docs/images/01-overview.webp" width="24%" alt="资产总览"> <img src="docs/images/03-stocktake.webp" width="24%" alt="盘点"> <img src="docs/images/04-trend.webp" width="24%" alt="净值趋势"> <img src="docs/images/07-account-investment.webp" width="24%" alt="投资账户">
+<img src="docs/images/01-overview.webp" width="24%" alt="资产总览"> <img src="docs/images/28-health.webp" width="24%" alt="健康资产"> <img src="docs/images/04-trend.webp" width="24%" alt="净值趋势"> <img src="docs/images/07-account-investment.webp" width="24%" alt="投资账户">
 
 ### 待办
 
@@ -83,6 +83,8 @@
 <br>
 
 <img src="docs/images/02-overview-dark.webp" width="24%" alt="资产总览（深色）"> <img src="docs/images/09-account-edit.webp" width="24%" alt="账户设置"> <img src="docs/images/10-flow-buy.webp" width="24%" alt="申购流水"> <img src="docs/images/08-account-cash.webp" width="24%" alt="现金账户">
+
+<img src="docs/images/03-stocktake.webp" width="24%" alt="盘点"> <img src="docs/images/30-cash.webp" width="24%" alt="可用现金"> <img src="docs/images/29-health-figures.webp" width="24%" alt="身体成分"> <img src="docs/images/31-health-dark.webp" width="24%" alt="健康资产（深色）">
 
 <img src="docs/images/13-todo-upcoming.webp" width="24%" alt="计划"> <img src="docs/images/14-todo-list.webp" width="24%" alt="清单与分区"> <img src="docs/images/17-todo-inbox.webp" width="24%" alt="收件箱"> <img src="docs/images/16-todo-dark.webp" width="24%" alt="待办（深色）">
 

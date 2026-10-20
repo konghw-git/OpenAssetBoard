@@ -145,13 +145,13 @@ class ScreenshotTest {
     }
 
     @Test fun overviewDark() {
-        val c = demoContainer()
+        val c = withHealth(demoContainer())
         shot("02-overview-dark", c, dark = true) { OverviewScreen({}, noop, {}, noop, noop, {}) }
     }
 
     @Config(qualifiers = "w850dp-h900dp-xhdpi")
     @Test fun overviewUnfolded() {
-        val c = demoContainer()
+        val c = withHealth(demoContainer())
         shot("03-overview-unfolded", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
     }
 

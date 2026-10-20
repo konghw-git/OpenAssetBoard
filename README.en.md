@@ -48,7 +48,7 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Health as an asset**: weigh in once a day, record weight (body fat optional), and follow weight, body fat and BMI with a 7-day average; BMI and body-fat grades, fat and lean mass, progress to a target and a nine-cell body type. A day without a weigh-in simply stays empty — no interpolation, no streaks.
 - **Home-screen widget**: net worth plus a one-tap stocktake.
 
-<img src="docs/images/01-overview.webp" width="24%" alt="Asset overview"> <img src="docs/images/03-stocktake.webp" width="24%" alt="Stocktake"> <img src="docs/images/04-trend.webp" width="24%" alt="Net worth trend"> <img src="docs/images/07-account-investment.webp" width="24%" alt="Investment account">
+<img src="docs/images/01-overview.webp" width="24%" alt="Asset overview"> <img src="docs/images/28-health.webp" width="24%" alt="Health"> <img src="docs/images/04-trend.webp" width="24%" alt="Net worth trend"> <img src="docs/images/07-account-investment.webp" width="24%" alt="Investment account">
 
 ### Todo
 
@@ -83,6 +83,8 @@ This app is built for it. One stocktake walks every account, you change the thre
 <br>
 
 <img src="docs/images/02-overview-dark.webp" width="24%" alt="Asset overview, dark"> <img src="docs/images/09-account-edit.webp" width="24%" alt="Account settings"> <img src="docs/images/10-flow-buy.webp" width="24%" alt="Buy flow"> <img src="docs/images/08-account-cash.webp" width="24%" alt="Cash account">
+
+<img src="docs/images/03-stocktake.webp" width="24%" alt="Stocktake"> <img src="docs/images/30-cash.webp" width="24%" alt="Cash at hand"> <img src="docs/images/29-health-figures.webp" width="24%" alt="Body composition"> <img src="docs/images/31-health-dark.webp" width="24%" alt="Health, dark">
 
 <img src="docs/images/13-todo-upcoming.webp" width="24%" alt="Upcoming"> <img src="docs/images/14-todo-list.webp" width="24%" alt="List with sections"> <img src="docs/images/17-todo-inbox.webp" width="24%" alt="Inbox"> <img src="docs/images/16-todo-dark.webp" width="24%" alt="Todo, dark">
 
