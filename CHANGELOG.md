@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-20
+
+### Added
+
+- **Weekly reviews**, hung on the diary's timeline. A week's page shows the week in numbers
+  (diary days, daily habits, todos done, change in weight and net worth, worked out on opening),
+  its seven diary days, the notes taken from it, and the review text, which saves like a diary
+  entry. Every diary day links to its week; Monday and Sunday evening bring a nudge while the
+  review is empty; the calendar marks each week. Reviews go to the trash and into backups.
+- **Today's note review.** One note left alone the longest (a week at least) comes back to the
+  top of the notes list for the day; opening or closing it sends it to the back of the queue.
+- **Extract a selection.** Selecting text in a diary entry offers 提炼到笔记 in the selection menu.
+  A week's review can be extracted too; such notes link back to the week.
+- **Swipe actions on notes and todos.** Left deletes, and the card breaks into dust while the
+  rows close up; right reveals pin and topic (notes) or complete, reschedule and the important
+  flag (todos). A long swipe runs the first action.
+- **Hand-set order for notes.** Long-press a note and drag it; the sort menu also offers last
+  updated and last created.
+- **All topics in one sheet.** The topic row keeps a fixed button at its end that opens every
+  topic in a grid, searchable once there are many; the editor files notes from the same sheet.
+
+### Changed
+
+- Undo and other messages show as a small frosted capsule with a countdown ring instead of a
+  full-width bar, so the list stays readable.
+- Todo and note cards are translucent glass over a soft colour field.
+- A note extracted from the diary always gets a title line, 「10月20日 日记摘录」 unless one is
+  typed, so a long paragraph no longer becomes the title.
+- Database schema 6 and backup format 6 (note order, weekly reviews); older backups still
+  restore, and the confirmation says when that would clear the current weekly reviews.
+
 ## [0.6.0] - 2026-10-20
 
 ### Added
@@ -105,7 +136,8 @@ between minor versions; backup format v3 reads v1 and v2.
 - Reminder punctuality depends on the phone's autostart and background permissions; the in-app
   checklist walks through them.
 
-[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/konghw-git/OpenAssetBoard/releases/tag/v0.4.0

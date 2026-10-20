@@ -57,7 +57,8 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Daily habits**: supplements, workout, diet, water, early sleep. Ticked on the todo page, shown read-only at the top of the diary.
 - **Reminders that fire**: normal notifications, a strong reminder (full screen, ring, vibrate — still on time in deep doze), per-occurrence reminders for repeating todos, catch-up after reboot, and recovery after the permission is revoked.
 - **Quick capture**: tap `+` on the widget, type, save — target under 5 seconds.
-- **Trash and logbook**: deleted todos, lists, diary entries and notes stay for 30 days; completed occurrences of repeating todos stay in the logbook.
+- **Swipe actions**: swipe left to delete (the card breaks into dust; a small capsule at the bottom offers undo), right for complete, reschedule and the important flag.
+- **Trash and logbook**: deleted todos, lists, diary entries, weekly reviews and notes stay for 30 days; completed occurrences of repeating todos stay in the logbook.
 
 <img src="docs/images/11-todo-home.webp" width="24%" alt="Todo"> <img src="docs/images/12-todo-composer.webp" width="24%" alt="Quick capture"> <img src="docs/images/25-todo-unfold.webp" width="24%" alt="Todo on a foldable"> <img src="docs/images/15-todo-detail.webp" width="24%" alt="Todo detail">
 
@@ -66,20 +67,23 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **One plain-text entry per day**, automatically annotated with the lunar date, solar term, public holidays and make-up workdays, the day's weather, and the todos and stocktake you completed.
 - **Nothing gets lost**: a save lands one second after you stop typing, and at least every 4.5 seconds while you type without pausing. A failed save says so and keeps your text in the editor.
 - **Calendar and search**: browse by month, search every entry, and revisit the same day in past years.
+- **Weekly review**: one per week, on the diary's timeline. The page opens with the week in numbers (diary days, daily habits, todos done, change in weight and net worth), then the week's seven entries and the notes taken from them, and the review itself at the bottom, saved as you type. Each diary day links to its week, Monday and Sunday evening bring a nudge, and the calendar marks every week.
 
 <img src="docs/images/18-diary.webp" width="24%" alt="Diary"> <img src="docs/images/19-diary-calendar.webp" width="24%" alt="Calendar"> <img src="docs/images/20-diary-dark.webp" width="24%" alt="Diary, dark"> <img src="docs/images/23-reminder-guide.webp" width="24%" alt="Reminder setup check">
 
 ### Notes
 
 - **The diary goes by day, notes go by topic**: one idea per note, revised and grown over time. The first line is the title; `#tags` are highlighted.
-- **Extract from the diary**: tap the light bulb on a diary day, tick the paragraphs, and save them as a new note or append them to one. The diary itself is untouched; the note remembers which day it came from and takes you back there. Each diary day lists the notes taken from it.
-- **One level of topics**: filter, reorder, pin, and search every note.
+- **Extract from the diary**: tap the light bulb on a diary day and tick paragraphs, or select some text and pick 提炼到笔记 from the selection menu; save it as a new note (titled after the day unless you type one) or append it to one. The original is untouched; the note remembers where it came from and takes you back there. Weekly reviews extract the same way.
+- **Today's review**: each day one note left alone the longest comes back to the top of the list.
+- **One level of topics**: a row of filters with a fixed button at its end that opens every topic in a grid (searchable once there are many); search every note.
+- **Order and swipes**: long-press a note to drag it (or sort by last updated or created); swipe left to delete, right to pin or move to a topic. Cards are translucent glass.
 - **Never loses text either**: the diary's autosave and conflict-to-draft rules; unsaved notes are committed before a restore.
 
 ### Shared
 
 - **Local first**: everything lives in SQLite on the phone. The backup is one JSON file written to a folder you pick and overwritten each time.
-- **Versioned backup and restore**: format v5, reads v1–v4. Restore replaces the whole database, copies the current data aside first, and runs behind a write gate so an in-flight old operation can't land in the restored data.
+- **Versioned backup and restore**: format v6, reads v1–v5. Restore replaces the whole database, copies the current data aside first, and runs behind a write gate so an in-flight old operation can't land in the restored data.
 - **Networking is optional and one switch away**: turn it off and the app makes no request at all — holidays come from built-in data and no weather is shown.
 - **Dark mode**, system theme, adjustable up/down colours (red-up by default, as in Chinese markets), and a two-pane layout on foldables.
 - **Launcher shortcuts** straight to stocktake, quick capture and the diary.
@@ -187,17 +191,18 @@ The rule is **calculation out of the UI**: every number on screen comes from a p
 | `domain/health/` | BMI, body-fat grades, body type, health trend and moving average |
 | `domain/todo/` | View membership and ordering, recurrence, reminder state, invariants |
 | `data/WriteGate.kt` | The read-write gate and the data epoch |
-| `data/BackupManager.kt` | JSON export (v5, reads v1–v4), validation, restore coordinator |
+| `data/BackupManager.kt` | JSON export (v6, reads v1–v5), validation, restore coordinator |
 | `domain/calendar/` | Lunar calendar, solar terms, festivals, the official workday table |
 
 ## Roadmap
 
 - [x] Asset overview, stocktake, net worth trend, investment flows
 - [x] Todos, diary, daily habits, trash
-- [x] Backup / restore (v5), reminders, widgets
+- [x] Backup / restore (v6), reminders, widgets
 - [x] Health as an asset (weight, body fat, BMI), cash at hand
 - [x] Notes: one level of topics, extracted from the diary, traced back to their day, searchable
-- [ ] Note review, weekly review
+- [x] Today's note review, extracting a selection, weekly review
+- [ ] One search across diary, weekly reviews and notes; `[[links]]`
 - [ ] Rates of return (XIRR, money-weighted annualised)
 - [ ] Target allocation comparison
 - [ ] Credit-card statement and due-date reminders
