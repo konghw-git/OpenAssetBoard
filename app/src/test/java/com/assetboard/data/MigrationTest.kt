@@ -108,7 +108,7 @@ class MigrationTest {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5)
+            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6)
             .allowMainThreadQueries()
             .build()
         try {
@@ -210,11 +210,26 @@ class MigrationTest {
         for (t in ledgerTables) assertEquals("table $t", before[t], after[t])
     }
 
+    @Test fun migrationFiveToSixOrdersNotesAsTheyShowed() {
+        helper.createDatabase(name, 5).use { db ->
+            fun note(id: String, updated: Long) = db.put("notes", "id" to id, "topic_id" to null, "body" to id, "body_rev" to 1L, "pinned" to false, "created_at" to 1L, "updated_at" to updated, "reviewed_at" to null, "deleted_at" to null, "delete_batch" to null)
+            note("n1", 10L)
+            note("n2", 30L)
+            note("n3", 20L)
+            note("n4", 20L)
+        }
+        helper.runMigrationsAndValidate(name, 6, true, Migrations.MIGRATION_5_6).use { db ->
+            val order = db.query("SELECT id FROM notes ORDER BY position").use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+            // Most recently updated first; a tie goes by id.
+            assertEquals(listOf("n2", "n3", "n4", "n1"), order)
+        }
+    }
+
     @Test fun databaseAtThreeOpensWithRoomAfterTheHealthMigration() = runBlocking {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5)
+            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6)
             .allowMainThreadQueries()
             .build()
         try {

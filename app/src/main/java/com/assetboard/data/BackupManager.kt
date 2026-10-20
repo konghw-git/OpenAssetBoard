@@ -384,7 +384,8 @@ class BackupManager(
         db.healthDao().insertAll(file.bodyMeasurements)
         // Parents first: foreign keys are checked row by row, so the wrong order fails the restore.
         n.insertTopics(file.noteTopics)
-        n.insertAll(file.notes)
+        // Before format 6 notes had no hand-set order: they take the one they showed in.
+        n.insertAll(if (file.formatVersion >= 6) file.notes else file.notes.sortedByDescending { it.updatedAt }.mapIndexed { i, x -> x.copy(position = i.toLong()) })
         n.insertSources(file.noteSources)
         n.insertDrafts(file.noteDrafts)
     }
@@ -463,7 +464,7 @@ class BackupManager(
         val now = clock()
         val written = when {
             p.noteId == null -> {
-                val note = Note(newId(), p.topicId?.takeIf { n.topic(it) != null }, p.text, bodyRev = 1, createdAt = now, updatedAt = now)
+                val note = Note(newId(), p.topicId?.takeIf { n.topic(it) != null }, p.text, bodyRev = 1, position = n.minPosition() - 1, createdAt = now, updatedAt = now)
                 n.insert(note)
                 note.id to 1L
             }
@@ -512,7 +513,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 5
+        const val FORMAT_VERSION = 6
     }
 }
 

@@ -33,11 +33,11 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,6 +71,12 @@ import com.assetboard.AppContainer
 import com.assetboard.data.Epoch
 import com.assetboard.domain.LedgerException
 import com.assetboard.ui.account.AccountDetailScreen
+import com.assetboard.ui.components.DustHost
+import com.assetboard.ui.components.DustState
+import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.components.LocalDust
+import com.assetboard.ui.components.backdropSource
+import com.assetboard.ui.components.rememberBackdrop
 import com.assetboard.ui.account.AccountEditScreen
 import com.assetboard.ui.diary.DiaryCalendarScreen
 import com.assetboard.ui.diary.DiaryScreen
@@ -190,9 +196,15 @@ fun AppNav(open: OpenRequest?, onOpenHandled: () -> Unit) {
             snackbar.showSnackbar(it, withDismissAction = true, duration = SnackbarDuration.Long)
         }
     }
+    val dust = remember { DustState() }
+    val backdrop = rememberBackdrop()
     Box(Modifier.fillMaxSize()) {
-        key(generation) { Shell(open, onOpenHandled) }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp))
+        CompositionLocalProvider(LocalDust provides dust) {
+            Box(Modifier.fillMaxSize().backdropSource(backdrop)) { key(generation) { Shell(open, onOpenHandled) } }
+        }
+        // Above every page, so a deleted card's dust can drift over the rest of the list.
+        DustHost(dust)
+        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp), backdrop)
         if (frozen) {
             Box(
                 Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },

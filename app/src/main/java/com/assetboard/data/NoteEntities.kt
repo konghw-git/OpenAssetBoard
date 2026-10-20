@@ -24,7 +24,8 @@ data class NoteTopic(
 )
 
 /**
- * A long-lived note. Only body writes (and moving to or from the trash) bump `body_rev`, so
+ * A long-lived note. [position] is its place in the hand-set order, smallest first; new notes
+ * go to the top. Only body writes (and moving to or from the trash) bump `body_rev`, so
  * pinning or changing the topic never makes an open editor stale; `updated_at` follows the body.
  */
 @Serializable
@@ -39,6 +40,7 @@ data class Note(
     val body: String = "",
     @ColumnInfo(name = "body_rev") val bodyRev: Long = 0,
     val pinned: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val position: Long = 0,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "reviewed_at") val reviewedAt: Long? = null,
@@ -115,7 +117,7 @@ object NoteText {
 
 @Dao
 interface NoteDao {
-    @Query("SELECT * FROM notes WHERE deleted_at IS NULL ORDER BY pinned DESC, updated_at DESC") fun observeLive(): Flow<List<Note>>
+    @Query("SELECT * FROM notes WHERE deleted_at IS NULL ORDER BY pinned DESC, position, updated_at DESC") fun observeLive(): Flow<List<Note>>
     @Query("SELECT * FROM notes WHERE id = :id") fun observeNote(id: String): Flow<Note?>
     @Query("SELECT * FROM notes WHERE id = :id") suspend fun note(id: String): Note?
     @Query("SELECT * FROM note_topics ORDER BY sort_order") fun observeTopics(): Flow<List<NoteTopic>>
@@ -135,6 +137,8 @@ interface NoteDao {
     suspend fun search(q: String): List<Note>
 
     @Query("SELECT COUNT(*) FROM notes WHERE topic_id = :topicId AND deleted_at IS NULL") suspend fun liveCountIn(topicId: String): Int
+    @Query("SELECT COALESCE(MIN(position), 0) FROM notes") suspend fun minPosition(): Long
+    @Query("UPDATE notes SET position = :position WHERE id = :id") suspend fun setPosition(id: String, position: Long)
 
     @Insert suspend fun insert(note: Note)
     @Update suspend fun update(note: Note)

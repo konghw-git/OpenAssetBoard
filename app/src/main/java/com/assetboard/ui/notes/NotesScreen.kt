@@ -1,7 +1,5 @@
 package com.assetboard.ui.notes
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,7 +16,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -35,7 +32,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,11 +50,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,12 +74,52 @@ import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.appear
 import com.assetboard.ui.components.pressScale
 import com.assetboard.ui.theme.AppTheme
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.layout
+import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.components.SwipeAction
+import com.assetboard.ui.components.SwipeActionsBox
+import com.assetboard.ui.components.UndoEvent
+import com.assetboard.ui.components.UndoMessages
+import com.assetboard.ui.components.ambient
+import com.assetboard.ui.components.backdropSource
+import com.assetboard.ui.components.glass
+import com.assetboard.ui.components.rememberAmbient
+import com.assetboard.ui.components.rememberBackdrop
+import com.assetboard.ui.components.rememberReorderState
+import com.assetboard.ui.components.rememberSwipeGroup
+import com.assetboard.ui.components.reorderable
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 
-class NotesViewModel(container: AppContainer) : ActionViewModel(container) {
+/** How the list is ordered. Only the hand-set order can be changed by dragging. */
+enum class NoteSort(val label: String, val note: String) {
+    CUSTOM("自定义顺序", "长按笔记拖动排序，新笔记排在最上面"),
+    UPDATED("最近更新", "改过的笔记排到前面"),
+    CREATED("最近创建", "新写的排到前面"),
+}
+
+class NotesViewModel(private val container: AppContainer) : ActionViewModel(container) {
     private val notes = container.notes
     val topics: StateFlow<List<NoteTopic>> = notes.observeTopics().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val all: StateFlow<List<Note>?> = notes.observeNotes().stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -95,18 +128,57 @@ class NotesViewModel(container: AppContainer) : ActionViewModel(container) {
     /** [ALL], [UNSORTED] or a topic id; kept while the tab is swiped away. */
     val filter = MutableStateFlow(ALL)
 
+    val sort = MutableStateFlow(
+        runCatching { NoteSort.valueOf(container.settings.string(KEY_SORT) ?: "") }.getOrDefault(NoteSort.CUSTOM),
+    )
+
+    private val _events = MutableSharedFlow<UndoEvent>(extraBufferCapacity = 8)
+    val events: SharedFlow<UndoEvent> = _events
+
+    fun setSort(s: NoteSort) {
+        container.settings.putString(KEY_SORT, s.name)
+        sort.value = s
+    }
+
+    /** Dragging needs the hand-set order; offers to switch to it. */
+    fun explainDrag() {
+        _events.tryEmit(UndoEvent("按「${sort.value.label}」排列时不能拖动", action = "改为自定义") { setSort(NoteSort.CUSTOM) })
+    }
+
     fun draftToNote(d: NoteDraft, onDone: (String) -> Unit) = action { onDone(notes.draftToNote(d.id)) }
     fun discardDraft(d: NoteDraft) = action { notes.discardDraft(d.id) }
+
+    fun togglePin(n: Note) = action { notes.setPinned(n.id, !n.pinned) }
+    fun setTopic(n: Note, topicId: String?) = action { notes.setTopic(n.id, topicId) }
+    fun createTopic(name: String, onCreated: (String) -> Unit = {}) = action { onCreated(notes.createTopic(name)) }
+    fun reorder(ids: List<String>) = action { notes.reorder(ids) }
+
+    fun delete(n: Note) = action {
+        val batch = notes.delete(n.id)
+        val t = n.title.let { if (it.length > 12) it.take(12) + "…" else it }
+        _events.tryEmit(UndoEvent("《$t》已移到回收站") { notes.restore(batch) })
+    }
+
+    fun undo(e: UndoEvent) {
+        val u = e.undo ?: return
+        action { u() }
+    }
 
     companion object {
         const val ALL = "*"
         const val UNSORTED = "-"
+        private const val KEY_SORT = "note_sort"
     }
 }
 
+/** The dust and swipe key of a note's card. */
+private fun noteKey(id: String) = "note:$id"
+
 /**
  * The notes tab: only a list. Writing happens on its own page and searching on another, so
- * nothing here takes the keyboard and swiping between tabs never fights with typing.
+ * nothing here takes the keyboard and swiping between tabs never fights with typing. Cards are
+ * glass over the page's ambient colour; swipe left deletes, right pins or files; in the
+ * hand-set order a long press picks a card up to move it.
  */
 @Composable
 fun NotesScreen(
@@ -122,77 +194,142 @@ fun NotesScreen(
     val all by vm.all.collectAsStateWithLifecycle()
     val drafts by vm.drafts.collectAsStateWithLifecycle()
     val filterRaw by vm.filter.collectAsStateWithLifecycle()
+    val sort by vm.sort.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     var draftsOpen by rememberSaveable { mutableStateOf(false) }
+    var topicsOpen by rememberSaveable { mutableStateOf(false) }
+    var filingId by rememberSaveable { mutableStateOf<String?>(null) }
     ErrorDialog(error) { vm.error.value = null }
     val cs = MaterialTheme.colorScheme
+    val snackbar = remember { SnackbarHostState() }
+    UndoMessages(vm.events, snackbar, vm::undo)
+    val backdrop = rememberBackdrop()
+    val ambient = rememberAmbient()
+    val swipe = rememberSwipeGroup()
+    val listState = rememberLazyListState()
+    LaunchedEffect(listState.isScrollInProgress) { if (listState.isScrollInProgress) swipe.closeAll() }
+
     // A topic deleted meanwhile falls back to everything.
     val filter = if (filterRaw == NotesViewModel.ALL || filterRaw == NotesViewModel.UNSORTED || topics.any { it.id == filterRaw }) filterRaw else NotesViewModel.ALL
     val notes = all.orEmpty()
-    val shown = remember(notes, filter) {
-        when (filter) {
+    val counts = remember(notes) { notes.groupingBy { it.topicId }.eachCount() }
+    val shown = remember(notes, filter, sort) {
+        val picked = when (filter) {
             NotesViewModel.ALL -> notes
             NotesViewModel.UNSORTED -> notes.filter { it.topicId == null }
             else -> notes.filter { it.topicId == filter }
         }
+        when (sort) {
+            NoteSort.CUSTOM -> picked
+            NoteSort.UPDATED -> picked.sortedByDescending { it.updatedAt }
+            NoteSort.CREATED -> picked.sortedByDescending { it.createdAt }
+        }
     }
-    val wash = AppTheme.extra.heroStart
+    // The order on screen; a drag rearranges it here and saves it on release.
+    var order by remember(shown) { mutableStateOf(shown) }
+    val custom = sort == NoteSort.CUSTOM
+    val reorder = rememberReorderState(
+        listState,
+        onMove = { from, to ->
+            val a = order.indexOfFirst { noteKey(it.id) == from }
+            val b = order.indexOfFirst { noteKey(it.id) == to }
+            if (a < 0 || b < 0 || order[a].pinned != order[b].pinned) {
+                false
+            } else {
+                order = order.toMutableList().apply { add(b, removeAt(a)) }
+                true
+            }
+        },
+        onDrop = { key ->
+            val moved = order.firstOrNull { noteKey(it.id) == key } ?: return@rememberReorderState
+            vm.reorder(order.filter { it.pinned == moved.pinned }.map { it.id })
+        },
+    )
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(cs.background)
-            .drawBehind { drawRect(Brush.verticalGradient(listOf(wash.copy(alpha = 0.07f), Color.Transparent), endY = 360.dp.toPx())) },
-    ) {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                TabHeader("笔记", subtitle(notes.size, topics.size)) {
-                    HeaderAction(Icons.Outlined.Search, "搜索笔记", onSearch)
-                    HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
-                }
-            },
-        ) { padding ->
-            val list = all
-            LazyColumn(
-                Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                item(key = "topics") {
-                    TopicBar(topics, notes, filter, onPick = { vm.filter.value = it }, onManage = onTopics, modifier = Modifier.appear(0))
-                }
-                if (drafts.isNotEmpty()) {
-                    item(key = "drafts") { DraftBanner(drafts.size, Modifier.animateItem()) { draftsOpen = true } }
-                }
-                when {
-                    list == null -> Unit
-                    notes.isEmpty() -> item(key = "empty") { EmptyNotes(Modifier.appear(1)) }
-                    shown.isEmpty() -> item(key = "emptyTopic") {
-                        Text(
-                            if (filter == NotesViewModel.UNSORTED) "所有笔记都有主题了" else "这个主题下还没有笔记，点下方「写笔记」写第一篇",
-                            style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 48.dp),
+    Box(Modifier.fillMaxSize().ambient(ambient)) {
+        Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
+            Scaffold(
+                containerColor = Color.Transparent,
+                topBar = {
+                    TabHeader("笔记", subtitle(notes.size, topics.size)) {
+                        HeaderAction(Icons.Outlined.Search, "搜索笔记", onSearch)
+                        SortAction(sort, vm::setSort)
+                        HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
+                    }
+                },
+            ) { padding ->
+                val list = all
+                LazyColumn(
+                    Modifier.fillMaxSize().padding(padding),
+                    state = listState,
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    item(key = "topics") {
+                        TopicBar(
+                            topics, counts, notes.size, filter,
+                            onPick = { vm.filter.value = it },
+                            onAll = { topicsOpen = true },
+                            onNewTopic = onTopics,
+                            modifier = Modifier.appear(0),
                         )
                     }
-                    else -> {
-                        val pinned = shown.filter { it.pinned }
-                        val rest = shown.filterNot { it.pinned }
-                        val showTopic = filter == NotesViewModel.ALL
-                        if (pinned.isNotEmpty()) {
-                            item(key = "pinnedLabel") { Label("置顶", Modifier.animateItem()) }
-                            items(pinned, key = { it.id }) { n ->
-                                NoteCard(n, topics, { onOpen(n.id) }, Modifier.animateItem(), showTopic = showTopic)
-                            }
-                            if (rest.isNotEmpty()) item(key = "restLabel") { Label("最近更新", Modifier.animateItem()) }
+                    if (drafts.isNotEmpty()) {
+                        item(key = "drafts") { DraftBanner(drafts.size, Modifier.animateItem()) { draftsOpen = true } }
+                    }
+                    when {
+                        list == null -> Unit
+                        notes.isEmpty() -> item(key = "empty") { EmptyNotes(Modifier.appear(1)) }
+                        shown.isEmpty() -> item(key = "emptyTopic") {
+                            Text(
+                                if (filter == NotesViewModel.UNSORTED) "所有笔记都有主题了" else "这个主题下还没有笔记，点下方「写笔记」写第一篇",
+                                style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 48.dp),
+                            )
                         }
-                        items(rest, key = { it.id }) { n ->
-                            NoteCard(n, topics, { onOpen(n.id) }, Modifier.animateItem(), showTopic = showTopic)
+                        else -> {
+                            val pinned = order.filter { it.pinned }
+                            val rest = order.filterNot { it.pinned }
+                            val showTopic = filter == NotesViewModel.ALL
+                            val card: @Composable LazyItemScope.(Note) -> Unit = { n ->
+                                val key = noteKey(n.id)
+                                val dragged = reorder.dragging == key
+                                SwipeActionsBox(
+                                    key = key,
+                                    group = swipe,
+                                    shape = NoteCardShape,
+                                    modifier = Modifier
+                                        .zIndex(if (dragged) 1f else 0f)
+                                        .graphicsLayer { translationY = if (dragged) reorder.offset else 0f }
+                                        .then(if (dragged) Modifier else Modifier.animateItem()),
+                                    actions = listOf(
+                                        SwipeAction(if (n.pinned) "取消置顶" else "置顶", if (n.pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, cs.secondary) { vm.togglePin(n) },
+                                        SwipeAction("主题", Icons.AutoMirrored.Outlined.Label, cs.tertiary) { filingId = n.id },
+                                    ),
+                                    onDelete = { vm.delete(n) },
+                                    enabled = reorder.dragging == null,
+                                ) {
+                                    NoteCard(
+                                        n, topics, { onOpen(n.id) },
+                                        Modifier.reorderable(reorder, key, enabled = custom),
+                                        showTopic = showTopic,
+                                        lifted = dragged,
+                                        onLongClick = if (custom) null else vm::explainDrag,
+                                    )
+                                }
+                            }
+                            if (pinned.isNotEmpty()) {
+                                item(key = "pinnedLabel") { Label("置顶", Modifier.animateItem()) }
+                                items(pinned, key = { noteKey(it.id) }) { card(it) }
+                                if (rest.isNotEmpty()) item(key = "restLabel") { Label(if (custom) "笔记" else sort.label, Modifier.animateItem()) }
+                            }
+                            items(rest, key = { noteKey(it.id) }) { card(it) }
                         }
                     }
                 }
             }
         }
+        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp), backdrop)
         PrimaryActionButton(
             Icons.Outlined.Edit, "写笔记",
             onClick = { onNew(filter.takeIf { it != NotesViewModel.ALL && it != NotesViewModel.UNSORTED }) },
@@ -200,6 +337,28 @@ fun NotesScreen(
         )
     }
 
+    if (topicsOpen) {
+        TopicSheet(
+            "按主题看", topics, counts, filter, showAll = true,
+            onPick = { vm.filter.value = it; topicsOpen = false },
+            onCreate = { name -> vm.createTopic(name) { vm.filter.value = it } ; topicsOpen = false },
+            onDismiss = { topicsOpen = false },
+            onManage = { topicsOpen = false; onTopics() },
+        )
+    }
+    filingId?.let { id ->
+        val n = notes.firstOrNull { it.id == id }
+        if (n == null) {
+            filingId = null
+        } else {
+            TopicSheet(
+                "放到哪个主题", topics, counts, n.topicId ?: NotesViewModel.UNSORTED, showAll = false,
+                onPick = { k -> vm.setTopic(n, k.takeIf { it != NotesViewModel.UNSORTED }); filingId = null },
+                onCreate = { name -> vm.createTopic(name) { t -> vm.setTopic(n, t) }; filingId = null },
+                onDismiss = { filingId = null },
+            )
+        }
+    }
     if (draftsOpen) {
         DraftsSheet(
             drafts, notes,
@@ -217,6 +376,30 @@ private fun subtitle(notes: Int, topics: Int): String = when {
     else -> "$notes 篇笔记 · $topics 个主题"
 }
 
+/** The sort order, from a header button. */
+@Composable
+private fun SortAction(sort: NoteSort, onPick: (NoteSort) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var open by remember { mutableStateOf(false) }
+    Box {
+        HeaderAction(Icons.AutoMirrored.Outlined.Sort, "排序", { open = true })
+        DropdownMenu(open, { open = false }, shape = RoundedCornerShape(18.dp), containerColor = cs.surfaceContainer) {
+            NoteSort.entries.forEach { s ->
+                DropdownMenuItem(
+                    text = {
+                        Column(Modifier.padding(vertical = 4.dp)) {
+                            Text(s.label, style = MaterialTheme.typography.bodyLarge)
+                            Text(s.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        }
+                    },
+                    trailingIcon = { if (s == sort) Icon(Icons.Default.Check, null, tint = cs.primary) },
+                    onClick = { open = false; onPick(s) },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun Label(text: String, modifier: Modifier = Modifier) {
     Text(
@@ -227,72 +410,85 @@ private fun Label(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** 全部, each topic, 未归类 when it has anything, then the way to manage topics. */
+/**
+ * 全部, each topic and 未归类 in a row that scrolls, with a fixed button at its end that opens
+ * every topic in a sheet, so a long row never hides the way to the rest.
+ */
 @Composable
 private fun TopicBar(
     topics: List<NoteTopic>,
-    notes: List<Note>,
+    counts: Map<String?, Int>,
+    total: Int,
     filter: String,
     onPick: (String) -> Unit,
-    onManage: () -> Unit,
+    onAll: () -> Unit,
+    onNewTopic: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
-    val counts = remember(notes) { notes.groupingBy { it.topicId }.eachCount() }
     val unsorted = counts[null] ?: 0
-    LazyRow(
-        modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item(key = NotesViewModel.ALL) { FilterPill("全部", notes.size, cs.primary, filter == NotesViewModel.ALL, null) { onPick(NotesViewModel.ALL) } }
-        topics.forEachIndexed { i, t ->
-            item(key = t.id) {
-                FilterPill(t.name, counts[t.id] ?: 0, AppTheme.extra.group(i), filter == t.id, AppTheme.extra.group(i), Modifier.animateItem()) { onPick(t.id) }
+    val row = rememberLazyListState()
+    val keys = buildList {
+        add(NotesViewModel.ALL)
+        topics.forEach { add(it.id) }
+        if (topics.isNotEmpty() && (unsorted > 0 || filter == NotesViewModel.UNSORTED)) add(NotesViewModel.UNSORTED)
+    }
+    // A topic picked from the sheet scrolls into view.
+    LaunchedEffect(filter) {
+        val i = keys.indexOf(filter)
+        val visible = row.layoutInfo.visibleItemsInfo
+        val whole = visible.any { it.index == i && it.offset >= 0 && it.offset + it.size <= row.layoutInfo.viewportEndOffset }
+        if (i >= 0 && !whole) row.animateScrollToItem((i - 1).coerceAtLeast(0))
+    }
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        LazyRow(
+            Modifier
+                .weight(1f)
+                // Out to the screen's left edge, so chips scroll off it and their shadows are not cut.
+                .layout { m, c ->
+                    val edge = 16.dp.roundToPx()
+                    val p = m.measure(c.copy(minWidth = c.minWidth + edge, maxWidth = c.maxWidth + edge))
+                    layout(c.maxWidth, p.height) { p.place(-edge, 0) }
+                }
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    // The row fades out under the button rather than being cut off.
+                    if (topics.isNotEmpty()) {
+                        drawRect(
+                            Brush.horizontalGradient(listOf(Color.Transparent, Color.Black), startX = size.width - 28.dp.toPx(), endX = size.width),
+                            blendMode = BlendMode.DstOut,
+                        )
+                    }
+                },
+            state = row,
+            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item(key = NotesViewModel.ALL) { FilterPill("全部", total, cs.primary, filter == NotesViewModel.ALL, null) { onPick(NotesViewModel.ALL) } }
+            topics.forEachIndexed { i, t ->
+                item(key = t.id) {
+                    FilterPill(t.name, counts[t.id] ?: 0, AppTheme.extra.group(i), filter == t.id, AppTheme.extra.group(i), Modifier.animateItem()) { onPick(t.id) }
+                }
+            }
+            if (NotesViewModel.UNSORTED in keys) {
+                item(key = NotesViewModel.UNSORTED) {
+                    FilterPill("未归类", unsorted, cs.onSurfaceVariant, filter == NotesViewModel.UNSORTED, cs.outline) { onPick(NotesViewModel.UNSORTED) }
+                }
+            }
+            if (topics.isEmpty()) {
+                item(key = "new") { NewTopicPill(onNewTopic) }
             }
         }
-        if (topics.isNotEmpty() && (unsorted > 0 || filter == NotesViewModel.UNSORTED)) {
-            item(key = NotesViewModel.UNSORTED) {
-                FilterPill("未归类", unsorted, cs.onSurfaceVariant, filter == NotesViewModel.UNSORTED, cs.outline) { onPick(NotesViewModel.UNSORTED) }
-            }
-        }
-        item(key = "manage") {
-            ManagePill(if (topics.isEmpty()) Icons.Default.Add else Icons.Outlined.Tune, if (topics.isEmpty()) "新建主题" else "管理", onManage)
+        if (topics.isNotEmpty()) {
+            Spacer(Modifier.width(4.dp))
+            AllTopicsButton(onAll)
         }
     }
 }
 
 @Composable
-private fun FilterPill(name: String, count: Int, color: Color, selected: Boolean, dot: Color?, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val bg by animateColorAsState(if (selected) color else cs.surfaceContainer, tween(220), label = "pill")
-    // Dark mode's palette is light: picked text goes dark on it instead of white.
-    val onColor = if (color.luminance() > 0.5f) Color(0xFF12201C) else Color.White
-    val fg = if (selected) onColor else cs.onSurface
-    val source = remember { MutableInteractionSource() }
-    Row(
-        modifier
-            .height(38.dp)
-            .pressScale(source)
-            .shadow(if (selected) 6.dp else 1.dp, RoundedCornerShape(50), spotColor = if (selected) color else Color.Black.copy(alpha = 0.1f))
-            .clip(RoundedCornerShape(50))
-            .background(bg)
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
-            .padding(start = if (dot != null) 12.dp else 16.dp, end = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (dot != null) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (selected) onColor else dot))
-            Spacer(Modifier.width(7.dp))
-        }
-        Text(name, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(count.toString(), style = MaterialTheme.typography.labelMedium, color = if (selected) onColor.copy(alpha = 0.8f) else cs.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun ManagePill(icon: ImageVector, text: String, onClick: () -> Unit) {
+private fun NewTopicPill(onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier
@@ -303,9 +499,27 @@ private fun ManagePill(icon: ImageVector, text: String, onClick: () -> Unit) {
             .padding(start = 10.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, null, tint = cs.primary, modifier = Modifier.size(17.dp))
+        Icon(Icons.Default.Add, null, tint = cs.primary, modifier = Modifier.size(17.dp))
         Spacer(Modifier.width(4.dp))
-        Text(text, style = MaterialTheme.typography.labelLarge, color = cs.primary)
+        Text("新建主题", style = MaterialTheme.typography.labelLarge, color = cs.primary)
+    }
+}
+
+/** Opens every topic in a sheet; stays put at the end of the row. */
+@Composable
+private fun AllTopicsButton(onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val source = remember { MutableInteractionSource() }
+    Box(
+        Modifier
+            .size(38.dp)
+            .pressScale(source, 0.9f)
+            .glass(CircleShape, glass, elevation = 6.dp)
+            .clip(CircleShape)
+            .clickable(interactionSource = source, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Outlined.GridView, "全部主题", tint = cs.onSurface, modifier = Modifier.size(19.dp))
     }
 }
 

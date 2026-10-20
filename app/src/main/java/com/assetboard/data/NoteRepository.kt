@@ -53,7 +53,7 @@ class NoteRepository(
         if (failBodyWrites) throw LedgerException("模拟写盘失败")
         val now = clock()
         if (noteId == null) {
-            val n = Note(newId(), topicId?.takeIf { dao.topic(it) != null }, text, bodyRev = 1, createdAt = now, updatedAt = now)
+            val n = Note(newId(), topicId?.takeIf { dao.topic(it) != null }, text, bodyRev = 1, position = dao.minPosition() - 1, createdAt = now, updatedAt = now)
             dao.insert(n)
             addSources(n.id, sources, now)
             BodySave.Saved(n.id, 1, created = true)
@@ -102,7 +102,7 @@ class NoteRepository(
     /** A new note with [text], taken from [source]; returns its id. */
     suspend fun create(text: String, source: SourceRef?, topicId: String? = null): String = serial {
         val now = clock()
-        val n = Note(newId(), topicId?.takeIf { dao.topic(it) != null }, text, bodyRev = 1, createdAt = now, updatedAt = now)
+        val n = Note(newId(), topicId?.takeIf { dao.topic(it) != null }, text, bodyRev = 1, position = dao.minPosition() - 1, createdAt = now, updatedAt = now)
         dao.insert(n)
         if (source != null) addSources(n.id, listOf(source), now)
         n.id
@@ -115,7 +115,7 @@ class NoteRepository(
         val d = dao.draft(draftId) ?: throw LedgerException("这份草稿已经处理过了")
         val now = clock()
         val topic = d.noteId?.let { dao.note(it) }?.topicId
-        val n = Note(newId(), topic, d.text, bodyRev = 1, createdAt = now, updatedAt = now)
+        val n = Note(newId(), topic, d.text, bodyRev = 1, position = dao.minPosition() - 1, createdAt = now, updatedAt = now)
         dao.insert(n)
         dao.deleteDraft(d.id)
         n.id
@@ -130,6 +130,23 @@ class NoteRepository(
     suspend fun setTopic(id: String, topicId: String?) = serial {
         ensure(topicId == null || dao.topic(topicId) != null) { "这个主题已被删除" }
         dao.setTopic(id, topicId)
+    }
+
+    /**
+     * Puts the notes of [ids] in that order, among the places they already hold, so notes not
+     * in the list (another topic, the other section) keep theirs.
+     */
+    suspend fun reorder(ids: List<String>) = serial {
+        var all = dao.all().sortedWith(compareBy<Note> { it.position }.thenByDescending { it.updatedAt })
+        // Ties (an old backup, say) are spread out first, in the order they show.
+        if (all.map { it.position }.toSet().size < all.size) {
+            all = all.mapIndexed { i, n -> n.copy(position = i.toLong()) }
+            for (n in all) dao.setPosition(n.id, n.position)
+        }
+        val byId = all.associateBy { it.id }
+        val moved = ids.mapNotNull { byId[it] }
+        val slots = moved.map { it.position }.sorted()
+        moved.forEachIndexed { i, n -> if (n.position != slots[i]) dao.setPosition(n.id, slots[i]) }
     }
 
     suspend fun setReviewed(id: String, at: Long? = clock()) = serial { dao.setReviewed(id, at) }

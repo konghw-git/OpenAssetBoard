@@ -34,6 +34,20 @@ object Migrations {
         }
     }
 
+    /**
+     * Notes get a hand-set order. It starts as the list showed them before: most recently
+     * updated first.
+     */
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `notes` ADD COLUMN `position` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL(
+                "UPDATE notes SET position = (SELECT COUNT(*) FROM notes n2 WHERE n2.updated_at > notes.updated_at " +
+                    "OR (n2.updated_at = notes.updated_at AND n2.id < notes.id))",
+            )
+        }
+    }
+
     private val V5_TABLES = listOf(
         "CREATE TABLE IF NOT EXISTS `note_topics` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `sort_order` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "CREATE TABLE IF NOT EXISTS `notes` (`id` TEXT NOT NULL, `topic_id` TEXT, `body` TEXT NOT NULL, `body_rev` INTEGER NOT NULL, `pinned` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `reviewed_at` INTEGER, `deleted_at` INTEGER, `delete_batch` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`topic_id`) REFERENCES `note_topics`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",

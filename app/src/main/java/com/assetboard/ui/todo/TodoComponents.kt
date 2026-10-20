@@ -12,10 +12,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
@@ -28,7 +26,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -39,7 +36,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.outlined.Alarm
-import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.StickyNote2
@@ -47,27 +43,21 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,6 +72,7 @@ import com.assetboard.domain.todo.DateBadge
 import com.assetboard.domain.todo.Recurrence
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.components.DatePickDialog
+import com.assetboard.ui.components.glass
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -200,13 +191,12 @@ fun TodoRow(
     val badge = if (done) null else TodoViews.trailing(todo, today, inUpcoming)
     val points = if (done) emptyList() else checklist
     val content by animateFloatAsState(if (done) 0.55f else 1f, tween(260), label = "done")
-    val bg by animateColorAsState(if (selected) cs.primaryContainer else cs.surfaceContainer, tween(200), label = "bg")
+    val tint by animateColorAsState(if (selected) cs.primary.copy(alpha = 0.16f) else Color.Transparent, tween(200), label = "tint")
     Row(
         modifier
             .fillMaxWidth()
-            .shadow(if (done) 0.dp else 3.dp, TodoCardShape, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.10f))
+            .glass(TodoCardShape, glass, tint, elevation = if (done) 0.dp else 10.dp)
             .clip(TodoCardShape)
-            .background(bg)
             .then(if (selected) Modifier.border(1.5.dp, cs.primary, TodoCardShape) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .heightIn(min = 60.dp)
@@ -364,52 +354,6 @@ private fun MetaChip(icon: ImageVector, text: String?, color: Color) {
             Text(text, style = MaterialTheme.typography.labelSmall, color = color)
         }
     }
-}
-
-/** Right swipe completes, left swipe asks for a new date; the card snaps back either way. */
-@Composable
-fun SwipeRow(
-    enabled: Boolean,
-    onComplete: () -> Unit,
-    onReschedule: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    if (!enabled) {
-        content()
-        return
-    }
-    val haptic = LocalHapticFeedback.current
-    val complete by rememberUpdatedState(onComplete)
-    val reschedule by rememberUpdatedState(onReschedule)
-    val state = rememberSwipeToDismissBoxState(
-        confirmValueChange = { v ->
-            when (v) {
-                SwipeToDismissBoxValue.StartToEnd -> { haptic.performHapticFeedback(HapticFeedbackType.LongPress); complete() }
-                SwipeToDismissBoxValue.EndToStart -> reschedule()
-                SwipeToDismissBoxValue.Settled -> Unit
-            }
-            false
-        },
-        positionalThreshold = { it * 0.35f },
-    )
-    val cs = MaterialTheme.colorScheme
-    SwipeToDismissBox(
-        state = state,
-        backgroundContent = {
-            val toEnd = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-            val bg = if (toEnd) cs.primary else cs.tertiary
-            Box(
-                Modifier.fillMaxSize().clip(TodoCardShape).background(Brush.horizontalGradient(if (toEnd) listOf(bg, bg.copy(alpha = 0.7f)) else listOf(bg.copy(alpha = 0.7f), bg))).padding(horizontal = 24.dp),
-                contentAlignment = if (toEnd) Alignment.CenterStart else Alignment.CenterEnd,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (toEnd) Icons.Default.Check else Icons.Outlined.CalendarMonth, null, tint = if (toEnd) cs.onPrimary else cs.onTertiary)
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (toEnd) "完成" else "改期", color = if (toEnd) cs.onPrimary else cs.onTertiary, style = MaterialTheme.typography.labelLarge)
-                }
-            }
-        },
-    ) { content() }
 }
 
 @Composable

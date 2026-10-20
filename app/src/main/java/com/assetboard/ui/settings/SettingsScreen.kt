@@ -41,7 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
+import com.assetboard.ui.components.GlassSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -152,7 +152,7 @@ fun SettingsScreen(
 
     Scaffold(
         containerColor = cs.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { GlassSnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text("设置") },

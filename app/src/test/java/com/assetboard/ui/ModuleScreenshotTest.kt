@@ -21,6 +21,15 @@ import com.assetboard.ui.settings.TrashScreen
 import com.assetboard.ui.theme.AssetBoardTheme
 import com.assetboard.ui.todo.TodoDetailScreen
 import com.assetboard.ui.todo.TodoHomeScreen
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
+import com.assetboard.ui.components.DustHost
+import com.assetboard.ui.components.DustState
+import com.assetboard.ui.components.LocalDust
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.plus
@@ -112,6 +121,38 @@ class ModuleScreenshotTest {
     @Test fun todoToday() {
         val d = demo()
         shot("21-todo-today", d.c) { TodoHomeScreen({}, {}, initialView = "today") }
+    }
+
+    @Test fun todoSwipeAndDust() {
+        val d = demo()
+        compose.setContent {
+            CompositionLocalProvider(LocalContainer provides d.c) {
+                AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) {
+                    val dust = remember { DustState() }
+                    CompositionLocalProvider(LocalDust provides dust) {
+                        Box {
+                            TodoHomeScreen({}, {}, initialView = "today")
+                            DustHost(dust)
+                        }
+                    }
+                }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("交水电费")).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.onNodeWithText("交水电费").performTouchInput { down(center); moveBy(Offset(60f, 0f)); moveBy(Offset(220f, 0f)); moveBy(Offset(200f, 0f)) }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onRoot().captureRoboImage("build/screenshots/26-todo-swipe-right.png")
+        compose.onNodeWithText("交水电费").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(1_000)
+        // A long left swipe: the card turns to dust, the undo bar comes up. The clock is driven
+        // by hand, or waiting for idle would run the dust to its end.
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("给导师发周报").performTouchInput { down(center); moveBy(Offset(-60f, 0f)); moveBy(Offset(-300f, 0f)); moveBy(Offset(-300f, 0f)); up() }
+        repeat(30) { compose.mainClock.advanceTimeByFrame() }
+        compose.onRoot().captureRoboImage("build/screenshots/27-todo-dust.png")
+        repeat(120) { compose.mainClock.advanceTimeByFrame() }
+        compose.onRoot().captureRoboImage("build/screenshots/28-todo-undo.png")
     }
 
     @Test fun todoUpcoming() {

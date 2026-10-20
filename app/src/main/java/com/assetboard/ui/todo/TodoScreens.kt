@@ -64,6 +64,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.outlined.OutlinedFlag
+import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MoreVert
@@ -88,7 +92,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -150,6 +153,18 @@ import com.assetboard.domain.todo.ViewRow
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.OpenRequest
 import com.assetboard.ui.components.ConfirmDialog
+import com.assetboard.ui.components.Ambient
+import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.components.LocalDust
+import com.assetboard.ui.components.SwipeAction
+import com.assetboard.ui.components.SwipeActionsBox
+import com.assetboard.ui.components.SwipeGroup
+import com.assetboard.ui.components.ambient
+import com.assetboard.ui.components.ambientSlice
+import com.assetboard.ui.components.backdropSource
+import com.assetboard.ui.components.rememberAmbient
+import com.assetboard.ui.components.rememberBackdrop
+import com.assetboard.ui.components.rememberSwipeGroup
 import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.HeaderAction
 import com.assetboard.ui.components.ErrorDialog
@@ -229,6 +244,12 @@ fun TodoHomeScreen(
     var sectionDialog by remember { mutableStateOf<Pair<String, String>?>(null) } // (section id or "", name)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val backdrop = rememberBackdrop()
+    val ambient = rememberAmbient()
+    val swipe = rememberSwipeGroup()
+    val dust = LocalDust.current
+    // Scrolling closes a row left open by a swipe.
+    LaunchedEffect(listState.isScrollInProgress) { if (listState.isScrollInProgress) swipe.closeAll() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     ErrorDialog(error) { vm.error.value = null }
@@ -298,12 +319,21 @@ fun TodoHomeScreen(
         onListMenu = { listDialog = it },
         onSection = { sectionDialog = it },
         onAdd = if (dialGone && !composer) ({ openComposer() }) else null,
+        onDelete = { ids ->
+            // On-screen cards turn to dust first; the rest just go.
+            scope.launch {
+                dust?.dissolve(ids.map(::todoKey))
+                vm.delete(ids)
+            }
+        },
+        swipe = swipe,
+        ambient = ambient,
         vm = vm,
     )
     val cs = MaterialTheme.colorScheme
 
     // A Surface, so text outside a Scaffold still gets the theme's content color.
-    Surface(color = cs.background, modifier = Modifier.fillMaxSize()) {
+    Surface(color = Color.Transparent, modifier = Modifier.fillMaxSize().ambient(ambient)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= 600.dp
             if (wide) {
@@ -320,17 +350,20 @@ fun TodoHomeScreen(
                     }
                     VerticalDivider(color = cs.outlineVariant)
                     Box(Modifier.weight(1f).fillMaxHeight()) {
-                        if (sorting) {
-                            SortMode(ctx, Modifier.statusBarsPadding())
-                        } else {
-                            LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 32.dp)) {
-                                viewContent(ctx)
+                        Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
+                            if (sorting) {
+                                SortMode(ctx, Modifier.statusBarsPadding())
+                            } else {
+                                LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
+                                    viewContent(ctx)
+                                }
                             }
                         }
-                        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp))
+                        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), backdrop)
                     }
                 }
             } else {
+                Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
                 if (sorting) {
                     SortMode(ctx, Modifier.statusBarsPadding())
                 } else {
@@ -344,7 +377,8 @@ fun TodoHomeScreen(
                         viewContent(ctx)
                     }
                 }
-                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp))
+                }
+                GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), backdrop)
             }
         }
     }
@@ -635,6 +669,9 @@ private class ViewContext(
     val onSection: (Pair<String, String>) -> Unit,
     /** Set while the dial is scrolled away: a + in the sticky header brings the field back. */
     val onAdd: (() -> Unit)?,
+    val onDelete: (List<String>) -> Unit,
+    val swipe: SwipeGroup,
+    val ambient: Ambient,
     val vm: TodoViewModel,
 ) {
     val manual get() = view == TodoView.INBOX || list != null
@@ -659,10 +696,13 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                 val selecting = c.selection.isNotEmpty()
                 val logbook = c.view == TodoView.LOGBOOK
                 Box(Modifier.animateItem().padding(horizontal = 16.dp, vertical = 5.dp)) {
-                    SwipeRow(
-                        enabled = !line.row.done && !selecting && !logbook,
-                        onComplete = { c.vm.complete(t) },
-                        onReschedule = { c.onReschedule(listOf(t.id)) },
+                    SwipeActionsBox(
+                        key = todoKey(t.id),
+                        group = c.swipe,
+                        shape = TodoCardShape,
+                        enabled = !selecting && !logbook,
+                        actions = todoActions(t, line.row.done, c),
+                        onDelete = { c.vm.delete(listOf(t.id)) },
                     ) {
                         val items = d.checklistByTodo[t.id].orEmpty()
                         val showList = listId == null && c.view != TodoView.INBOX
@@ -694,13 +734,29 @@ private fun LazyListScope.viewContent(c: ViewContext) {
     }
 }
 
+/** The dust and swipe key of a todo's card. */
+private fun todoKey(id: String) = "todo:$id"
+
+/** What a right swipe offers: done or not, the date and the flag; a full swipe completes. */
+@Composable
+private fun todoActions(t: Todo, done: Boolean, c: ViewContext): List<SwipeAction> {
+    val cs = MaterialTheme.colorScheme
+    if (done) return listOf(SwipeAction("未完成", Icons.AutoMirrored.Outlined.Undo, cs.onSurfaceVariant) { c.vm.toggle(t) })
+    return listOf(
+        SwipeAction("完成", Icons.Default.Check, cs.primary) { c.vm.complete(t) },
+        SwipeAction("改期", Icons.Outlined.CalendarMonth, cs.tertiary) { c.onReschedule(listOf(t.id)) },
+        if (t.important) SwipeAction("取消重要", Icons.Outlined.OutlinedFlag, cs.secondary) { c.vm.setImportant(t, false) }
+        else SwipeAction("重要", Icons.Default.Flag, Color(0xFFD08A2E)) { c.vm.setImportant(t, true) },
+    )
+}
+
 /** The view's title and actions; becomes the selection bar while selecting. Sticks to the top. */
 @Composable
 private fun ViewHeader(c: ViewContext) {
     val cs = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
     val accent = c.view?.let { viewStyles.getValue(it).start } ?: listColor(c.data, c.list?.id) ?: cs.primary
-    Box(Modifier.fillMaxWidth().background(cs.background).padding(horizontal = 16.dp).padding(top = 18.dp, bottom = 8.dp)) {
+    Box(Modifier.fillMaxWidth().ambientSlice(c.ambient).padding(horizontal = 16.dp).padding(top = 18.dp, bottom = 8.dp)) {
         AnimatedContent(c.selection.isNotEmpty(), transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(120)) }, label = "header") { selecting ->
             if (selecting) {
                 Row(
@@ -711,7 +767,7 @@ private fun ViewHeader(c: ViewContext) {
                     Text("已选 ${c.selection.size} 条", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                     IconButton(onClick = { c.onReschedule(c.selection.toList()) }) { Icon(Icons.Outlined.EventRepeat, "改期") }
                     IconButton(onClick = { c.onMove(c.selection.toList()) }) { Icon(Icons.Outlined.DriveFileMove, "移动") }
-                    IconButton(onClick = { c.vm.delete(c.selection.toList()); c.onSelection(emptySet()) }) { Icon(Icons.Outlined.Delete, "删除", tint = cs.error) }
+                    IconButton(onClick = { c.onDelete(c.selection.toList()); c.onSelection(emptySet()) }) { Icon(Icons.Outlined.Delete, "删除", tint = cs.error) }
                 }
             } else {
                 Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {

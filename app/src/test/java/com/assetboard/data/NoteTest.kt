@@ -449,6 +449,65 @@ class NoteTest {
 
     // ------------------------------------------------------------ text rules
 
+    // ------------------------------------------------------------ hand-set order
+
+    private suspend fun order() = repo.observeNotes().first().map { it.body }
+
+    @Test fun newNotesGoToTheTopAndEditsDoNotMoveThem() = f.run {
+        val a = note("甲")
+        note("乙")
+        f.now += 1_000
+        repo.append(a.id, "补充", day)
+        val s = session()
+        s.onInput("丙")
+        assertTrue(s.saveNow())
+        s.close()
+        assertEquals(listOf("丙", "乙", "甲\n\n补充"), order())
+    }
+
+    @Test fun reorderingASubsetKeepsTheOthersInPlace() = f.run {
+        val t = repo.createTopic("投资")
+        val a = note("甲", t)
+        val b = note("乙")
+        val c = note("丙", t)
+        note("丁")
+        // On screen: 丁 丙 乙 甲; the topic's view shows 丙 甲 and swaps them.
+        assertEquals(listOf("丁", "丙", "乙", "甲"), order())
+        repo.reorder(listOf(a.id, c.id))
+        assertEquals(listOf("丁", "甲", "乙", "丙"), order())
+        repo.reorder(listOf(b.id, a.id))
+        assertEquals(listOf("丁", "乙", "甲", "丙"), order())
+    }
+
+    @Test fun reorderSpreadsTiesFirst() = f.run {
+        val a = note("甲")
+        f.now += 10
+        val b = note("乙")
+        dao.setPosition(a.id, 0)
+        dao.setPosition(b.id, 0)
+        repo.reorder(listOf(a.id, b.id))
+        assertEquals(listOf("甲", "乙"), order())
+        assertEquals(2, dao.all().map { it.position }.toSet().size)
+    }
+
+    @Test fun formatFiveBackupTakesTheOrderItShowed() = f.run {
+        val a = note("甲")
+        f.now += 10
+        val b = note("乙")
+        repo.reorder(listOf(a.id, b.id))
+        val v6 = Json.parseToJsonElement(f.backup.exportJson()).jsonObject
+        val v5 = JsonObject(v6.mapValues { (k, v) -> if (k == "formatVersion") JsonPrimitive(5) else v })
+        f.backup.restore(file("v5.json", v5.toString()))
+        // Format 5 had no order of its own: most recently updated first.
+        assertEquals(listOf("乙", "甲"), order())
+    }
+
+    @Test fun extractedNotesAlwaysHaveATitleLine() {
+        val d = date("2026-10-12")
+        assertEquals("10月12日 日记摘录\n\n一段很长的日记\n\n第二段", com.assetboard.ui.notes.extractBody(" ", d, listOf("一段很长的日记", "第二段")).replace(Regex("^\\d+年"), ""))
+        assertEquals("定投\n\n一段", com.assetboard.ui.notes.extractBody(" 定投 ", d, listOf("一段")))
+    }
+
     @Test fun textRules() {
         assertEquals("标题", NoteText.title("\n  标题  \n正文"))
         assertEquals(NoteText.UNTITLED, NoteText.title(" \n "))

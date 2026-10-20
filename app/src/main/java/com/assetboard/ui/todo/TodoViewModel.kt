@@ -1,10 +1,7 @@
 package com.assetboard.ui.todo
 
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import com.assetboard.AppContainer
 import com.assetboard.data.Todo
 import com.assetboard.data.TodoData
@@ -14,18 +11,18 @@ import com.assetboard.data.UndoOutcome
 import com.assetboard.domain.Habit
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.ActionViewModel
+import com.assetboard.ui.components.UndoEvent
+import com.assetboard.ui.components.UndoMessages
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 
 /** A snackbar message, optionally with a 5-second undo. */
-data class TodoEvent(val text: String, val undo: (suspend () -> Unit)? = null)
+typealias TodoEvent = UndoEvent
 
 /** Actions shared by the todo screens. Every write carries the epoch bound at creation. */
 class TodoViewModel(private val container: AppContainer) : ActionViewModel(container) {
@@ -81,6 +78,8 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
         _events.tryEmit(TodoEvent(if (ids.size == 1) "已删除" else "已删除 ${ids.size} 条") { repo.restoreBatch(batch) })
     }
 
+    fun setImportant(t: Todo, important: Boolean) = action { repo.setImportant(t.id, important) }
+
     fun reschedule(ids: List<String>, date: LocalDate?, someday: Boolean) = action { repo.reschedule(ids, date, someday) }
 
     fun move(ids: List<String>, listId: String?) = action { repo.moveMany(ids, listId) }
@@ -132,15 +131,4 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
 
 /** Shows [TodoViewModel.events]; undo stays offered for 5 seconds. */
 @Composable
-fun TodoSnackbars(vm: TodoViewModel, host: SnackbarHostState) {
-    LaunchedEffect(vm) {
-        // A newer message replaces the one on screen.
-        vm.events.collectLatest { e ->
-            val result = withTimeoutOrNull(5_000) {
-                host.showSnackbar(e.text, actionLabel = if (e.undo != null) "撤销" else null, duration = SnackbarDuration.Indefinite, withDismissAction = e.undo == null)
-            }
-            if (result == null) host.currentSnackbarData?.dismiss()
-            if (result == SnackbarResult.ActionPerformed) vm.undo(e)
-        }
-    }
-}
+fun TodoSnackbars(vm: TodoViewModel, host: SnackbarHostState) = UndoMessages(vm.events, host, vm::undo)

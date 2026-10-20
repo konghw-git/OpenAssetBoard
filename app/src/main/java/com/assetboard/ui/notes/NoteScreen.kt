@@ -37,7 +37,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PushPin
@@ -47,14 +46,11 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
+import com.assetboard.ui.components.GlassSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -159,7 +155,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit) {
     val topicId = if (exists) note?.topicId else pendingTopic
     Scaffold(
         containerColor = cs.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { GlassSnackbarHost(snackbar) },
         topBar = {
             Row(
                 Modifier.fillMaxWidth().statusBarsPadding().padding(start = 12.dp, end = 16.dp, top = 10.dp, bottom = 8.dp),
@@ -260,12 +256,11 @@ private fun DoneButton(onClick: () -> Unit) {
     }
 }
 
-/** The note's topic; tapping it offers the others, 未归类 and a new one. */
+/** The note's topic; tapping it opens every topic in a sheet, with 未归类 and a new one. */
 @Composable
 private fun TopicChip(topics: List<NoteTopic>, topicId: String?, onPick: (String?) -> Unit, onCreate: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    var open by remember { mutableStateOf(false) }
-    var naming by rememberSaveable { mutableStateOf(false) }
+    var open by rememberSaveable { mutableStateOf(false) }
     val topic = topics.firstOrNull { it.id == topicId }
     val color = topicColor(topics, topic?.id)
     Box {
@@ -292,30 +287,15 @@ private fun TopicChip(topics: List<NoteTopic>, topicId: String?, onPick: (String
             )
             Icon(Icons.Default.ExpandMore, "选择主题", tint = if (topic != null) color else cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = RoundedCornerShape(16.dp), containerColor = cs.surfaceContainer) {
-            topics.forEachIndexed { i, t ->
-                DropdownMenuItem(
-                    text = { Text(t.name) },
-                    leadingIcon = { Box(Modifier.size(10.dp).clip(CircleShape).background(AppTheme.extra.group(i))) },
-                    trailingIcon = { if (t.id == topicId) Icon(Icons.Default.Check, null, tint = cs.primary) },
-                    onClick = { open = false; onPick(t.id) },
-                )
-            }
-            DropdownMenuItem(
-                text = { Text("未归类") },
-                leadingIcon = { Box(Modifier.size(10.dp).clip(CircleShape).background(cs.outline)) },
-                trailingIcon = { if (topic == null) Icon(Icons.Default.Check, null, tint = cs.primary) },
-                onClick = { open = false; onPick(null) },
-            )
-            HorizontalDivider(color = cs.outlineVariant)
-            DropdownMenuItem(
-                text = { Text("新建主题…", color = cs.primary) },
-                leadingIcon = { Icon(Icons.Default.Add, null, tint = cs.primary) },
-                onClick = { open = false; naming = true },
-            )
-        }
     }
-    if (naming) TopicNameDialog("新建主题", "", onDismiss = { naming = false }) { naming = false; onCreate(it) }
+    if (open) {
+        TopicSheet(
+            "放到哪个主题", topics, null, topicId ?: NotesViewModel.UNSORTED, showAll = false,
+            onPick = { k -> open = false; onPick(k.takeIf { it != NotesViewModel.UNSORTED }) },
+            onCreate = { name -> open = false; onCreate(name) },
+            onDismiss = { open = false },
+        )
+    }
 }
 
 /** One name field; the repository has the last word on what is allowed. */

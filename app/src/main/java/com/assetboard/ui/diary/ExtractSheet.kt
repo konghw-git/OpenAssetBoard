@@ -58,6 +58,9 @@ import com.assetboard.data.NoteTopic
 import com.assetboard.ui.notes.NotePicker
 import com.assetboard.ui.notes.extractBlock
 import com.assetboard.ui.notes.extractBody
+import com.assetboard.ui.notes.extractTitle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.IconButton
 import com.assetboard.ui.notes.dayLabel
 import java.time.LocalDate
 
@@ -81,7 +84,7 @@ fun ExtractSheet(
     val paragraphs = remember(text) { NoteText.paragraphs(text) }
     // A single paragraph is what there is to take; with more, the user picks.
     var picked by rememberSaveable(text) { mutableStateOf(if (paragraphs.size == 1) listOf(0) else emptyList()) }
-    var title by rememberSaveable { mutableStateOf("") }
+    var title by rememberSaveable { mutableStateOf(extractTitle(date)) }
     var choosing by rememberSaveable { mutableStateOf(false) }
     val chosen = paragraphs.filterIndexed { i, _ -> i in picked }
     val all = picked.size == paragraphs.size
@@ -121,9 +124,10 @@ fun ExtractSheet(
                     ) {
                         OutlinedTextField(
                             title, { title = it.replace('\n', ' ') },
-                            label = { Text("标题（可选）") },
-                            placeholder = { Text("不填就用第一段的第一行") },
-                            supportingText = { Text("存为新笔记时放在第一行；追加到已有笔记时不用") },
+                            label = { Text("新笔记的标题") },
+                            placeholder = { Text(extractTitle(date)) },
+                            supportingText = { Text("不填就用「${extractTitle(date)}」；追加到已有笔记时不用") },
+                            trailingIcon = if (title.isNotEmpty()) ({ IconButton(onClick = { title = "" }) { Icon(Icons.Default.Close, "清空标题") } }) else null,
                             singleLine = true,
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth(),
@@ -138,7 +142,7 @@ fun ExtractSheet(
                             Spacer(Modifier.width(6.dp))
                             Text("追加到笔记…")
                         }
-                        Button(onClick = { onSaveNew(extractBody(title, chosen)) }, enabled = chosen.isNotEmpty(), modifier = Modifier.weight(1f).height(50.dp)) {
+                        Button(onClick = { onSaveNew(extractBody(title, date, chosen)) }, enabled = chosen.isNotEmpty(), modifier = Modifier.weight(1f).height(50.dp)) {
                             Icon(Icons.AutoMirrored.Outlined.NoteAdd, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(if (chosen.isEmpty()) "存为新笔记" else "存为新笔记 · ${chosen.size}")

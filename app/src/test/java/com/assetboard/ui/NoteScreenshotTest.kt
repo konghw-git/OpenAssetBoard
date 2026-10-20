@@ -3,10 +3,7 @@ package com.assetboard.ui
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
-import androidx.compose.ui.test.hasScrollToKeyAction
-import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -14,6 +11,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
@@ -140,11 +139,35 @@ class NoteScreenshotTest {
     @Test fun noteTopics() {
         show(demo())
         openTab()
-        // The filter row scrolls; 管理 sits at its end.
-        compose.onNode(hasScrollToKeyAction() and hasAnyDescendant(hasText("全部")) and !hasAnyDescendant(hasText("定投纪律"))).performScrollToKey("manage")
+        // Every topic in a sheet, from the button that stays at the end of the row.
+        compose.onNodeWithContentDescription("全部主题").performClick()
+        waitFor("按主题看")
+        capture("56-note-topic-sheet")
         compose.onNodeWithText("管理").performClick()
         waitFor("笔记主题")
-        capture("56-note-topics")
+        capture("56b-note-topics")
+    }
+
+    @Test fun swipeActions() {
+        show(demo())
+        openTab()
+        waitFor("定投纪律")
+        // Halfway through a swipe: right shows pin and topic, left shows delete.
+        compose.onNodeWithText("火锅局的启发").performTouchInput { down(center); moveBy(Offset(60f, 0f)); moveBy(Offset(200f, 0f)); moveBy(Offset(200f, 0f)) }
+        capture("61-note-swipe-right")
+        compose.onNodeWithText("火锅局的启发").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("早睡的真正障碍").performTouchInput { down(center); moveBy(Offset(-60f, 0f)); moveBy(Offset(-200f, 0f)) }
+        capture("62-note-swipe-left")
+    }
+
+    @Test fun sortMenu() {
+        show(demo())
+        openTab()
+        waitFor("定投纪律")
+        compose.onNodeWithContentDescription("排序").performClick()
+        waitFor("自定义顺序")
+        capture("63-note-sort")
     }
 
     @Test fun drafts() {

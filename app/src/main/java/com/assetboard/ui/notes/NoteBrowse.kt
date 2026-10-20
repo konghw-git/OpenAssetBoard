@@ -300,9 +300,15 @@ fun NoteTopicsScreen(onBack: () -> Unit) {
     }
 }
 
-/** The extract's paragraphs as they will read in the note. */
-fun extractBody(title: String, paragraphs: List<String>): String =
-    listOfNotNull(title.trim().takeIf { it.isNotEmpty() }, paragraphs.joinToString("\n\n").takeIf { it.isNotEmpty() }).joinToString("\n\n")
+/** The title a note extracted from [date] gets when none is typed. */
+fun extractTitle(date: java.time.LocalDate): String = "${dayLabel(date)} 日记摘录"
+
+/**
+ * The extract as it will read in the note: always a title line of its own ([title], or
+ * [extractTitle] when it is blank), so a long paragraph never becomes the title.
+ */
+fun extractBody(title: String, date: java.time.LocalDate, paragraphs: List<String>): String =
+    (title.trim().ifEmpty { extractTitle(date) }) + "\n\n" + paragraphs.joinToString("\n\n")
 
 /** The block an append adds for [date]. */
 fun extractBlock(date: java.time.LocalDate, paragraphs: List<String>): String = NoteText.block(date.toString(), paragraphs.joinToString("\n\n"))

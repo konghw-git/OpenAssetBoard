@@ -2,6 +2,14 @@ package com.assetboard.ui.notes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material3.ripple
+import com.assetboard.ui.components.glass
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +28,6 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -114,7 +121,12 @@ fun TopicTag(name: String, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** One note in a list: title, the lines after it, its topic and when it last changed. */
+val NoteCardShape = RoundedCornerShape(22.dp)
+
+/**
+ * One note in a list, on glass: title, the lines after it, its topic and when it last changed.
+ * [lifted] while it is being dragged.
+ */
 @Composable
 fun NoteCard(
     note: Note,
@@ -123,44 +135,47 @@ fun NoteCard(
     modifier: Modifier = Modifier,
     showTopic: Boolean = true,
     preview: AnnotatedString? = null,
+    lifted: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val source = remember { MutableInteractionSource() }
     val topic = topics.firstOrNull { it.id == note.topicId }
     val body = preview ?: remember(note.body, cs.primary) { tagged(NoteText.preview(note.body), cs.primary) }
-    Surface(
-        color = cs.surfaceContainer,
-        shape = RoundedCornerShape(22.dp),
-        shadowElevation = 1.dp,
-        modifier = modifier.fillMaxWidth().pressScale(source, 0.98f),
+    val lift by animateFloatAsState(if (lifted) 1f else 0f, spring(stiffness = Spring.StiffnessMediumLow), label = "lift")
+    Column(
+        modifier
+            .fillMaxWidth()
+            .pressScale(source, 0.98f)
+            .graphicsLayer { scaleX = 1f + 0.03f * lift; scaleY = scaleX }
+            .glass(NoteCardShape, glass, elevation = 10.dp + 18.dp * lift)
+            .clip(NoteCardShape)
+            .combinedClickable(interactionSource = source, indication = ripple(), onClick = onClick, onLongClick = onLongClick)
+            .padding(start = 18.dp, end = 16.dp, top = 14.dp, bottom = 13.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Column(
-            Modifier.clickable(interactionSource = source, indication = androidx.compose.material3.ripple(), onClick = onClick).padding(start = 18.dp, end = 16.dp, top = 14.dp, bottom = 13.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    note.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (note.title == NoteText.UNTITLED) cs.outline else cs.onSurface,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                if (note.pinned) {
-                    Spacer(Modifier.width(8.dp))
-                    Icon(Icons.Filled.PushPin, "已置顶", tint = cs.secondary, modifier = Modifier.size(15.dp))
-                }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                note.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (note.title == NoteText.UNTITLED) cs.outline else cs.onSurface,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (note.pinned) {
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.Filled.PushPin, "已置顶", tint = cs.secondary, modifier = Modifier.size(15.dp))
             }
-            if (body.isNotEmpty()) {
-                Text(body, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        if (body.isNotEmpty()) {
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (showTopic && topic != null) {
+                TopicTag(topic.name, topicColor(topics, topic.id))
+                Spacer(Modifier.width(8.dp))
             }
-            Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (showTopic && topic != null) {
-                    TopicTag(topic.name, topicColor(topics, topic.id))
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text(whenLabel(note.updatedAt), style = MaterialTheme.typography.labelMedium, color = cs.outline)
-            }
+            Text(whenLabel(note.updatedAt), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant.copy(alpha = 0.7f))
         }
     }
 }
