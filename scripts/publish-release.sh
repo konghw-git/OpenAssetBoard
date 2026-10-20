@@ -12,11 +12,14 @@ VERSION="$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts)"
 TAG="v$VERSION"
 [ -n "$VERSION" ] || { echo "versionName not found" >&2; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "Working tree is not clean" >&2; exit 1; }
-gh auth status >/dev/null 2>&1 || { echo "Run 'gh auth login' first" >&2; exit 1; }
+# `gh auth status` can fail behind a proxy with a working token; an API call is the real test.
+gh api user --jq .login >/dev/null 2>&1 || { echo "Run 'gh auth login' first" >&2; exit 1; }
+REPO="$(sed -n 's/.*"UPDATE_REPO", "\\"\(.*\)\\"".*/\1/p' app/build.gradle.kts)"
+[ -n "$REPO" ] || { echo "UPDATE_REPO not found" >&2; exit 1; }
 git rev-parse "$TAG" >/dev/null 2>&1 && { echo "Tag $TAG already exists" >&2; exit 1; }
 grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "CHANGELOG.md has no [$VERSION] section" >&2; exit 1; }
 
-./gradlew assembleRelease
+./gradlew ${GRADLE_ARGS:-} assembleRelease
 APK="build/release/OpenAssetBoard-$VERSION.apk"
 mkdir -p build/release
 cp app/build/outputs/apk/release/app-release.apk "$APK"
@@ -25,6 +28,8 @@ cp app/build/outputs/apk/release/app-release.apk "$APK"
 NOTES="$(awk -v v="## [$VERSION]" 'index($0, v) == 1 { on = 1; next } on && /^## \[/ { exit } on' CHANGELOG.md)"
 
 git tag -a "$TAG" -m "$TAG"
-git push origin HEAD "$TAG"
-gh release create "$TAG" "$APK" --title "$TAG" --notes "$NOTES"
+# Over HTTPS with gh's token: works where SSH's port 22 is blocked.
+git -c credential.helper= -c credential.helper='!gh auth git-credential' push "https://github.com/$REPO.git" HEAD:main "$TAG"
+git fetch -q origin 2>/dev/null || true
+gh release create "$TAG" "$APK" --repo "$REPO" --title "$TAG" --notes "$NOTES"
 echo "Published $TAG"
