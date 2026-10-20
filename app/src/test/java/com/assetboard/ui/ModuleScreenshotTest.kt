@@ -33,10 +33,13 @@ import androidx.compose.ui.test.performTouchInput
 import com.assetboard.ui.components.DustHost
 import com.assetboard.ui.components.DustState
 import com.assetboard.ui.components.LocalDust
-import com.assetboard.ui.components.TabSwipeHandles
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.plus
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performTextReplacement
+import kotlinx.coroutines.flow.first
+import androidx.compose.ui.test.performClick
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -176,13 +179,33 @@ class ModuleScreenshotTest {
         shot("27-todo-composer", d.c) { TodoHomeScreen({}, {}, request = OpenRequest.QuickAdd) }
     }
 
-    /** The tab handles at the middle of the edges, at rest and lit while the pages move. */
-    @Test fun todoHandles() {
-        shot("20b-todo-handles", demo().c) { Box { TodoHomeScreen({}, {}, initialView = "today"); TabSwipeHandles(active = false) } }
+    /** The 每日 pill opens the habit editor; a habit's form opens under it, and so does a new one's. */
+    @Test fun habitEditor() {
+        val d = demo()
+        shot("20-todo-home", d.c) { TodoHomeScreen({}, {}, initialView = "today") }
+        compose.onNodeWithText("每日").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("每日打卡").assertExists()
+        compose.onRoot().captureRoboImage("build/screenshots/20d-habit-editor.png")
+        compose.onNodeWithText("添加打卡").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNode(hasSetTextAction()).performTextReplacement("读书")
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/20e-habit-new.png")
+        compose.onNodeWithText("添加").performClick()
+        compose.waitUntil(5_000) { runBlocking { d.c.habits.observeActive().first().size } == 6 }
     }
 
-    @Test fun todoHandlesLit() {
-        shot("20c-todo-handles-lit", demo().c) { Box { TodoHomeScreen({}, {}, initialView = "today"); TabSwipeHandles(active = true) } }
+    /** Seven habits fill the battery; the diary shows today's seven, past days their five. */
+    @Test fun sevenHabits() {
+        val d = demo()
+        runBlocking(d.c.gate.bound()) {
+            d.c.habits.add("读书", "book", 0xFF2A9D8F)
+            val m = d.c.habits.add("冥想", "meditate", 0xFFC2477A)
+            d.c.habits.toggle(d.c.habits.observeActive().first().first { it.key == m })
+        }
+        shot("20f-todo-seven-habits", d.c) { TodoHomeScreen({}, {}, initialView = "today") }
     }
 
     /** Pulling the list down opens the new-todo field; pulling again while it is open opens nothing more. */

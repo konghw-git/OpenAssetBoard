@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
 import com.assetboard.ui.components.tint
 import com.assetboard.domain.Habit
+import com.assetboard.domain.HabitDay
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -96,7 +97,6 @@ import androidx.compose.material.icons.outlined.ViewWeek
 import com.assetboard.data.Weeks
 import androidx.compose.foundation.text.contextmenu.builder.item
 import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -160,6 +160,7 @@ import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.theme.AppTheme
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 /**
  * The diary tab: today on open, always for reading first; tapping the page brings up the
@@ -175,6 +176,8 @@ fun DiaryScreen(
     onSearch: () -> Unit,
     onSettings: () -> Unit,
     onStocktake: () -> Unit = {},
+    /** The tab is the one shown, or being moved to; leaving it ends any typing. */
+    active: Boolean = true,
     /** The text is being typed in; the shell stops tab swiping meanwhile. */
     onEditingChange: (Boolean) -> Unit = {},
     onOpenNote: (String) -> Unit = {},
@@ -236,7 +239,7 @@ fun DiaryScreen(
     val cs = MaterialTheme.colorScheme
     val today = LocalDate.now()
     val streak by vm.streak.collectAsStateWithLifecycle()
-    val habits by remember(date) { container.habits.observe(date) }.collectAsStateWithLifecycle(emptySet())
+    val habits by remember(date) { container.habits.observeDay(date) }.collectAsStateWithLifecycle(null)
     val habitsSince by remember { container.habits.observeFirstDate() }.collectAsStateWithLifecycle(null)
     // From the first check on, every day shows its record, an empty one too; never the future.
     val showHabits = !date.isAfter(today) && (date == today || habitsSince?.let { !date.isBefore(it) } == true)
@@ -249,6 +252,7 @@ fun DiaryScreen(
         keyboard?.hide()
     }
     BackHandler(editing) { done() }
+    LaunchedEffect(active) { if (!active && editing) done() }
     LaunchedEffect(editing) { onEditingChange(editing) }
 
     val extractSelection: (String) -> Unit = { picked ->
@@ -334,7 +338,7 @@ fun DiaryScreen(
                         translationX = shift.value * 32.dp.toPx()
                         alpha = 1f - abs(shift.value) * 0.85f
                     }
-                    .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 48.dp),
+                    .verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 48.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // Part of the page, above the text, so it scrolls away with it.
@@ -357,7 +361,7 @@ fun DiaryScreen(
                         onExtract = extractSelection,
                         onSelection = { selected = it },
                     ) {
-                        if (showHabits) HabitRecord(habits, live = date == today)
+                        habits?.takeIf { showHabits && it.shown.isNotEmpty() }?.let { HabitRecord(it, live = date == today) }
                     }
                 }
                 if (!editing) {
@@ -405,11 +409,12 @@ fun DiaryScreen(
 }
 
 /**
- * The day's five habits at the head of the page, read from the todo tab's battery: set in a
- * different face, not part of the text, not editable here, and never counted as writing.
+ * The day's habits at the head of the page, read from the todo tab's battery: set in a different
+ * face, not part of the text, not editable here, and never counted as writing. A day shows the
+ * habits it had (see [Habit.shownOn]), so changing them later leaves past days as they were.
  */
 @Composable
-private fun HabitRecord(checked: Set<Habit>, live: Boolean) {
+private fun HabitRecord(day: HabitDay, live: Boolean) {
     val cs = MaterialTheme.colorScheme
     val face = TextStyle(fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, letterSpacing = 0.5.sp)
     Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
@@ -417,13 +422,13 @@ private fun HabitRecord(checked: Set<Habit>, live: Boolean) {
             Icon(Icons.Outlined.Lock, null, tint = cs.outline, modifier = Modifier.size(12.dp))
             Spacer(Modifier.width(4.dp))
             Text(
-                "每日指标 ${checked.size}/${Habit.entries.size}" + if (live) " · 在待办页打勾，零点后定格" else "",
+                "每日指标 ${day.done}/${day.shown.size}" + if (live) " · 在待办页打勾，零点后定格" else "",
                 style = face.copy(fontSize = 12.sp, color = cs.onSurfaceVariant),
             )
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
-            Habit.entries.forEach { h ->
-                val on = h in checked
+            day.shown.forEach { h ->
+                val on = h.key in day.checked
                 Row(
                     Modifier
                         .clip(RoundedCornerShape(50))

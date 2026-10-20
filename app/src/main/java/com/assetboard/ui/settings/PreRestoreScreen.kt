@@ -37,6 +37,8 @@ import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.ListRow
 import com.assetboard.ui.components.SectionCard
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.assetboard.ui.components.scrollIndicator
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 /** Inspect, confirm, restore: shared by "restore from backup" and the pre-restore copies. */
 open class RestoreViewModel(protected val container: AppContainer) : ActionViewModel(container) {
@@ -103,8 +105,9 @@ fun PreRestoreScreen(onBack: () -> Unit) {
             )
         },
     ) { padding ->
+        val barState = rememberLazyListState()
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
+            Modifier.fillMaxSize().padding(padding).scrollIndicator(barState), state = barState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

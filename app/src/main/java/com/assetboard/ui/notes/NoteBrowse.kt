@@ -79,6 +79,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import com.assetboard.ui.components.scrollIndicator
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 /** Full-text search over all live notes, pinned and recent first, with the hits highlighted. */
 @Composable
@@ -114,8 +116,9 @@ fun NoteSearchScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         },
     ) { padding ->
         val r = results
+        val barState = rememberLazyListState()
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
+            Modifier.fillMaxSize().padding(padding).scrollIndicator(barState), state = barState,
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -160,7 +163,8 @@ fun NotePicker(notes: List<Note>, topics: List<NoteTopic>, onBack: () -> Unit, o
                 color = cs.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
             )
         }
-        LazyColumn(Modifier.heightIn(max = 440.dp)) {
+        val barState = rememberLazyListState()
+        LazyColumn(Modifier.heightIn(max = 440.dp).scrollIndicator(barState), state = barState) {
             items(shown, key = { it.id }) { n ->
                 val topic = topics.firstOrNull { it.id == n.topicId }
                 Row(
@@ -232,7 +236,8 @@ fun NoteTopicsScreen(onBack: () -> Unit) {
             FloatingActionButton(onClick = { creating = true }) { Icon(Icons.Default.Add, "新建主题") }
         },
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val barState = rememberLazyListState()
+        LazyColumn(Modifier.fillMaxSize().padding(padding).scrollIndicator(barState), state = barState, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 Text(
                     "一篇笔记属于一个主题，或者不属于任何主题（未归类）。主题的顺序就是笔记页筛选条的顺序。",

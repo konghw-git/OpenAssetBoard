@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -53,6 +52,7 @@ import com.assetboard.ui.components.glassBarColors
 import com.assetboard.reminder.ReminderScheduler
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.SectionCard
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 private enum class Check { OK, MISSING, UNKNOWN }
 
@@ -104,7 +104,7 @@ fun ReminderGuideScreen(onBack: () -> Unit) {
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp),
+            Modifier.fillMaxSize().padding(padding).verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(

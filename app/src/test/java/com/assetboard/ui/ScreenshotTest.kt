@@ -190,6 +190,32 @@ class ScreenshotTest {
         compose.waitUntil(5_000) { !c.repository.ledger.value!!.accounts.first { it.name == "农行②" }.isDisabled }
     }
 
+    /** Pulling the assets list down past its top is 新建账户; the hint says so while armed. */
+    @Test fun overviewPullAddsAnAccount() {
+        val c = demoContainer()
+        var added = 0
+        shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, { added++ }) }
+        compose.onNode(hasScrollAction()).performTouchInput { down(center); moveBy(Offset(0f, 40f)); repeat(6) { moveBy(Offset(0f, 100f)) } }
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithText("松手新建账户").assertExists()
+        compose.onRoot().captureRoboImage("build/screenshots/01i-overview-pull-armed.png")
+        compose.onNode(hasScrollAction()).performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(1_000)
+        assert(added == 1) { "pull opened the new account page $added times" }
+    }
+
+    /** The scroll bar on the right edge, while the list moves. */
+    @Test fun overviewScrollBar() {
+        val c = demoContainer()
+        shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        compose.mainClock.autoAdvance = false
+        compose.onNode(hasScrollAction()).performTouchInput { down(center); repeat(8) { moveBy(Offset(0f, -60f)) } }
+        repeat(20) { compose.mainClock.advanceTimeByFrame() }
+        compose.onRoot().captureRoboImage("build/screenshots/01j-overview-scrollbar.png")
+        compose.onNode(hasScrollAction()).performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun overviewGoal() {
         val c = demoContainer()
         runBlocking(c.gate.bound()) { c.goal.set(c.repository.loadOnce().currentTotals().netWorth * 5 / 2) }

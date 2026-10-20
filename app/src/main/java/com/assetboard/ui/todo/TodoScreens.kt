@@ -66,7 +66,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.platform.LocalDensity
@@ -181,6 +180,8 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.cos
 import kotlin.math.sin
+import com.assetboard.ui.components.verticalScrollWithIndicator
+import com.assetboard.ui.components.scrollIndicator
 
 /** "inbox" | "today" | "upcoming" | "someday" | "logbook" | "list:<id>" */
 object ViewKey {
@@ -321,13 +322,17 @@ fun TodoHomeScreen(
         openComposer()
     }
     val pullTop = with(LocalDensity.current) { pull.pulled.toDp() }
-    val habits by remember(today) { vm.habitsOn(today) }.collectAsStateWithLifecycle(emptySet())
+    val checkedHabits by remember(today) { vm.habitsOn(today) }.collectAsStateWithLifecycle(emptySet())
+    val habits by vm.activeHabits.collectAsStateWithLifecycle(emptyList())
+    var customizing by rememberSaveable { mutableStateOf(false) }
+    if (customizing) HabitEditorSheet(habits, vm, onDismiss = { customizing = false })
     val dial: @Composable (Modifier) -> Unit = { m ->
         ViewsAndHabits(
-            d, today, selected, doneToday, todayRows.size, composer, habits,
+            d, today, selected, doneToday, todayRows.size, composer, habits, checkedHabits,
             onSelect = { selected = it },
             onHub = { if (composer) closeComposer() else openComposer() },
             onHabit = vm::toggleHabit,
+            onCustomize = { customizing = true },
             modifier = m,
         )
     }
@@ -373,7 +378,7 @@ fun TodoHomeScreen(
             if (wide) {
                 Row(Modifier.fillMaxSize()) {
                     Column(
-                        Modifier.width(340.dp).fillMaxHeight().verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = 24.dp),
+                        Modifier.width(340.dp).fillMaxHeight().verticalScrollWithIndicator(rememberScrollState()).statusBarsPadding().padding(bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         HomeTitle(today, doneToday, todayRows.size, onSettings)
@@ -386,7 +391,7 @@ fun TodoHomeScreen(
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
                             PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize().statusBarsPadding(), icon = Icons.Default.Add) {
-                                LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
+                                LazyColumn(Modifier.fillMaxSize().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
                                     viewContent(ctx)
                                 }
                             }
@@ -398,7 +403,7 @@ fun TodoHomeScreen(
                 Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
                     PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize().statusBarsPadding(), icon = Icons.Default.Add) {
                     // Keep DIAL_ITEM in step with the item order here.
-                    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
+                    LazyColumn(Modifier.fillMaxSize().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
                         item("title") { HomeTitle(today, doneToday, todayRows.size, onSettings) }
                         item("banners") { Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) { ReminderBanners(vm, onGuide) } }
                         item("views") { dial(Modifier.padding(top = 2.dp, bottom = 6.dp)) }

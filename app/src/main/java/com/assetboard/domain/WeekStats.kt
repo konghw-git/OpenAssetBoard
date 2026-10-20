@@ -41,6 +41,8 @@ data class WeekStats(
             weights: List<BodyMeasurement>,
             netWorth: List<Pair<Long, Long>>,
             zone: ZoneId = ZoneId.systemDefault(),
+            /** Every habit there is or was; the week shows the ones it had, in order. */
+            allHabits: List<Habit> = Habit.DEFAULTS,
         ): WeekStats {
             val end = start.plusDays(6)
             fun inWeek(d: LocalDate) = !d.isBefore(start) && !d.isAfter(end)
@@ -49,9 +51,10 @@ data class WeekStats(
                 today.isAfter(end) -> 7
                 else -> ChronoUnit.DAYS.between(start, today).toInt() + 1
             }
-            val habits = Habit.entries.associateWith { h ->
-                habitChecks.filter { it.habit == h.key && inWeek(LocalDate.parse(it.date)) }.map { it.date }.toSet().size
-            }
+            val days = habitChecks.filter { inWeek(LocalDate.parse(it.date)) }.groupBy { it.habit }.mapValues { (_, c) -> c.map { it.date }.toSet().size }
+            val habits = allHabits.sortedBy { it.position }
+                .filter { h -> (days[h.key] ?: 0) > 0 || (0L..6L).any { h.on(start.plusDays(it)) } }
+                .associateWith { h -> days[h.key] ?: 0 }
             val done = todos.count { t ->
                 t.deletedAt == null && (t.kind == TodoKind.ORDINARY || t.kind == TodoKind.COMPLETION) &&
                     t.completedAt?.let { inWeek(TodoViews.localDate(it, zone)) } == true

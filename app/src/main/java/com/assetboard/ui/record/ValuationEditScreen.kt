@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +61,7 @@ import com.assetboard.ui.theme.NumberStyle
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 class ValuationEditViewModel(
     private val container: AppContainer,
@@ -155,7 +155,7 @@ fun ValuationEditScreen(accountId: String, valuationId: String?, onBack: () -> U
             return@GlassScaffold
         }
         Column(
-            Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+            Modifier.fillMaxSize().padding(padding).imePadding().verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             SectionCard {

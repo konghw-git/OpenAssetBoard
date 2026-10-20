@@ -57,6 +57,7 @@ import com.assetboard.domain.Dates
 import com.assetboard.domain.Money
 import com.assetboard.ui.theme.NumberStyle
 import java.time.LocalDate
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 /** White rounded card on the paper background. */
 @Composable
@@ -224,7 +225,8 @@ fun <T> ListPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            LazyColumn(Modifier.heightIn(max = 420.dp)) {
+            val barState = rememberLazyListState()
+            LazyColumn(Modifier.heightIn(max = 420.dp).scrollIndicator(barState), state = barState) {
                 items(items) { item ->
                     Row(
                         Modifier

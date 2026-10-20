@@ -5,7 +5,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Box
@@ -42,6 +47,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,7 +61,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,9 +85,6 @@ import com.assetboard.ui.week.WeekScreen
 import com.assetboard.ui.components.DustState
 import com.assetboard.ui.components.GlassSnackbarHost
 import com.assetboard.ui.components.LocalDust
-import com.assetboard.ui.components.LocalTabSwipeZones
-import com.assetboard.ui.components.TabSwipeHandles
-import com.assetboard.ui.components.TabSwipeZones
 import com.assetboard.ui.components.backdropSource
 import com.assetboard.ui.components.rememberBackdrop
 import com.assetboard.ui.account.AccountEditScreen
@@ -106,6 +112,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.round
 
 val LocalContainer = staticCompositionLocalOf<AppContainer> { error("AppContainer not provided") }
 
@@ -183,12 +192,15 @@ private enum class Tab(val label: String, val icon: ImageVector, val selectedIco
 
 private const val PICKED_DATE = "picked_date"
 
+/** Finger speed along the bottom bar, px/s, past which a release goes on to the next tab. */
+private const val BAR_FLICK = 700f
+
 private fun optional(name: String) = navArgument(name) { type = NavType.StringType; defaultValue = "" }
 
 private fun NavBackStackEntry.arg(name: String): String? = arguments?.getString(name)?.takeIf { it.isNotEmpty() }
 
 /**
- * The app shell: four tabs in a pager (swipe or tap the bar), pages pushed over them, rebuilt from scratch after every restore
+ * The app shell: four tabs in a pager (swipe the page, tap the bar or slide along it), pages pushed over them, rebuilt from scratch after every restore
  * (fresh ViewModels, fresh epoch). Cold start always lands on the assets tab.
  */
 @Composable
@@ -266,6 +278,17 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
     val entry by nav.currentBackStackEntryAsState()
     val showBar = entry?.destination?.route == Routes.HOME
     val cs = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current
+    // A finger sliding along the bar drags the pages with it, a tab's width per page, the
+    // highlight following the finger; let go, and it settles on the nearest tab.
+    var barWidth by remember { mutableIntStateOf(0) }
+    var barDragging by remember { mutableStateOf(false) }
+    val barDrag = rememberDraggableState { d ->
+        val tab = barWidth.toFloat() / Tab.entries.size
+        val page = pager.layoutInfo.pageSize + pager.layoutInfo.pageSpacing
+        if (tab > 0f) pager.dispatchRawDelta(d * page / tab)
+    }
+    LaunchedEffect(pager.currentPage) { if (barDragging) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
 
     Scaffold(
         containerColor = cs.background,
@@ -276,7 +299,25 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                     containerColor = cs.surfaceContainer,
                     tonalElevation = 0.dp,
                     modifier = Modifier.shadow(16.dp, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.10f))
-                        .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
+                        .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                        .onSizeChanged { barWidth = it.width }
+                        .draggable(
+                            barDrag, Orientation.Horizontal,
+                            onDragStarted = {
+                                pager.stopScroll(MutatePriority.UserInput)
+                                barDragging = true
+                            },
+                            onDragStopped = { v ->
+                                barDragging = false
+                                val at = pager.currentPage + pager.currentPageOffsetFraction
+                                val to = when {
+                                    v > BAR_FLICK -> ceil(at)
+                                    v < -BAR_FLICK -> floor(at)
+                                    else -> round(at)
+                                }.toInt().coerceIn(0, Tab.entries.lastIndex)
+                                pager.animateScrollToPage(to)
+                            },
+                        ),
                 ) {
                     Tab.entries.forEach { tab ->
                         val selected = pager.currentPage == tab.ordinal
@@ -313,11 +354,8 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
             composable(Routes.HOME, enterTransition = { fadeIn() }, exitTransition = { fadeOut() }) { e ->
                 // Back from another tab goes to the assets tab first, as the bar did before.
                 BackHandler(pager.currentPage != Tab.ASSETS.ordinal) { scope.launch { pager.animateScrollToPage(Tab.ASSETS.ordinal) } }
-                // Strokes over a todo or note row work the row; the handles at the middle of the
-                // edges, and everything that is not a row, turn the tabs.
-                val zones = remember { TabSwipeZones() }
-                CompositionLocalProvider(LocalTabSwipeZones provides zones) {
-                HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !diaryEditing, key = { it }) { page ->
+                // Strokes over a row work the row; everything that is not a row turns the tabs.
+                HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !(diaryEditing && pager.currentPage == Tab.DIARY.ordinal), key = { it }) { page ->
                     when (Tab.entries[page]) {
                         Tab.ASSETS -> OverviewScreen(
                             onOpenAccount = { nav.navigate(Routes.account(it)) },
@@ -328,15 +366,12 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                             onAddAccount = { groupId -> nav.navigate(Routes.accountEdit(groupId = groupId)) },
                             onHealth = { record -> nav.navigate(Routes.health(record)) },
                         )
-                        Tab.TODO -> Box(Modifier.fillMaxSize()) {
-                            TodoHomeScreen(
-                                onSettings = settings,
-                                onGuide = { nav.navigate(Routes.REMINDER_GUIDE) },
-                                request = todoRequest,
-                                onRequestHandled = { todoRequest = null },
-                            )
-                            TabSwipeHandles(pager.isScrollInProgress)
-                        }
+                        Tab.TODO -> TodoHomeScreen(
+                            onSettings = settings,
+                            onGuide = { nav.navigate(Routes.REMINDER_GUIDE) },
+                            request = todoRequest,
+                            onRequestHandled = { todoRequest = null },
+                        )
                         Tab.DIARY -> {
                             val picked by e.savedStateHandle.getStateFlow<String?>(PICKED_DATE, null).collectAsStateWithLifecycle()
                             DisposableEffect(Unit) { onDispose { diaryEditing = false } }
@@ -347,23 +382,22 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                                 onSearch = { nav.navigate(Routes.DIARY_SEARCH) },
                                 onSettings = settings,
                                 onStocktake = { nav.navigate(Routes.stocktake()) },
+                                // Leaving the tab ends the typing first; the focused text keeps the
+                                // page composed, so its own dispose would never come.
+                                active = pager.targetPage == Tab.DIARY.ordinal,
                                 onEditingChange = { diaryEditing = it },
                                 onOpenNote = openNote,
                                 onOpenWeek = openWeek,
                             )
                         }
-                        Tab.NOTES -> Box(Modifier.fillMaxSize()) {
-                            NotesScreen(
-                                onOpen = openNote,
-                                onNew = { topicId -> nav.navigate(Routes.note(topicId = topicId)) },
-                                onSearch = { nav.navigate(Routes.NOTE_SEARCH) },
-                                onTopics = { nav.navigate(Routes.NOTE_TOPICS) },
-                                onSettings = settings,
-                            )
-                            TabSwipeHandles(pager.isScrollInProgress)
-                        }
+                        Tab.NOTES -> NotesScreen(
+                            onOpen = openNote,
+                            onNew = { topicId -> nav.navigate(Routes.note(topicId = topicId)) },
+                            onSearch = { nav.navigate(Routes.NOTE_SEARCH) },
+                            onTopics = { nav.navigate(Routes.NOTE_TOPICS) },
+                            onSettings = settings,
+                        )
                     }
-                }
                 }
             }
             val pickDate: (java.time.LocalDate) -> Unit = { d ->

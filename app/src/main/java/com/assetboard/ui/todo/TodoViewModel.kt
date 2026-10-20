@@ -38,9 +38,21 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
 
     fun toggle(t: Todo) = if (TodoViews.isOpen(t)) complete(t) else uncomplete(t)
 
-    fun habitsOn(date: LocalDate): Flow<Set<Habit>> = container.habits.observe(date)
+    /** The keys of the habits checked on [date]. */
+    fun habitsOn(date: LocalDate): Flow<Set<String>> = container.habits.observe(date)
+
+    /** The habits checked off from today on, in order. */
+    val activeHabits: Flow<List<Habit>> = container.habits.observeActive()
 
     fun toggleHabit(h: Habit) = action { container.habits.toggle(h) }
+
+    fun addHabit(label: String, icon: String, color: Long, onDone: () -> Unit = {}) = action(onDone) { container.habits.add(label, icon, color) }
+
+    fun updateHabit(key: String, label: String, icon: String, color: Long, onDone: () -> Unit = {}) = action(onDone) { container.habits.update(key, label, icon, color) }
+
+    fun reorderHabits(keys: List<String>) = action { container.habits.reorder(keys) }
+
+    fun removeHabit(key: String, onDone: () -> Unit = {}) = action(onDone) { container.habits.remove(key) }
 
     fun toggleChecklist(itemId: String) = action { repo.toggleChecklist(itemId) }
 

@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.NoteAdd
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
@@ -62,6 +61,7 @@ import com.assetboard.ui.notes.extractBody
 import com.assetboard.ui.notes.ExtractOrigin
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.IconButton
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 /**
  * Copies parts of a day's diary (or a week's review) into a note; the original stays as it is. Read-only apart
@@ -120,7 +120,7 @@ fun ExtractSheet(
                         }
                     }
                     Column(
-                        Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(top = 12.dp, bottom = 12.dp),
+                        Modifier.weight(1f, fill = false).verticalScrollWithIndicator(rememberScrollState()).padding(top = 12.dp, bottom = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         OutlinedTextField(

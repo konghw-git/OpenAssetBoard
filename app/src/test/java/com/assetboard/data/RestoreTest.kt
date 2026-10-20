@@ -8,6 +8,7 @@ import com.assetboard.domain.todo.RepeatType
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -181,6 +182,26 @@ class RestoreTest {
         assertEquals(before, counts())
         // One copy, overwritten: it now holds the data from before the second restore.
         assertEquals(1, f.backup.preRestoreCopies().size)
+    }
+
+    @Test fun r5b_customHabitsComeBackAndOldBackupsBringTheFive() = f.run {
+        val read = f.habits.add("读书", "book", 0xFF2A9D8F)
+        f.habits.toggle(f.habits.observeActive().first().first { it.key == read })
+        f.habits.remove(com.assetboard.domain.Habit.DIET.key)
+        val exported = f.backup.exportJson()
+        val labels = suspend { f.habits.observeActive().first().map { it.label } }
+        val before = labels()
+        f.habits.add("冥想", "meditate", 0xFF7A62C2)
+        f.backup.restore(file("habits.json", exported))
+        assertEquals(before, labels())
+        assertEquals(listOf(read), f.db.habitDao().all().map { it.habit })
+        // A backup from before habits could change has no list: the five built in come back.
+        val old = JsonObject(codec.parseToJsonElement(exported).jsonObject.filterKeys { it != "habits" && it != "habitChecks" })
+        f.backup.restore(file("habits-old.json", old.toString()))
+        assertEquals(listOf("吃补剂", "健身", "控制饮食", "喝够水", "早睡早起"), labels())
+        // And a check of a habit the backup does not know is refused.
+        val stray = JsonObject(codec.parseToJsonElement(exported).jsonObject.filterKeys { it != "habits" })
+        assertTrue(runCatching { f.backup.restore(file("habits-stray.json", stray.toString())) }.isFailure)
     }
 
     @Test fun r6_roundTripKeepsEverythingButTheEpoch() = f.run {

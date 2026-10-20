@@ -6,6 +6,41 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-10-21
+
+### Added
+
+- **Daily habits are yours to set.** The battery's 每日 pill opens them: rename one, give it
+  another icon or color, move it up or down, add new ones (up to seven) or take one off. A new
+  habit counts from the day it is added and a removed one stays in the days it was part of, so
+  the diary and the weekly review show each day with the habits it had. Backups carry them;
+  older backups bring back the five built in.
+- **Pull the assets list down for a new account**, as the + in the header does.
+- **Slide along the bottom bar** to turn the tabs: the pages follow the finger, a tab's width per
+  page, and settle on the nearest tab, or the next one on a flick.
+- A slim scroll bar on the right edge of every scrolling page and sheet, while it moves and for a
+  moment after.
+
+### Changed
+
+- A todo's checklist hangs from its check circle as a thread: each item is a node on a line
+  running down from it, filling with the primary color as items are done. The column that was
+  empty under the circle now carries the line.
+
+### Removed
+
+- The tab handles on the screen edges. A swipe on a row is the row's and anywhere else turns the
+  tabs.
+
+### Fixed
+
+- A swipe on a row could also drag the pages behind it, and the two would fight, shaking the
+  screen. The pager takes back a stroke as soon as one event of it goes unclaimed, with all the
+  distance since the touch; rows now hold on to every event of a stroke they have taken, the
+  still and the purely vertical ones too, until the finger lifts.
+- Leaving the diary while typing (by the bar, say) ends the typing first; before, the tabs
+  stayed unswipeable afterwards.
+
 ## [0.9.1] - 2026-10-21
 
 ### Added

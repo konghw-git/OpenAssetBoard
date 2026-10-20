@@ -109,6 +109,8 @@ import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToLong
+import com.assetboard.ui.components.scrollIndicator
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 /** The profile and every record, oldest first. */
 data class HealthState(val profile: HealthProfile?, val records: List<BodyMeasurement>) {
@@ -263,8 +265,9 @@ private fun HealthContent(
     var range by rememberSaveable { mutableStateOf(HealthRange.D90) }
     var metric by rememberSaveable { mutableStateOf(HealthMetric.WEIGHT) }
     val latest = s.latest
+    val barState = rememberLazyListState()
     LazyColumn(
-        modifier.fillMaxSize(),
+        modifier.fillMaxSize().scrollIndicator(barState), state = barState,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 40.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {

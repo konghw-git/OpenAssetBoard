@@ -70,6 +70,8 @@ import com.assetboard.ui.components.pressScale
 import com.assetboard.ui.theme.AppTheme
 import com.assetboard.ui.theme.NumberStyle
 import kotlin.math.abs
+import com.assetboard.ui.components.scrollIndicator
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 /**
  * Net worth over a period: the headline change, the net worth line, assets against debts per
@@ -95,8 +97,9 @@ fun TrendScreen(onBack: () -> Unit, onOpenStocktake: (String) -> Unit, onNewStoc
             )
         },
     ) { padding ->
+        val barState = rememberLazyListState()
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
+            Modifier.fillMaxSize().padding(padding).scrollIndicator(barState), state = barState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {

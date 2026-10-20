@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
@@ -126,6 +125,8 @@ import java.time.LocalDate
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import com.assetboard.ui.components.verticalScrollWithIndicator
+import com.assetboard.ui.components.scrollIndicator
 
 /** How the list is ordered. Only the hand-set order can be changed by dragging. */
 enum class NoteSort(val label: String, val note: String) {
@@ -308,7 +309,7 @@ fun NotesScreen(
                 val list = all
                 PullToCreateBox(pull, "下拉新建笔记", "松手新建笔记", Modifier.fillMaxSize().padding(padding)) {
                 LazyColumn(
-                    Modifier.fillMaxSize(),
+                    Modifier.fillMaxSize().scrollIndicator(listState),
                     state = listState,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = with(LocalDensity.current) { pull.pulled.toDp() }, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -707,7 +708,7 @@ private fun DraftsSheet(
     var discarding by remember { mutableStateOf<NoteDraft?>(null) }
     GlassSheet(onDismissRequest = onDismiss) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp).navigationBarsPadding(),
+            Modifier.fillMaxWidth().verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("未处理的草稿", style = MaterialTheme.typography.titleLarge)

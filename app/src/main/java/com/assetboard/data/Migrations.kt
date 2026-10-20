@@ -49,6 +49,16 @@ object Migrations {
         }
     }
 
+    /** Habits become rows; the table starts empty, which stands for the five built in (see [HabitRepository]). */
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(V7_HABITS)
+        }
+    }
+
+    private const val V7_HABITS =
+        "CREATE TABLE IF NOT EXISTS `habits` (`key` TEXT NOT NULL, `label` TEXT NOT NULL, `icon` TEXT NOT NULL, `color` INTEGER NOT NULL, `position` INTEGER NOT NULL, `added_on` TEXT, `removed_on` TEXT, PRIMARY KEY(`key`))"
+
     private val V6_TABLES = listOf(
         "CREATE TABLE IF NOT EXISTS `weekly_reviews` (`id` TEXT NOT NULL, `week_start` TEXT NOT NULL, `body` TEXT NOT NULL, `body_rev` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `delete_batch` TEXT, PRIMARY KEY(`id`))",
         "CREATE INDEX IF NOT EXISTS `index_weekly_reviews_week_start` ON `weekly_reviews` (`week_start`)",

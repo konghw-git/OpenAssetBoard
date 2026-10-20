@@ -16,7 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -114,6 +113,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.LocalTime
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 data class DetailState(
     val todo: Todo?,
@@ -261,7 +261,7 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
                 }
             }
             Column(
-                Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp),
+                Modifier.fillMaxWidth().weight(1f, fill = false).verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 // Title and notes
@@ -598,7 +598,7 @@ fun RepeatDialog(current: RepeatRule?, plan: LocalDate, occurrenceCount: Int, on
         onDismissRequest = onDismiss,
         title = { Text("重复") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.verticalScrollWithIndicator(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     RepeatType.entries.forEach { rt -> FilterChip(selected = type == rt, onClick = { type = rt }, label = { Text(rt.label) }) }
                 }

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.Button
@@ -48,6 +47,7 @@ import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.DatePickDialog
 import com.assetboard.ui.components.SelectField
 import java.time.LocalDate
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 /**
  * One screen: weight (required), body fat (optional), the day (today unless changed, never the
@@ -97,7 +97,7 @@ fun HealthEditSheet(
 
     GlassSheet(onDismissRequest = onDismiss) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).imePadding().navigationBarsPadding(),
+            Modifier.fillMaxWidth().verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).imePadding().navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

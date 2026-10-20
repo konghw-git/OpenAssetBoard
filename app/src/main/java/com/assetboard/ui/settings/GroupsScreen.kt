@@ -62,6 +62,8 @@ import com.assetboard.ui.components.ListRow
 import com.assetboard.ui.components.RowDivider
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.theme.AppTheme
+import com.assetboard.ui.components.scrollIndicator
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 class GroupsViewModel(private val container: AppContainer) : ActionViewModel(container) {
     private val repo = container.repository
@@ -98,7 +100,8 @@ fun GroupsScreen(onBack: () -> Unit) {
             FloatingActionButton(onClick = { creating = true }) { Icon(Icons.Default.Add, "新建分组") }
         },
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp)) {
+        val barState = rememberLazyListState()
+        LazyColumn(Modifier.fillMaxSize().padding(padding).scrollIndicator(barState), state = barState, contentPadding = PaddingValues(16.dp)) {
             item {
                 SectionCard {
                     groups.forEachIndexed { i, g ->

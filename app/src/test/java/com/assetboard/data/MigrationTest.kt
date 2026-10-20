@@ -108,7 +108,7 @@ class MigrationTest {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6)
+            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7)
             .allowMainThreadQueries()
             .build()
         try {
@@ -225,11 +225,24 @@ class MigrationTest {
         }
     }
 
+    @Test fun migrationSixToSevenAddsAnEmptyHabitTableAndKeepsTheChecks() {
+        helper.createDatabase(name, 6).use { db ->
+            db.put("habit_checks", "date" to "2026-10-20", "habit" to "workout", "checked_at" to 1L)
+        }
+        helper.runMigrationsAndValidate(name, 7, true, Migrations.MIGRATION_6_7).use { db ->
+            // Empty stands for the five built in; the old checks keep their keys.
+            assertTrue(db.dump("habits").isEmpty())
+            assertEquals(1, db.dump("habit_checks").size)
+            db.put("habits", "key" to "k1", "label" to "读书", "icon" to "book", "color" to 0xFF3D8FD1, "position" to 5, "added_on" to "2026-10-21", "removed_on" to null)
+            assertEquals(1, db.dump("habits").size)
+        }
+    }
+
     @Test fun databaseAtThreeOpensWithRoomAfterTheHealthMigration() = runBlocking {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6)
+            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7)
             .allowMainThreadQueries()
             .build()
         try {

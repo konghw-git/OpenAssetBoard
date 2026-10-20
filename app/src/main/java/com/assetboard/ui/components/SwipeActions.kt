@@ -9,7 +9,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,8 +48,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -91,8 +88,7 @@ private const val FLING = 900f
  * - right reveals [actions]; swiping on past the threshold runs the first one.
  *
  * An open row closes when another opens, when it is tapped, or when [group] closes all. A stroke
- * on a row is the row's; the tabs turn from anywhere else, and from the [TabSwipeZones] over the
- * list (see [rowDrag]). A row inside another (a checklist item in its todo) takes only the
+ * on a row is the row's; the tabs turn from anywhere else (see [rowDrag]). A row inside another (a checklist item in its todo) takes only the
  * directions it has something for; the rest go to the outer row. [compact] is for short rows:
  * the delete button shows its icon only. [deleteLabel] and [deleteIcon] name what a left swipe
  * does when it is not quite a delete (an account with history is disabled instead).
@@ -295,8 +291,12 @@ private fun ActionButton(label: String, icon: ImageVector, color: Color, shape: 
  * A row's sideways drag, shared with the scrollers around it. Nothing is taken until the stroke
  * leaves touch slop; then the row takes it when it [claims] the direction, or when the row is
  * [open] already and the stroke closes it. Otherwise the stroke is left alone: a direction the
- * row has nothing for goes to an outer row, a vertical stroke to the list. A stroke that starts
- * in one of the [LocalTabSwipeZones] is never the row's: it turns the tabs.
+ * row has nothing for goes to an outer row, a vertical stroke to the list.
+ *
+ * Once taken, every event of the stroke is consumed until the finger lifts, the still and the
+ * purely vertical ones too. The pager and the list wait for a child to let go of a gesture and
+ * pick it up with all the distance moved since the touch; a single event left over would turn
+ * the tabs under a row that is moving, and the two would fight.
  */
 private fun Modifier.rowDrag(
     enabled: Boolean,
@@ -314,14 +314,10 @@ private fun Modifier.rowDrag(
     val start by rememberUpdatedState(onStart)
     val delta by rememberUpdatedState(onDelta)
     val stop by rememberUpdatedState(onStop)
-    val zones = LocalTabSwipeZones.current
-    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    onGloballyPositioned { coords = it }.pointerInput(Unit) {
+    pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             if (!on) return@awaitEachGesture
-            val at = coords?.takeIf { it.isAttached }?.localToRoot(down.position)
-            if (zones != null && at != null && zones.contains(at)) return@awaitEachGesture
             val slop = viewConfiguration.touchSlop
             val tracker = VelocityTracker().apply { addPointerInputChange(down) }
             var moved = Offset.Zero
@@ -344,12 +340,21 @@ private fun Modifier.rowDrag(
                 awaitPointerEvent(PointerEventPass.Final)
                 if (c.isConsumed) return@awaitEachGesture
             }
-            val ended = horizontalDrag(down.id) { c ->
+            var lifted = false
+            while (true) {
+                val event = awaitPointerEvent()
+                // Every pointer of the stroke, so a second finger cannot hand it to the pager.
+                event.changes.forEach { it.consume() }
+                val c = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!c.pressed) {
+                    lifted = true
+                    break
+                }
                 tracker.addPointerInputChange(c)
-                delta(c.positionChange().x)
-                c.consume()
+                val dx = c.position.x - c.previousPosition.x
+                if (dx != 0f) delta(dx)
             }
-            stop(if (ended) tracker.calculateVelocity().x else 0f)
+            stop(if (lifted) tracker.calculateVelocity().x else 0f)
         }
     }
 }

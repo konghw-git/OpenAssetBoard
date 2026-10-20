@@ -112,10 +112,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.platform.LocalDensity
+import com.assetboard.ui.components.rememberPullToCreate
+import com.assetboard.ui.components.PullToCreateBox
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Add
@@ -189,6 +191,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import com.assetboard.ui.components.verticalScrollWithIndicator
+import com.assetboard.ui.components.scrollIndicator
 
 data class AccountRowUi(
     val account: Account,
@@ -331,6 +335,9 @@ fun OverviewScreen(
     BackHandler(editing != null) { editing = null }
     val listState = rememberLazyListState()
     LaunchedEffect(listState.isScrollInProgress) { if (listState.isScrollInProgress) swipe.closeAll() }
+    // Pulling the list down past its top is the same as 新建账户 in the header.
+    val pull = rememberPullToCreate(enabled = editing == null) { swipe.closeAll(); onAddAccount(null) }
+    val pullTop = with(LocalDensity.current) { pull.pulled.toDp() }
     val rows = RowActions(
         swipe = swipe,
         editing = editing,
@@ -375,13 +382,15 @@ fun OverviewScreen(
                 else -> BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                     if (maxWidth >= 600.dp) {
                         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            LazyColumn(Modifier.weight(1.1f).imePadding(), state = listState, contentPadding = PaddingValues(start = 16.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                item { Box(Modifier.appear(0)) { hero(s) } }
-                                item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(s, health, { cashOpen = true }, onHealth) } }
-                                accountSections(s, onOpenAccount, onAddAccount, rows, first = 2)
+                            PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.weight(1.1f), icon = Icons.Default.Add) {
+                                LazyColumn(Modifier.fillMaxSize().imePadding().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(start = 16.dp, top = pullTop, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    item { Box(Modifier.appear(0)) { hero(s) } }
+                                    item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(s, health, { cashOpen = true }, onHealth) } }
+                                    accountSections(s, onOpenAccount, onAddAccount, rows, first = 2)
+                                }
                             }
                             Column(
-                                Modifier.weight(0.9f).verticalScroll(rememberScrollState()).padding(end = 16.dp, bottom = 32.dp),
+                                Modifier.weight(0.9f).verticalScrollWithIndicator(rememberScrollState()).padding(end = 16.dp, bottom = 32.dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp),
                             ) {
                                 TrendCard(s, onTrend)
@@ -389,15 +398,17 @@ fun OverviewScreen(
                             }
                         }
                     } else {
-                        LazyColumn(
-                            Modifier.fillMaxSize().imePadding(),
-                            state = listState,
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            item { Box(Modifier.appear(0)) { hero(s) } }
-                            item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(s, health, { cashOpen = true }, onHealth) } }
-                            accountSections(s, onOpenAccount, onAddAccount, rows, first = 2)
+                        PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize(), icon = Icons.Default.Add) {
+                            LazyColumn(
+                                Modifier.fillMaxSize().imePadding().scrollIndicator(listState),
+                                state = listState,
+                                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = pullTop, bottom = 32.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                            ) {
+                                item { Box(Modifier.appear(0)) { hero(s) } }
+                                item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(s, health, { cashOpen = true }, onHealth) } }
+                                accountSections(s, onOpenAccount, onAddAccount, rows, first = 2)
+                            }
                         }
                     }
                 }
@@ -406,6 +417,9 @@ fun OverviewScreen(
         }
     }
 }
+
+private const val PULL_HINT = "下拉新建账户"
+private const val PULL_ARMED = "松手新建账户"
 
 private fun LazyListScope.accountSections(s: OverviewState, onOpenAccount: (String) -> Unit, onAddAccount: (String?) -> Unit, rows: RowActions, first: Int) {
     item(key = "accounts") { Box(Modifier.appear(first)) { AccountsCard(s, onOpenAccount, onAddAccount, rows) } }
@@ -1271,7 +1285,7 @@ private fun CashSheet(s: OverviewState, onOpenAccount: (String) -> Unit, onDismi
     val l = s.liquidity
     val colorOf = remember(s) { s.groups.flatMap { g -> g.rows.map { it.account.id to g.group.colorIndex } }.toMap() }
     GlassSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding()) {
+        Column(Modifier.fillMaxWidth().verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding()) {
             Text("可用现金", style = MaterialTheme.typography.titleLarge)
             Text("手里随时能用的钱，不含基金投资和锁定资金", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
             Spacer(Modifier.height(16.dp))

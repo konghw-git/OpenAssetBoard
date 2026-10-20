@@ -44,6 +44,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.runtime.key
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -95,7 +97,7 @@ import com.assetboard.domain.Habit
 import com.assetboard.domain.todo.TodoView
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.components.habitCharge
-import com.assetboard.ui.components.icon
+import com.assetboard.ui.components.iconVector
 import com.assetboard.ui.components.pressScale
 import com.assetboard.ui.components.tint
 import com.assetboard.ui.theme.AppTheme
@@ -315,15 +317,18 @@ internal fun DialHub(done: Int, total: Int, open: Boolean, modifier: Modifier, o
 // ---------------------------------------------------------------- the habit battery
 
 /**
- * The five daily habits as the cells of an upright battery. Each tap charges a cell; the charge
- * color climbs from amber to green as more are done, and a full battery lights its cap.
+ * The daily habits as the cells of an upright battery. Each tap charges a cell; the charge color
+ * climbs from amber to green as more are done, and a full battery lights its cap. The 每日 pill
+ * in the corner opens [onCustomize]. Fewer habits keep their cells at a comfortable height
+ * instead of stretching them over the whole body.
  */
 @Composable
-internal fun HabitBattery(checked: Set<Habit>, onToggle: (Habit) -> Unit, modifier: Modifier = Modifier) {
+internal fun HabitBattery(habits: List<Habit>, checked: Set<String>, onToggle: (Habit) -> Unit, onCustomize: () -> Unit, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
-    val level = checked.size
-    val full = level == Habit.entries.size
-    val charge by animateColorAsState(habitCharge(level), tween(400), label = "charge")
+    val level = habits.count { it.key in checked }
+    val total = habits.size
+    val full = total > 0 && level == total
+    val charge by animateColorAsState(habitCharge(level, total), tween(400), label = "charge")
     val flow = rememberInfiniteTransition(label = "battery")
     val shimmer by flow.animateFloat(-0.4f, 1.4f, infiniteRepeatable(tween(2_200, easing = LinearEasing)), label = "shimmer")
     val glow by flow.animateFloat(0.35f, 1f, infiniteRepeatable(tween(1_100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "glow")
@@ -331,13 +336,13 @@ internal fun HabitBattery(checked: Set<Habit>, onToggle: (Habit) -> Unit, modifi
     val body = RoundedCornerShape(18.dp)
     Column(modifier) {
         // The count and the name sit above the cap's height, clear of the body and its shadow.
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             AnimatedVisibility(level > 0, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
                 Icon(Icons.Rounded.Bolt, null, tint = charge, modifier = Modifier.size(14.dp))
             }
-            Text("$level/${Habit.entries.size}", fontSize = ringSp(12f), fontWeight = FontWeight.SemiBold, color = if (level > 0) charge else cs.onSurfaceVariant)
+            Text("$level/$total", fontSize = ringSp(12f), fontWeight = FontWeight.SemiBold, color = if (level > 0) charge else cs.onSurfaceVariant)
             Spacer(Modifier.weight(1f))
-            Text(if (full) "满格" else "每日", fontSize = ringSp(12f), color = cs.onSurfaceVariant)
+            CustomizePill(if (full) "满格" else "每日", if (full) charge else cs.onSurfaceVariant, onCustomize)
         }
         Spacer(Modifier.height(5.dp))
         Box(
@@ -353,12 +358,38 @@ internal fun HabitBattery(checked: Set<Habit>, onToggle: (Habit) -> Unit, modifi
                 .clip(body)
                 .border(2.dp, edge, body)
                 .padding(5.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
         ) {
-            Habit.entries.forEach { h ->
-                HabitCell(h, h in checked, charge, shimmer, Modifier.weight(1f).fillMaxWidth()) { onToggle(h) }
+            habits.forEach { h ->
+                key(h.key) {
+                    HabitCell(h, h.key in checked, charge, shimmer, Modifier.weight(1f, fill = false).fillMaxWidth().height(MaxCell)) { onToggle(h) }
+                }
             }
         }
+    }
+}
+
+/** The tallest a battery cell gets, when there are only a few. */
+private val MaxCell = 40.dp
+
+/** 每日 (or 满格) with a tune mark, as a small pill: tapping it opens the habit editor. */
+@Composable
+private fun CustomizePill(text: String, color: Color, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val source = remember { MutableInteractionSource() }
+    Row(
+        Modifier
+            .pressScale(source, 0.92f)
+            .clip(RoundedCornerShape(50))
+            .background(cs.onSurface.copy(alpha = 0.06f))
+            .border(1.dp, cs.outlineVariant.copy(alpha = 0.7f), RoundedCornerShape(50))
+            .clickable(interactionSource = source, indication = null, onClickLabel = "自定义每日打卡", onClick = onClick)
+            .padding(start = 8.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, fontSize = ringSp(12f), color = color, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.width(2.dp))
+        Icon(Icons.Rounded.Tune, null, tint = color, modifier = Modifier.size(12.dp))
     }
 }
 
@@ -399,7 +430,7 @@ private fun HabitCell(h: Habit, on: Boolean, charge: Color, shimmer: Float, modi
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val fg = lerp(cs.onSurface, Color.White, level)
-        Icon(h.icon, null, tint = lerp(h.tint, Color.White, level), modifier = Modifier.size(15.dp))
+        Icon(h.iconVector, null, tint = lerp(h.tint, Color.White, level), modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
         Text(h.label, fontSize = 12.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, color = fg, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
         Box(
@@ -424,17 +455,19 @@ internal fun ViewsAndHabits(
     doneToday: Int,
     totalToday: Int,
     composing: Boolean,
-    habits: Set<Habit>,
+    habits: List<Habit>,
+    checked: Set<String>,
     onSelect: (String) -> Unit,
     onHub: () -> Unit,
     onHabit: (Habit) -> Unit,
+    onCustomize: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         val ring = (maxWidth * 0.58f).coerceAtMost(236.dp)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ViewRing(d, today, selected, doneToday, totalToday, composing, onSelect, onHub, ring)
-            HabitBattery(habits, onHabit, Modifier.weight(1f).height(ring).padding(vertical = 2.dp))
+            HabitBattery(habits, checked, onHabit, onCustomize, Modifier.weight(1f).height(ring).padding(vertical = 2.dp))
         }
     }
 }

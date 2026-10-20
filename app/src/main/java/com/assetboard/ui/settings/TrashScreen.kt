@@ -54,6 +54,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import com.assetboard.ui.components.scrollIndicator
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 class TrashViewModel(private val container: AppContainer) : ActionViewModel(container) {
     private val todos = container.todos
@@ -154,8 +156,9 @@ fun TrashScreen(onBack: () -> Unit) {
             }
             return@GlassScaffold
         }
+        val barState = rememberLazyListState()
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
+            Modifier.fillMaxSize().padding(padding).scrollIndicator(barState), state = barState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

@@ -81,6 +81,8 @@ import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
 import com.assetboard.ui.theme.AppTheme
 import com.assetboard.ui.theme.NumberStyle
+import com.assetboard.ui.components.scrollIndicator
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 enum class EntryType { BASELINE, STOCKTAKE, VALUATION, FLOW }
 
@@ -228,8 +230,9 @@ fun AccountDetailScreen(
             }
             return@GlassScaffold
         }
+        val barState = rememberLazyListState()
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
+            Modifier.fillMaxSize().padding(padding).scrollIndicator(barState), state = barState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {

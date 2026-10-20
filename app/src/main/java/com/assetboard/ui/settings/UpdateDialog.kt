@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -34,6 +33,7 @@ import com.assetboard.data.AppUpdater
 import com.assetboard.data.Release
 import com.assetboard.data.UpdateState
 import com.assetboard.ui.LocalContainer
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 /** What [UpdateState] reads as in the settings row. */
 fun updateSummary(s: UpdateState, current: String): String = when (s) {
@@ -129,7 +129,7 @@ private fun UpdateBody(s: UpdateState, updater: AppUpdater) {
                 Text(
                     notes,
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 10.dp).heightIn(max = 260.dp).verticalScroll(rememberScrollState()),
+                    modifier = Modifier.padding(top = 10.dp).heightIn(max = 260.dp).verticalScrollWithIndicator(rememberScrollState()),
                 )
             }
             Text("覆盖安装，数据都会保留。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp))

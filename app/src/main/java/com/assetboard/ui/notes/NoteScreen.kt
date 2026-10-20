@@ -35,7 +35,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -102,6 +101,7 @@ import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.HeaderAction
 import com.assetboard.ui.theme.AppTheme
 import java.time.LocalDate
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 /**
  * One note, on its own page above the tabs. An existing note opens for reading and a tap brings
@@ -196,7 +196,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
             return@GlassScaffold
         }
         Column(
-            Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState())
+            Modifier.fillMaxSize().padding(padding).imePadding().verticalScrollWithIndicator(rememberScrollState())
                 .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {

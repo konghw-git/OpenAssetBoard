@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
@@ -94,6 +93,7 @@ import com.assetboard.ui.components.SectionHeader
 import com.assetboard.ui.theme.AppTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 class SettingsViewModel(container: AppContainer) : RestoreViewModel(container) {
     val message = MutableStateFlow<String?>(null)
@@ -178,7 +178,7 @@ fun SettingsScreen(
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp),
+            Modifier.fillMaxSize().padding(padding).verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             AboutCard(BuildConfigInfo.versionName(context), lastBackup, onBackup = { if (tree == null) pickTree.launch(null) else vm.backupNow() })

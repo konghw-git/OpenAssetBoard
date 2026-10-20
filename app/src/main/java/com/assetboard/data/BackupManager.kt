@@ -43,6 +43,8 @@ data class BackupFile(
     val diaryEntries: List<DiaryEntry> = emptyList(),
     val diaryDrafts: List<DiaryDraft> = emptyList(),
     val habitChecks: List<HabitCheck> = emptyList(),
+    /** Empty in backups from before habits could change, and while the five built in are unedited. */
+    val habits: List<com.assetboard.domain.Habit> = emptyList(),
     val healthProfile: HealthProfile? = null,
     val bodyMeasurements: List<BodyMeasurement> = emptyList(),
     val noteTopics: List<NoteTopic> = emptyList(),
@@ -143,6 +145,7 @@ class BackupManager(
                 diaryEntries = d.all(),
                 diaryDrafts = d.allDrafts(),
                 habitChecks = db.habitDao().all(),
+                habits = db.habitDao().habits(),
                 healthProfile = db.healthDao().profile(),
                 bodyMeasurements = db.healthDao().all(),
                 noteTopics = db.noteDao().allTopics(),
@@ -262,8 +265,10 @@ class BackupManager(
         unique(file.flows, { it.id }, "流水")
         unique(file.snapshotItems, { it.snapshotId to it.accountId }, "盘点明细")
         unique(file.habitChecks, { it.date to it.habit }, "每日指标")
+        unique(file.habits, { it.key }, "每日打卡")
+        val habitKeys = file.habits.ifEmpty { com.assetboard.domain.Habit.DEFAULTS }.map { it.key }.toSet()
         for (h in file.habitChecks) {
-            ensure(com.assetboard.domain.Habit.of(h.habit) != null) { "备份里有未知的每日指标「${h.habit}」" }
+            ensure(h.habit in habitKeys) { "备份里有未知的每日指标「${h.habit}」" }
             ensure(runCatching { java.time.LocalDate.parse(h.date) }.isSuccess) { "备份里有日期无效的每日指标" }
         }
         unique(file.bodyMeasurements, { it.id }, "健康记录")
@@ -375,6 +380,7 @@ class BackupManager(
         todo.clearLists()
         d.clear()
         db.habitDao().clear()
+        db.habitDao().clearHabits()
         db.healthDao().clearProfile()
         db.healthDao().clear()
         n.clearDrafts()
@@ -396,6 +402,7 @@ class BackupManager(
         todo.insertChecklistItems(file.checklistItems)
         d.insertAll(file.diaryEntries)
         d.insertDrafts(file.diaryDrafts)
+        db.habitDao().putHabits(file.habits)
         db.habitDao().insertAll(file.habitChecks)
         file.healthProfile?.let { db.healthDao().insertProfiles(listOf(it)) }
         db.healthDao().insertAll(file.bodyMeasurements)
@@ -569,7 +576,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 7
+        const val FORMAT_VERSION = 8
     }
 }
 

@@ -38,7 +38,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -111,7 +110,7 @@ import com.assetboard.ui.components.GlassSnackbarHost
 import com.assetboard.ui.components.HeaderAction
 import com.assetboard.ui.components.ambient
 import com.assetboard.ui.components.glass
-import com.assetboard.ui.components.icon
+import com.assetboard.ui.components.iconVector
 import com.assetboard.ui.components.rememberAmbient
 import com.assetboard.ui.components.tint
 import com.assetboard.ui.diary.ExtractSheet
@@ -119,6 +118,7 @@ import com.assetboard.ui.notes.ExtractOrigin
 import com.assetboard.ui.notes.NoteCard
 import com.assetboard.ui.theme.AppTheme
 import java.time.LocalDate
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 /**
  * A week's review, hung on the diary's timeline: the week in numbers, its seven days, what was
@@ -213,7 +213,7 @@ fun WeekScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenNote:
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(scroll)
+            Modifier.fillMaxSize().padding(padding).imePadding().verticalScrollWithIndicator(scroll)
                 .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -351,7 +351,7 @@ private fun WeekHero(start: LocalDate, stats: WeekStats?, onPrev: () -> Unit, on
         if (s != null) {
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Habit.entries.forEach { h -> HabitCount(h, s.habits[h] ?: 0, s.diaryOf.coerceAtLeast(1)) }
+                s.habits.forEach { (h, n) -> HabitCount(h, n, s.diaryOf.coerceAtLeast(1), compact = s.habits.size > 6) }
             }
         }
     }
@@ -373,14 +373,14 @@ private fun RowScope.Tile(label: String, value: String, unit: String) {
 
 /** A habit's icon over how many days it was ticked; a full week glows. */
 @Composable
-private fun HabitCount(h: Habit, n: Int, of: Int) {
+private fun HabitCount(h: Habit, n: Int, of: Int, compact: Boolean) {
     val extra = AppTheme.extra
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.size(38.dp).clip(CircleShape).background(if (n > 0) h.tint.copy(alpha = 0.28f + 0.5f * (n.toFloat() / of).coerceAtMost(1f)) else Color.White.copy(alpha = 0.10f)),
+            Modifier.size(if (compact) 34.dp else 38.dp).clip(CircleShape).background(if (n > 0) h.tint.copy(alpha = 0.28f + 0.5f * (n.toFloat() / of).coerceAtMost(1f)) else Color.White.copy(alpha = 0.10f)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(h.icon, h.label, tint = if (n > 0) Color.White else extra.onHeroMuted, modifier = Modifier.size(19.dp))
+            Icon(h.iconVector, h.label, tint = if (n > 0) Color.White else extra.onHeroMuted, modifier = Modifier.size(19.dp))
         }
         Spacer(Modifier.height(4.dp))
         Text("$n 天", style = MaterialTheme.typography.labelSmall, color = extra.onHeroMuted)

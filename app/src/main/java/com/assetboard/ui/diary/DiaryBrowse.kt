@@ -78,6 +78,8 @@ import com.assetboard.data.Weeks
 import androidx.compose.foundation.shape.CircleShape
 import java.time.LocalDate
 import java.time.YearMonth
+import com.assetboard.ui.components.scrollIndicator
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 /**
  * Month grid: days with text are filled in, today is ringed, 休 / 班 mark official days off and
@@ -329,8 +331,9 @@ fun DiarySearchScreen(onBack: () -> Unit, onPick: (LocalDate) -> Unit) {
         },
     ) { padding ->
         val r = results
+        val barState = rememberLazyListState()
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
+            Modifier.fillMaxSize().padding(padding).scrollIndicator(barState), state = barState,
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {

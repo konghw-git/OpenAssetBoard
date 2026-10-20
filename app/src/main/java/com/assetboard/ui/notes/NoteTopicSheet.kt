@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Search
@@ -56,6 +55,7 @@ import com.assetboard.ui.components.pressScale
 import com.assetboard.ui.components.LocalAmbient
 import com.assetboard.ui.components.glass
 import com.assetboard.ui.theme.AppTheme
+import com.assetboard.ui.components.verticalScrollWithIndicator
 
 /** How many topics before the sheet offers a search field. */
 private const val SEARCH_FROM = 8
@@ -108,7 +108,7 @@ fun TopicSheet(
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 )
             }
-            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(top = 14.dp, bottom = 12.dp)) {
+            Column(Modifier.weight(1f, fill = false).verticalScrollWithIndicator(rememberScrollState()).padding(top = 14.dp, bottom = 12.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (showAll && q.isEmpty()) {
                         FilterPill("全部", counts?.values?.sum(), cs.primary, selected == NotesViewModel.ALL, null) { onPick(NotesViewModel.ALL) }

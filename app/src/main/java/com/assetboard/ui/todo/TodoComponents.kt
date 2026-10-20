@@ -11,6 +11,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.drawBehind
+import com.assetboard.ui.components.LocalDust
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
@@ -202,7 +211,8 @@ fun TodoRow(
     val content by animateFloatAsState(if (done) 0.55f else 1f, tween(260), label = "done")
     val tint by animateColorAsState(if (selected) cs.primary.copy(alpha = 0.16f) else Color.Transparent, tween(200), label = "tint")
     val lift by animateFloatAsState(if (lifted) 1f else 0f, spring(stiffness = Spring.StiffnessMediumLow), label = "lift")
-    Row(
+    var headerHeight by remember { mutableIntStateOf(0) }
+    Column(
         modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = 1f + 0.03f * lift; scaleY = scaleX }
@@ -212,6 +222,9 @@ fun TodoRow(
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .heightIn(min = 60.dp)
             .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = if (points.isEmpty()) 4.dp else 8.dp),
+    ) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).onSizeChanged { headerHeight = it.height },
         // With check points under the title, the box and badge stay with the title line.
         verticalAlignment = if (points.isEmpty()) Alignment.CenterVertically else Alignment.Top,
     ) {
@@ -260,7 +273,6 @@ fun TodoRow(
                     }
                 }
             }
-            if (points.isNotEmpty()) InlineChecklist(points, onToggleItem, onDeleteItem, swipe)
         }
         if (badge != null) {
             val c = badgeColor(badge.tone)
@@ -277,6 +289,11 @@ fun TodoRow(
             )
         }
         trailing?.invoke()
+    }
+    if (points.isNotEmpty()) {
+        val lead = with(LocalDensity.current) { headerHeight.toDp() } - CircleBottom - LineGap
+        InlineChecklist(points, onToggleItem, onDeleteItem, swipe, lead.coerceAtLeast(0.dp), Modifier.graphicsLayer { alpha = content })
+    }
     }
 }
 
@@ -303,21 +320,36 @@ private fun ChecklistProgress(done: Int, total: Int) {
     }
 }
 
+/** Where the card's check circle ends, from the top of the title line: 44dp box, 22dp ring. */
+private val CircleBottom = 33.dp
+/** The air between a circle or node and the line running into it. */
+private val LineGap = 3.dp
+/** The width of the column the line runs down: the check circle's, so they share a centre. */
+private val RailWidth = 44.dp
+private val NodeSize = 14.dp
+
 /**
- * The todo's checklist under its title, every item on a strip of its own. Tapping one ticks it
- * in place; swiping it left deletes just that item, in dust of its own (a right swipe still
- * goes to the card). Adding and editing stay in the detail page.
+ * The todo's checklist under it, as a thread from the card's check circle: each item is a node
+ * on a line running down from the circle, its text on a strip to the right. Tapping either
+ * ticks it in place; swiping the strip left deletes just that item, in dust of its own (a right
+ * swipe still goes to the card). The nodes stay on the line while a strip moves. [lead] is how
+ * far above the first item the circle ends. Adding and editing stay in the detail page.
  */
 @Composable
-private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> Unit)?, onDelete: ((String) -> Unit)?, swipe: SwipeGroup?) {
-    Column(Modifier.padding(top = 8.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        items.forEach { item ->
+private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> Unit)?, onDelete: ((String) -> Unit)?, swipe: SwipeGroup?, lead: Dp, modifier: Modifier = Modifier) {
+    Column(modifier.padding(top = ChecklistGap).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(ChecklistGap)) {
+        items.forEachIndexed { i, item ->
             key(item.id) {
-                if (onDelete == null) {
-                    CheckPoint(item, onToggle)
-                } else {
-                    SwipeActionsBox(checklistKey(item.id), swipe, CheckPointShape, onDelete = { onDelete(item.id) }, compact = true) {
-                        CheckPoint(item, onToggle)
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    CheckNode(item, above = if (i == 0) lead + ChecklistGap else ChecklistGap, last = i == items.lastIndex, onToggle)
+                    Box(Modifier.weight(1f)) {
+                        if (onDelete == null) {
+                            CheckPoint(item, onToggle)
+                        } else {
+                            SwipeActionsBox(checklistKey(item.id), swipe, CheckPointShape, onDelete = { onDelete(item.id) }, compact = true) {
+                                CheckPoint(item, onToggle)
+                            }
+                        }
                     }
                 }
             }
@@ -325,16 +357,65 @@ private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> U
     }
 }
 
+private val ChecklistGap = 4.dp
+
 /** The dust and swipe key of a checklist item, in the list and in the detail. */
 internal fun checklistKey(id: String) = "check:$id"
 
 private val CheckPointShape = RoundedCornerShape(10.dp)
 
+/**
+ * An item's place on the thread: the line from [above] the row down to a node at its middle, and
+ * on below it unless [last]. The stretch leading into a done item is drawn in the primary color,
+ * so the thread fills in as the list gets done.
+ */
+@Composable
+private fun CheckNode(item: ChecklistItem, above: Dp, last: Boolean, onToggle: ((String) -> Unit)?) {
+    val cs = MaterialTheme.colorScheme
+    val dust = LocalDust.current
+    val hidden = dust?.isHidden(checklistKey(item.id)) == true
+    val scale by animateFloatAsState(if (item.done) 1f else 0.86f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium), label = "node")
+    val fill by animateColorAsState(if (item.done) cs.primary else Color.Transparent, tween(200), label = "nodeFill")
+    val into by animateColorAsState(if (item.done) cs.primary.copy(alpha = 0.55f) else cs.outline.copy(alpha = 0.42f), tween(260), label = "thread")
+    val rest = cs.outline.copy(alpha = 0.42f)
+    val source = remember { MutableInteractionSource() }
+    Box(
+        Modifier
+            .width(RailWidth)
+            .fillMaxHeight()
+            .graphicsLayer { alpha = if (hidden) 0f else 1f }
+            .drawBehind {
+                val x = size.width / 2
+                val mid = size.height / 2
+                val r = NodeSize.toPx() / 2
+                val gap = LineGap.toPx()
+                val w = 1.5.dp.toPx()
+                drawLine(into, Offset(x, -above.toPx()), Offset(x, mid - r - gap), strokeWidth = w, cap = StrokeCap.Round)
+                if (!last) drawLine(rest, Offset(x, mid + r + gap), Offset(x, size.height), strokeWidth = w, cap = StrokeCap.Round)
+            }
+            .then(if (onToggle != null) Modifier.clickable(interactionSource = source, indication = null) { onToggle(item.id) } else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .size(NodeSize)
+                .scale(scale)
+                .clip(CircleShape)
+                .background(fill)
+                .border(if (item.done) 0.dp else 1.4.dp, cs.outline, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.animation.AnimatedVisibility(item.done, enter = scaleIn(spring(dampingRatio = 0.4f)) + fadeIn(), exit = fadeOut()) {
+                Icon(Icons.Default.Check, null, tint = cs.onPrimary, modifier = Modifier.size(10.dp))
+            }
+        }
+    }
+}
+
+/** An item's text on its strip; the tick is on the node beside it. */
 @Composable
 private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
     val cs = MaterialTheme.colorScheme
-    val scale by animateFloatAsState(if (item.done) 1f else 0.9f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium), label = "point")
-    val fill by animateColorAsState(if (item.done) cs.primary else Color.Transparent, tween(200), label = "pointFill")
     val text by animateColorAsState(if (item.done) cs.outline else cs.onSurface.copy(alpha = 0.88f), tween(200), label = "pointText")
     // A strip a shade off the card: light on glass, dimmer once done.
     val strip by animateColorAsState(cs.onSurface.copy(alpha = if (item.done) 0.03f else 0.055f), tween(200), label = "strip")
@@ -346,23 +427,9 @@ private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
             .background(strip)
             .then(if (onToggle != null) Modifier.clickable { onToggle(item.id) } else Modifier)
             .heightIn(min = 36.dp)
-            .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier
-                .size(17.dp)
-                .scale(scale)
-                .clip(RoundedCornerShape(5.dp))
-                .background(fill)
-                .border(if (item.done) 0.dp else 1.4.dp, cs.outline, RoundedCornerShape(5.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            androidx.compose.animation.AnimatedVisibility(item.done, enter = scaleIn(spring(dampingRatio = 0.4f)) + fadeIn(), exit = fadeOut()) {
-                Icon(Icons.Default.Check, null, tint = cs.onPrimary, modifier = Modifier.size(12.dp))
-            }
-        }
-        Spacer(Modifier.width(10.dp))
         Text(
             item.text,
             style = MaterialTheme.typography.bodyMedium,

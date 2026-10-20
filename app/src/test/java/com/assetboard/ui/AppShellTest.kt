@@ -25,6 +25,11 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.isSelectable
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -61,6 +66,45 @@ class AppShellTest {
         compose.waitForIdle()
         compose.onNodeWithText("资产").assertIsSelected()
         compose.onNodeWithText("开始记录你的资产").assertExists()
+    }
+
+    /** A finger sliding along the bottom bar drags the tabs with it and settles on the nearest. */
+    @Test fun aSlideAlongTheBarTurnsTheTabs() {
+        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        show(c)
+        compose.onNodeWithText("资产").assertIsSelected()
+        // From over 资产 to over 日记: two tabs along.
+        compose.onNodeWithText("资产").performTouchInput {
+            down(center)
+            repeat(10) { moveBy(Offset(width * 0.2f, 0f)) }
+            up()
+        }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        compose.onNode(hasText("日记") and isSelectable()).assertIsSelected()
+    }
+
+    /** Leaving the diary while typing ends the typing, so the tabs swipe again afterwards. */
+    @Test fun leavingTheDiaryWhileTypingLetsTheTabsSwipe() {
+        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        show(c)
+        compose.onNodeWithText("日记").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("今天过得怎么样？")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasSetTextAction()).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("完成")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("资产").performClick()
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("资产").assertIsSelected()
+        // A sideways stroke on the page turns to the next tab.
+        compose.onRoot().performTouchInput {
+            down(Offset(width * 0.85f, height * 0.5f))
+            repeat(8) { moveBy(Offset(-width * 0.1f, 0f)) }
+            up()
+        }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        compose.onNode(hasText("待办") and isSelectable()).assertIsSelected()
     }
 
     @Test fun s2_noNetworkNoPermissionsStillShowsAssets() {
