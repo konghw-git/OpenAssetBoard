@@ -58,14 +58,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -73,6 +69,8 @@ import com.assetboard.data.DiaryEntry
 import com.assetboard.domain.calendar.ChineseCalendar
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.SectionCard
+import com.assetboard.ui.components.highlight
+import com.assetboard.ui.components.snippet
 import com.assetboard.ui.theme.AppTheme
 import kotlinx.coroutines.delay
 import java.time.LocalDate
@@ -312,25 +310,5 @@ fun DiarySearchScreen(onBack: () -> Unit, onPick: (LocalDate) -> Unit) {
                 }
             }
         }
-    }
-}
-
-/** About 40 characters on either side of the first hit. */
-private fun snippet(body: String, q: String): String {
-    val i = body.indexOf(q, ignoreCase = true).takeIf { it >= 0 } ?: return body.take(120)
-    val from = (i - 40).coerceAtLeast(0)
-    val to = (i + q.length + 80).coerceAtMost(body.length)
-    return (if (from > 0) "…" else "") + body.substring(from, to).replace('\n', ' ') + (if (to < body.length) "…" else "")
-}
-
-private fun highlight(text: String, q: String, color: androidx.compose.ui.graphics.Color): AnnotatedString = buildAnnotatedString {
-    if (q.isBlank()) { append(text); return@buildAnnotatedString }
-    var start = 0
-    while (true) {
-        val i = text.indexOf(q, start, ignoreCase = true)
-        if (i < 0) { append(text.substring(start)); break }
-        append(text.substring(start, i))
-        withStyle(SpanStyle(color = color, fontWeight = FontWeight.Bold, background = color.copy(alpha = 0.12f))) { append(text.substring(i, i + q.length)) }
-        start = i + q.length
     }
 }

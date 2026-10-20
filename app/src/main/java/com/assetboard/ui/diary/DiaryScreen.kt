@@ -92,6 +92,10 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material3.SnackbarResult
+import com.assetboard.data.NoteText
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -148,7 +152,8 @@ import java.time.LocalDate
 /**
  * The diary tab: today on open, always for reading first; tapping the page brings up the
  * keyboard. 完成 saves and puts the keyboard away. [pickedDate]
- * comes from the calendar or search.
+ * comes from the calendar, search or a note's source. [onOpenNote] opens a note the day was
+ * extracted into.
  */
 @Composable
 fun DiaryScreen(
@@ -160,6 +165,7 @@ fun DiaryScreen(
     onStocktake: () -> Unit = {},
     /** The text is being typed in; the shell stops tab swiping meanwhile. */
     onEditingChange: (Boolean) -> Unit = {},
+    onOpenNote: (String) -> Unit = {},
 ) {
     val container = LocalContainer.current
     val vm: DiaryViewModel = viewModel { DiaryViewModel(container) }
@@ -174,8 +180,17 @@ fun DiaryScreen(
     var jump by remember { mutableStateOf(false) }
     val unsavedLeave by vm.unsavedLeave.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val body = session?.text?.collectAsStateWithLifecycle()?.value.orEmpty()
+    /** The day and its text as they were when 提炼 was tapped: the sheet works on that snapshot. */
+    var extracting by remember { mutableStateOf<Pair<LocalDate, String>?>(null) }
     ErrorDialog(error) { vm.error.value = null }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    LaunchedEffect(vm) {
+        vm.extracted.collect { r ->
+            val res = snackbar.showSnackbar(r.message, actionLabel = if (r.noteId != null) "打开" else null, withDismissAction = r.noteId == null)
+            if (res == SnackbarResult.ActionPerformed && r.noteId != null) onOpenNote(r.noteId)
+        }
+    }
     LaunchedEffect(pickedDate) {
         if (pickedDate != null) {
             vm.open(LocalDate.parse(pickedDate))
@@ -236,6 +251,8 @@ fun DiaryScreen(
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             HeaderAction(Icons.Outlined.Search, "搜索", onSearch)
+                            // From the session, not the entry: a save started by 完成 may not have landed yet.
+                            if (entry != null && body.isNotBlank()) HeaderAction(Icons.Outlined.Lightbulb, "提炼到笔记", { extracting = date to body })
                             if (entry != null) HeaderAction(Icons.Outlined.Delete, "删除这篇", { askDelete = true })
                             HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
                         }
@@ -297,7 +314,7 @@ fun DiaryScreen(
                         if (showHabits) HabitRecord(habits, live = date == today)
                     }
                 }
-                if (!editing) DayExtras(vm)
+                if (!editing) DayExtras(vm, onOpenNote)
             }
         }
     }
@@ -306,6 +323,16 @@ fun DiaryScreen(
         ConfirmDialog(
             "删除这篇日记？", "日记会进回收站，30 天内可以恢复。", "删除", destructive = true,
             onConfirm = { askDelete = false; vm.delete() }, onDismiss = { askDelete = false },
+        )
+    }
+    extracting?.let { (day, text) ->
+        val notes by remember { container.notes.observeNotes() }.collectAsStateWithLifecycle(emptyList())
+        val topics by remember { container.notes.observeTopics() }.collectAsStateWithLifecycle(emptyList())
+        ExtractSheet(
+            day, text, notes, topics,
+            onDismiss = { extracting = null },
+            onSaveNew = { b -> vm.extractToNew(day, b) { id -> extracting = null; onOpenNote(id) } },
+            onAppend = { n, block -> extracting = null; vm.extractAppend(day, n, block) },
         )
     }
     if (jump) {
@@ -669,11 +696,12 @@ private fun CityDialog(vm: DiaryViewModel, onDismiss: () -> Unit, onPick: (Place
     )
 }
 
-/** Read-only: what got done that day and the same day in earlier years. */
+/** Read-only: what got done that day, the notes taken from it and the same day in earlier years. */
 @Composable
-private fun DayExtras(vm: DiaryViewModel) {
+private fun DayExtras(vm: DiaryViewModel, onOpenNote: (String) -> Unit) {
     val completed by vm.completed.collectAsStateWithLifecycle()
     val onThisDay by vm.onThisDay.collectAsStateWithLifecycle()
+    val fromDay by vm.fromDay.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
     if (completed.isNotEmpty()) {
         Fold(Icons.Outlined.TaskAlt, "完成的待办", completed.size) {
@@ -684,6 +712,18 @@ private fun DayExtras(vm: DiaryViewModel) {
                     }
                     Spacer(Modifier.width(10.dp))
                     Text(t.title, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                }
+            }
+        }
+    }
+    if (fromDay.isNotEmpty()) {
+        Fold(Icons.Outlined.AutoStories, "从这天提炼的笔记", fromDay.size) {
+            fromDay.forEach { n ->
+                Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { onOpenNote(n.id) }.padding(vertical = 8.dp)) {
+                    Text(n.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    NoteText.preview(n.body).takeIf { it.isNotEmpty() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }

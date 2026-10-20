@@ -6,9 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [Unreleased]
+## [0.6.0] - 2026-10-20
+
+### Added
+
+- **Notes, a fourth tab.** The diary goes by day; notes go by topic: one idea per note, revised
+  over time. The first line is the title and `#tags` are highlighted. One level of topics
+  (filter, reorder, rename, delete into 未归类), pinning and full-text search. A note opens on
+  its own page and saves itself exactly like the diary: one second after typing stops, at most
+  4.5 s apart, a conflict becomes a draft, and text that cannot be saved anywhere asks before the
+  page is left.
+- **Extract from the diary.** A light bulb on a diary day opens its paragraphs: tick the ones
+  worth keeping, then save them as a new note (with an optional title) or append them to an
+  existing one. The diary itself is not changed. A note lists the days it was taken from and
+  takes you back to them; each diary day lists the notes taken from it.
+- Notes go to the trash for 30 days like everything else, and unhandled note drafts show on the
+  notes tab.
 
 ### Changed
+
+- Backups are format 5 (database schema 5) and carry the notes; older backups still restore,
+  and the confirmation says when that would clear the current notes.
+- Unsaved note text is committed before a restore, as diary text already was.
 
 - **Switches that move instead of blink.** One segmented control everywhere (health metric and
   range, net worth range, account chart range, theme, up/down colours, fee side): the thumb slides
@@ -86,6 +105,7 @@ between minor versions; backup format v3 reads v1 and v2.
 - Reminder punctuality depends on the phone's autostart and background permissions; the in-app
   checklist walks through them.
 
-[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/konghw-git/OpenAssetBoard/releases/tag/v0.4.0

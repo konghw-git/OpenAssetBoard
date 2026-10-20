@@ -108,7 +108,7 @@ class MigrationTest {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4)
+            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5)
             .allowMainThreadQueries()
             .build()
         try {
@@ -173,11 +173,48 @@ class MigrationTest {
         for (t in ledgerTables) assertEquals("table $t", before[t], after[t])
     }
 
+    @Test fun migrationFourToFiveAddsNotesAndKeepsEverything() {
+        val tables = ledgerTables + listOf("todo_lists", "diary_entries", "habit_checks", "body_measurements")
+        val before = helper.createDatabase(name, 1).use { db ->
+            seedV1(db)
+            ledgerTables.associateWith { db.dump(it) }
+        }
+        helper.runMigrationsAndValidate(name, 2, true, Migrations.MIGRATION_1_2).use { db ->
+            db.put("todo_lists", "id" to "l1", "name" to "清单", "notes" to "", "deadline" to null, "sort_order" to 0, "archived_at" to null, "created_at" to 1L, "deleted_at" to null, "delete_batch" to null)
+            db.put("diary_entries", "id" to "d1", "date" to "2026-10-20", "body" to "正文", "body_rev" to 1L, "weather_code" to null, "temp_min" to null, "temp_max" to null, "city" to null, "lat" to null, "lon" to null, "weather_at" to null, "weather_rev" to 0L, "created_at" to 1L, "updated_at" to 1L, "deleted_at" to null, "delete_batch" to null)
+        }
+        helper.runMigrationsAndValidate(name, 3, true, Migrations.MIGRATION_2_3).use { db ->
+            db.put("habit_checks", "date" to "2026-10-20", "habit" to "workout", "checked_at" to 1L)
+        }
+        val mid = helper.runMigrationsAndValidate(name, 4, true, Migrations.MIGRATION_3_4).use { db ->
+            db.put("body_measurements", "id" to "m1", "date" to "2026-10-17", "measured_at" to 1L, "weight_g" to 92_100L, "body_fat_bp" to 2_580, "note" to null, "created_at" to 1L, "updated_at" to 1L)
+            tables.associateWith { db.dump(it) }
+        }
+        val after = helper.runMigrationsAndValidate(name, 5, true, Migrations.MIGRATION_4_5).use { db ->
+            db.execSQL("PRAGMA foreign_keys = ON")
+            db.put("note_topics", "id" to "t1", "name" to "投资", "sort_order" to 0, "created_at" to 1L)
+            db.put("notes", "id" to "n1", "topic_id" to "t1", "body" to "定投纪律", "body_rev" to 1L, "pinned" to false, "created_at" to 1L, "updated_at" to 1L, "reviewed_at" to null, "deleted_at" to null, "delete_batch" to null)
+            db.put("note_sources", "note_id" to "n1", "kind" to "DAY", "ref" to "2026-10-20", "created_at" to 1L)
+            db.put("note_drafts", "id" to "nd1", "note_id" to "n1", "text" to "草稿", "reason" to "冲突", "created_at" to 1L)
+            // One source per (note, kind, day): the second is refused by the primary key.
+            assertTrue(runCatching { db.put("note_sources", "note_id" to "n1", "kind" to "DAY", "ref" to "2026-10-20", "created_at" to 2L) }.isFailure)
+            // Deleting a topic leaves its notes uncategorised; deleting a note takes its sources and unhooks its drafts.
+            db.execSQL("DELETE FROM note_topics WHERE id = 't1'")
+            assertEquals(listOf(null), db.dump("notes").map { it[1] })
+            db.execSQL("DELETE FROM notes WHERE id = 'n1'")
+            assertTrue(db.dump("note_sources").isEmpty())
+            assertEquals(listOf(null), db.dump("note_drafts").map { it[1] })
+            tables.associateWith { db.dump(it) }
+        }
+        for (t in tables) assertEquals("table $t", mid[t], after[t])
+        for (t in ledgerTables) assertEquals("table $t", before[t], after[t])
+    }
+
     @Test fun databaseAtThreeOpensWithRoomAfterTheHealthMigration() = runBlocking {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4)
+            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5)
             .allowMainThreadQueries()
             .build()
         try {

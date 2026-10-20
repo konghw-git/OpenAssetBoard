@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.assetboard.ui.theme.AppTheme
 
 /**
- * The top of each of the three tabs: a large title, one line of context under it, and round
+ * The top of each tab: a large title, one line of context under it, and round
  * action buttons on the right. [statusBar] adds the status bar inset when the header is not
  * inside something that already did.
  */

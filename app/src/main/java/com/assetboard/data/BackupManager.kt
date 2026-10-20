@@ -21,7 +21,7 @@ import java.io.File
 
 /**
  * Format 2 adds the todo and diary tables, format 3 the daily habit checks, format 4 the health
- * profile and weigh-ins; older files read with the newer tables empty. Device-local
+ * profile and weigh-ins, format 5 the notes; older files read with the newer tables empty. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -44,6 +44,10 @@ data class BackupFile(
     val habitChecks: List<HabitCheck> = emptyList(),
     val healthProfile: HealthProfile? = null,
     val bodyMeasurements: List<BodyMeasurement> = emptyList(),
+    val noteTopics: List<NoteTopic> = emptyList(),
+    val notes: List<Note> = emptyList(),
+    val noteSources: List<NoteSource> = emptyList(),
+    val noteDrafts: List<NoteDraft> = emptyList(),
 )
 
 /**
@@ -71,6 +75,8 @@ data class BackupPreview(
     val currentDiaries: Int,
     val healthRecords: Int = 0,
     val currentHealthRecords: Int = 0,
+    val notes: Int = 0,
+    val currentNotes: Int = 0,
 )
 
 /** A saved copy of the data as it was right before a restore. */
@@ -94,6 +100,9 @@ class BackupManager(
     private val settings: SettingsStore,
     private val gate: WriteGate,
     private val diary: DiaryRepository,
+    private val notes: NoteRepository,
+    /** The diary and note editors whose unsaved text a restore commits first. */
+    private val editors: EditorRegistry,
     private val calendar: () -> WorkdayCalendar,
     private val effects: RestoreEffects,
     private val onRestored: () -> Unit,
@@ -128,6 +137,10 @@ class BackupManager(
                 habitChecks = db.habitDao().all(),
                 healthProfile = db.healthDao().profile(),
                 bodyMeasurements = db.healthDao().all(),
+                noteTopics = db.noteDao().allTopics(),
+                notes = db.noteDao().all(),
+                noteSources = db.noteDao().allSources(),
+                noteDrafts = db.noteDao().allDrafts(),
             )
         }
         return json.encodeToString(BackupFile.serializer(), file)
@@ -220,10 +233,12 @@ class BackupManager(
             currentDiaries = db.diaryDao().all().count { it.deletedAt == null },
             healthRecords = file.bodyMeasurements.size,
             currentHealthRecords = db.healthDao().all().size,
+            notes = file.notes.count { it.deletedAt == null },
+            currentNotes = db.noteDao().all().count { it.deletedAt == null },
         )
     }
 
-    /** Every check, before anything is touched: JSON, versions, ledger rules, todo and diary invariants. */
+    /** Every check, before anything is touched: JSON, versions, ledger rules, todo, diary and note invariants. */
     private fun validate(file: BackupFile) {
         fun <T> unique(items: List<T>, id: (T) -> Any, what: String) =
             ensure(items.map(id).toSet().size == items.size) { "备份里有重复的$what" }
@@ -273,12 +288,13 @@ class BackupManager(
         }
         for (f in file.flows) Rules.checkFlow(f, f.fromAccountId?.let(byId::get), f.toAccountId?.let(byId::get))
         TodoInvariants.checkAll(file.todoLists, file.todoSections, file.todos, file.checklistItems, file.diaryEntries, file.diaryDrafts, calendar())
+        NoteRepository.checkBackup(file.noteTopics, file.notes, file.noteSources, file.noteDrafts)
     }
 
     /**
      * Full-overwrite restore, as the coordinator of the write gate:
-     * 1. freeze: new writes are rejected, running ones finish, unsaved diary text is committed
-     *    through [flushDiaryEditors] (or the restore is cancelled);
+     * 1. freeze: new writes are rejected, running ones finish, unsaved diary and note text is
+     *    committed through [flushEditors] (or the restore is cancelled);
      * 2. validate the whole file; 3. save a copy of the current data;
      * 4. one transaction: wipe, insert, bump the epoch;
      * 5. only after the commit: alarms, notifications, widgets; 6. unfreeze, whatever happened.
@@ -291,7 +307,7 @@ class BackupManager(
         gate.freeze()
         var committed = false
         try {
-            flushDiaryEditors()
+            flushEditors()
             val file = parse(text)
             validate(file)
             val savedTo = savePreRestoreCopy()
@@ -329,6 +345,7 @@ class BackupManager(
         val dao = db.dao()
         val todo = db.todoDao()
         val d = db.diaryDao()
+        val n = db.noteDao()
         // Children first, so RESTRICT never fires while wiping.
         dao.clearSnapshotItems()
         dao.clearFlows()
@@ -345,6 +362,10 @@ class BackupManager(
         db.habitDao().clear()
         db.healthDao().clearProfile()
         db.healthDao().clear()
+        n.clearDrafts()
+        n.clearSources()
+        n.clear()
+        n.clearTopics()
         dao.insertGroups(file.groups)
         dao.insertAccounts(file.accounts)
         dao.insertSnapshots(file.snapshots)
@@ -361,38 +382,62 @@ class BackupManager(
         db.habitDao().insertAll(file.habitChecks)
         file.healthProfile?.let { db.healthDao().insertProfiles(listOf(it)) }
         db.healthDao().insertAll(file.bodyMeasurements)
+        // Parents first: foreign keys are checked row by row, so the wrong order fails the restore.
+        n.insertTopics(file.noteTopics)
+        n.insertAll(file.notes)
+        n.insertSources(file.noteSources)
+        n.insertDrafts(file.noteDrafts)
     }
 
     // ------------------------------------------------------------ the coordinator's private write channel
 
     /**
-     * The one write allowed while the gate is frozen: committing the diary editors' unsaved text.
-     * It runs DAO transactions directly (the coordinator already holds the write side), never
+     * The one write allowed while the gate is frozen: committing the editors' unsaved text. It
+     * runs DAO transactions directly (the coordinator already holds the write side), never
      * through [WriteGate.write]. Body first, under the session's `body_rev`; a draft when that
      * does not hold. Text that lands in neither cancels the restore.
      */
-    private suspend fun flushDiaryEditors() {
-        for (editor in diary.editors) {
+    private suspend fun flushEditors() {
+        for (editor in editors) {
             val p = editor.pendingForRestore() ?: continue
             val body = runCatching { db.withTransaction { writeBody(p) } }.getOrNull()
             if (body != null) {
                 editor.flushedByRestore(body.first, body.second)
                 continue
             }
-            val drafted = runCatching {
-                db.withTransaction {
-                    if (diary.failDraftWrites) throw IllegalStateException("模拟写盘失败")
-                    val d = db.diaryDao()
-                    d.insertDraft(DiaryDraft(newId(), p.date, p.entryId?.takeIf { d.entry(it) != null }, p.text, "恢复备份前保存冲突", clock()))
-                }
-            }.isSuccess
-            if (!drafted) throw LedgerException("有未保存的日记，恢复已取消")
-            editor.flushedByRestore(p.entryId, null)
+            val drafted = runCatching { db.withTransaction { writeDraft(p) } }.isSuccess
+            if (!drafted) throw LedgerException(if (p is PendingText.Note) "有未保存的笔记，恢复已取消" else "有未保存的日记，恢复已取消")
+            val id = when (p) {
+                is PendingText.Diary -> p.entryId
+                is PendingText.Note -> p.noteId
+            }
+            editor.flushedByRestore(id, null)
         }
     }
 
-    /** (entry id, new body_rev), or null when the version condition does not hold. */
-    private suspend fun writeBody(p: PendingDiaryText): Pair<String, Long>? {
+    /** (row id, new body_rev), or null when the version condition does not hold. */
+    private suspend fun writeBody(p: PendingText): Pair<String, Long>? = when (p) {
+        is PendingText.Diary -> writeDiaryBody(p)
+        is PendingText.Note -> writeNoteBody(p)
+    }
+
+    private suspend fun writeDraft(p: PendingText) {
+        val reason = "恢复备份前保存冲突"
+        when (p) {
+            is PendingText.Diary -> {
+                if (diary.failDraftWrites) throw IllegalStateException("模拟写盘失败")
+                val d = db.diaryDao()
+                d.insertDraft(DiaryDraft(newId(), p.date, p.entryId?.takeIf { d.entry(it) != null }, p.text, reason, clock()))
+            }
+            is PendingText.Note -> {
+                if (notes.failDraftWrites) throw IllegalStateException("模拟写盘失败")
+                val n = db.noteDao()
+                n.insertDraft(NoteDraft(newId(), p.noteId?.takeIf { n.note(it) != null }, p.text, reason, clock()))
+            }
+        }
+    }
+
+    private suspend fun writeDiaryBody(p: PendingText.Diary): Pair<String, Long>? {
         if (diary.failBodyWrites) throw IllegalStateException("模拟写盘失败")
         val d = db.diaryDao()
         val now = clock()
@@ -409,6 +454,24 @@ class BackupManager(
             existing.body.isEmpty() && d.updateBody(existing.id, p.text, existing.bodyRev, now) == 1 -> existing.id to existing.bodyRev + 1
             else -> null
         }
+    }
+
+    /** A new note is inserted; an existing one takes the text only at the session's version. Its sources land with it. */
+    private suspend fun writeNoteBody(p: PendingText.Note): Pair<String, Long>? {
+        if (notes.failBodyWrites) throw IllegalStateException("模拟写盘失败")
+        val n = db.noteDao()
+        val now = clock()
+        val written = when {
+            p.noteId == null -> {
+                val note = Note(newId(), p.topicId?.takeIf { n.topic(it) != null }, p.text, bodyRev = 1, createdAt = now, updatedAt = now)
+                n.insert(note)
+                note.id to 1L
+            }
+            n.updateBody(p.noteId, p.text, p.expectedRev ?: -1, now) == 1 -> p.noteId to (p.expectedRev!! + 1)
+            else -> return null
+        }
+        for (s in p.sources) n.insertSource(NoteSource(written.first, s.kind, s.ref, now))
+        return written
     }
 
     // ------------------------------------------------------------ pre-restore copies
@@ -449,7 +512,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 4
+        const val FORMAT_VERSION = 5
     }
 }
 

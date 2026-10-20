@@ -4,7 +4,7 @@
 
 # 强者之路 · OpenAssetBoard
 
-**A fully local Android app: a personal asset board, a Things-style todo manager, and a one-entry-a-day diary.**
+**A fully local Android app: a personal asset board, a Things-style todo manager, a one-entry-a-day diary, and notes.**
 
 Open it and you know exactly what you're worth; jot down what you have to do today and what happened today. No account, no cloud, no ads.
 
@@ -57,7 +57,7 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Daily habits**: supplements, workout, diet, water, early sleep. Ticked on the todo page, shown read-only at the top of the diary.
 - **Reminders that fire**: normal notifications, a strong reminder (full screen, ring, vibrate — still on time in deep doze), per-occurrence reminders for repeating todos, catch-up after reboot, and recovery after the permission is revoked.
 - **Quick capture**: tap `+` on the widget, type, save — target under 5 seconds.
-- **Trash and logbook**: deleted todos, lists and diary entries stay for 30 days; completed occurrences of repeating todos stay in the logbook.
+- **Trash and logbook**: deleted todos, lists, diary entries and notes stay for 30 days; completed occurrences of repeating todos stay in the logbook.
 
 <img src="docs/images/11-todo-home.webp" width="24%" alt="Todo"> <img src="docs/images/12-todo-composer.webp" width="24%" alt="Quick capture"> <img src="docs/images/25-todo-unfold.webp" width="24%" alt="Todo on a foldable"> <img src="docs/images/15-todo-detail.webp" width="24%" alt="Todo detail">
 
@@ -69,10 +69,17 @@ This app is built for it. One stocktake walks every account, you change the thre
 
 <img src="docs/images/18-diary.webp" width="24%" alt="Diary"> <img src="docs/images/19-diary-calendar.webp" width="24%" alt="Calendar"> <img src="docs/images/20-diary-dark.webp" width="24%" alt="Diary, dark"> <img src="docs/images/23-reminder-guide.webp" width="24%" alt="Reminder setup check">
 
+### Notes
+
+- **The diary goes by day, notes go by topic**: one idea per note, revised and grown over time. The first line is the title; `#tags` are highlighted.
+- **Extract from the diary**: tap the light bulb on a diary day, tick the paragraphs, and save them as a new note or append them to one. The diary itself is untouched; the note remembers which day it came from and takes you back there. Each diary day lists the notes taken from it.
+- **One level of topics**: filter, reorder, pin, and search every note.
+- **Never loses text either**: the diary's autosave and conflict-to-draft rules; unsaved notes are committed before a restore.
+
 ### Shared
 
 - **Local first**: everything lives in SQLite on the phone. The backup is one JSON file written to a folder you pick and overwritten each time.
-- **Versioned backup and restore**: format v3, reads v1 / v2. Restore replaces the whole database, copies the current data aside first, and runs behind a write gate so an in-flight old operation can't land in the restored data.
+- **Versioned backup and restore**: format v5, reads v1–v4. Restore replaces the whole database, copies the current data aside first, and runs behind a write gate so an in-flight old operation can't land in the restored data.
 - **Networking is optional and one switch away**: turn it off and the app makes no request at all — holidays come from built-in data and no weather is shown.
 - **Dark mode**, system theme, adjustable up/down colours (red-up by default, as in Chinese markets), and a two-pane layout on foldables.
 - **Launcher shortcuts** straight to stocktake, quick capture and the diary.
@@ -167,7 +174,7 @@ The images in `docs/images/` are those PNGs scaled down and converted to WebP.
 app/src/main/java/com/assetboard/
 ├── domain/           pure rules: balances, net invested, P&L, net worth trend, health grades and trend, todo views and recurrence, lunar calendar
 ├── data/             the only way in: validation, transactions, the write gate, backup and restore, migrations
-├── ui/               Compose screens (assets / todo / diary / settings); components holds the charts and shared widgets
+├── ui/               Compose screens (assets / todo / diary / notes / settings); components holds the charts and shared widgets
 ├── reminder/         alarms, notifications, the strong-reminder ring service, full-screen alarms, boot catch-up
 └── widget/           Glance home-screen widgets
 ```
@@ -180,15 +187,17 @@ The rule is **calculation out of the UI**: every number on screen comes from a p
 | `domain/health/` | BMI, body-fat grades, body type, health trend and moving average |
 | `domain/todo/` | View membership and ordering, recurrence, reminder state, invariants |
 | `data/WriteGate.kt` | The read-write gate and the data epoch |
-| `data/BackupManager.kt` | JSON export (v4, reads v1–v3), validation, restore coordinator |
+| `data/BackupManager.kt` | JSON export (v5, reads v1–v4), validation, restore coordinator |
 | `domain/calendar/` | Lunar calendar, solar terms, festivals, the official workday table |
 
 ## Roadmap
 
 - [x] Asset overview, stocktake, net worth trend, investment flows
 - [x] Todos, diary, daily habits, trash
-- [x] Backup / restore (v4), reminders, widgets
+- [x] Backup / restore (v5), reminders, widgets
 - [x] Health as an asset (weight, body fat, BMI), cash at hand
+- [x] Notes: one level of topics, extracted from the diary, traced back to their day, searchable
+- [ ] Note review, weekly review
 - [ ] Rates of return (XIRR, money-weighted annualised)
 - [ ] Target allocation comparison
 - [ ] Credit-card statement and due-date reminders

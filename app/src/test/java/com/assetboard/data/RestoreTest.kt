@@ -360,7 +360,7 @@ class RestoreTest {
                 }
             }
         }
-        val bm = BackupManager(f.context, f.db, f.settings, f.gate, f.diary, { f.calendar }, effects, onRestored = {}, clock = { f.now })
+        val bm = BackupManager(f.context, f.db, f.settings, f.gate, f.diary, f.notes, f.editors, { f.calendar }, effects, onRestored = {}, clock = { f.now })
         bm.restore(uri)
         assertEquals(listOf(WriteGate.MSG_RESTORING, WriteGate.MSG_RESTORING), during)
         // After unfreezing, the old screen is still turned away (R15).

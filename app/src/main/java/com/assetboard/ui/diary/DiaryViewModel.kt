@@ -2,10 +2,13 @@ package com.assetboard.ui.diary
 
 import androidx.lifecycle.viewModelScope
 import com.assetboard.AppContainer
+import com.assetboard.data.AppendResult
 import com.assetboard.data.DiaryDraft
 import com.assetboard.data.DiaryEntry
 import com.assetboard.data.DiarySession
+import com.assetboard.data.Note
 import com.assetboard.data.Place
+import com.assetboard.data.SourceRef
 import com.assetboard.data.Todo
 import com.assetboard.data.WeatherResult
 import com.assetboard.domain.NetWorthPoint
@@ -44,6 +47,9 @@ sealed interface WeatherUi {
     /** No fix and no recent location: the user picks a city. */
     data object NeedCity : WeatherUi
 }
+
+/** What an extract into a note came to, for the page's snackbar; [noteId] offers 打开. */
+data class Extracted(val message: String, val noteId: String?)
 
 /** One stocktake of the day and how net worth moved since the one before it. */
 data class DayStocktake(val point: NetWorthPoint, val change: Long?)
@@ -97,6 +103,11 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val holidays = container.holidays.table
+
+    /** Live notes with something taken from this day. */
+    val fromDay: StateFlow<List<Note>> = _date.flatMapLatest { container.notes.observeFromDay(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val extracted = MutableSharedFlow<Extracted>(extraBufferCapacity = 2)
 
     /** Days in a row with text, ending today (or yesterday while today is still empty). */
     val streak: StateFlow<Int> = diary.observeDatesWithText(LocalDate.now().minusDays(400), LocalDate.now())
@@ -212,6 +223,22 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     }
 
     fun discardDraft(draft: DiaryDraft) = action { diary.discardDraft(draft.id) }
+
+    // ------------------------------------------------------------ extract into notes
+
+    /** A new note from parts of [date]'s text; [onDone] gets its id. */
+    fun extractToNew(date: LocalDate, body: String, onDone: (String) -> Unit) = action {
+        onDone(container.notes.create(body, SourceRef.day(date)))
+    }
+
+    /** Only the result is reported: an append that went into a draft or failed never reads as done. */
+    fun extractAppend(date: LocalDate, note: Note, block: String) = action {
+        when (val r = container.notes.append(note.id, block, SourceRef.day(date))) {
+            AppendResult.Appended -> extracted.emit(Extracted("已追加到《${note.title}》", note.id))
+            AppendResult.SavedAsDraft -> extracted.emit(Extracted("保存冲突，内容已存为草稿，可在笔记页处理", null))
+            is AppendResult.Failed -> error.value = r.reason
+        }
+    }
 
     // ------------------------------------------------------------ weather
 

@@ -6,22 +6,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
-import java.util.concurrent.CopyOnWriteArraySet
 
 sealed interface BodySave {
     data class Saved(val entryId: String, val rev: Long, val created: Boolean) : BodySave
     data class Conflict(val reason: String) : BodySave
-}
-
-/** Unsaved editor text handed to the restore coordinator; the editor does not write it itself. */
-data class PendingDiaryText(val date: String, val entryId: String?, val expectedRev: Long?, val text: String)
-
-/** A live diary editor, as the restore coordinator sees it. */
-interface DiaryEditorHandle {
-    fun pendingForRestore(): PendingDiaryText?
-
-    /** The coordinator committed the text: into the entry at [newRev], or as a draft when [newRev] is null. */
-    fun flushedByRestore(entryId: String?, newRev: Long?)
 }
 
 /** The two writes an editor session makes; a seam for the autosave timing tests. */
@@ -41,6 +29,8 @@ class DiaryRepository(
     private val db: AppDatabase,
     private val gate: WriteGate,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Shared with the note editors; the restore commits all of them first. */
+    val editors: EditorRegistry = EditorRegistry(),
 ) : DiaryStore {
     private val dao = db.diaryDao()
     private val queue = Mutex()
@@ -49,10 +39,8 @@ class DiaryRepository(
     @Volatile internal var failBodyWrites: Boolean = false
     @Volatile internal var failDraftWrites: Boolean = false
 
-    val editors = CopyOnWriteArraySet<DiaryEditorHandle>()
-
-    override fun register(editor: DiaryEditorHandle) { editors += editor }
-    override fun unregister(editor: DiaryEditorHandle) { editors -= editor }
+    override fun register(editor: DiaryEditorHandle) = editors.add(editor)
+    override fun unregister(editor: DiaryEditorHandle) = editors.remove(editor)
 
     private suspend fun <T> serial(block: suspend () -> T): T = queue.withLock { gate.write { block() } }
 

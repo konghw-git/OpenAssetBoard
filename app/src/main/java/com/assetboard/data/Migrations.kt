@@ -27,6 +27,24 @@ object Migrations {
         }
     }
 
+    /** Adds the notes, their topics, sources and drafts; nothing else changes. */
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            for (sql in V5_TABLES) db.execSQL(sql)
+        }
+    }
+
+    private val V5_TABLES = listOf(
+        "CREATE TABLE IF NOT EXISTS `note_topics` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `sort_order` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "CREATE TABLE IF NOT EXISTS `notes` (`id` TEXT NOT NULL, `topic_id` TEXT, `body` TEXT NOT NULL, `body_rev` INTEGER NOT NULL, `pinned` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `reviewed_at` INTEGER, `deleted_at` INTEGER, `delete_batch` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`topic_id`) REFERENCES `note_topics`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "CREATE INDEX IF NOT EXISTS `index_notes_topic_id` ON `notes` (`topic_id`)",
+        "CREATE INDEX IF NOT EXISTS `index_notes_delete_batch` ON `notes` (`delete_batch`)",
+        "CREATE TABLE IF NOT EXISTS `note_sources` (`note_id` TEXT NOT NULL, `kind` TEXT NOT NULL, `ref` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`note_id`, `kind`, `ref`), FOREIGN KEY(`note_id`) REFERENCES `notes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "CREATE INDEX IF NOT EXISTS `index_note_sources_kind_ref` ON `note_sources` (`kind`, `ref`)",
+        "CREATE TABLE IF NOT EXISTS `note_drafts` (`id` TEXT NOT NULL, `note_id` TEXT, `text` TEXT NOT NULL, `reason` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`note_id`) REFERENCES `notes`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "CREATE INDEX IF NOT EXISTS `index_note_drafts_note_id` ON `note_drafts` (`note_id`)",
+    )
+
     private val V2_TABLES = listOf(
         "CREATE TABLE IF NOT EXISTS `todo_lists` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `notes` TEXT NOT NULL, `deadline` TEXT, `sort_order` INTEGER NOT NULL, `archived_at` INTEGER, `created_at` INTEGER NOT NULL, `deleted_at` INTEGER, `delete_batch` TEXT, PRIMARY KEY(`id`))",
         "CREATE TABLE IF NOT EXISTS `todo_sections` (`id` TEXT NOT NULL, `list_id` TEXT NOT NULL, `name` TEXT NOT NULL, `sort_order` INTEGER NOT NULL, `deleted_at` INTEGER, `delete_batch` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`list_id`) REFERENCES `todo_lists`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",

@@ -29,6 +29,9 @@ class Fixture {
     val ledger = LedgerRepository(db, gate, scope, clock = { now })
     val todos = TodoRepository(db, gate, scope, calendar = { calendar }, clock = { now }, zone = { zone }) { changed += it }
     val diary = DiaryRepository(db, gate, clock = { now })
+    /** The diary's registry, shared with the notes as in the app. */
+    val editors: EditorRegistry get() = diary.editors
+    val notes = NoteRepository(db, gate, diary.editors, clock = { now })
     val habits = HabitRepository(db, gate, clock = { now }, zone = { zone })
     val health = HealthRepository(db, gate, clock = { now }, zone = { zone })
     val settings = SettingsStore(context)
@@ -36,7 +39,7 @@ class Fixture {
     val effectCalls = mutableListOf<List<String>>()
     var restoredCount = 0
     val backup = BackupManager(
-        context, db, settings, gate, diary,
+        context, db, settings, gate, diary, notes, editors,
         calendar = { calendar },
         effects = object : RestoreEffects {
             override suspend fun afterRestore(oldTodoIds: List<String>) {

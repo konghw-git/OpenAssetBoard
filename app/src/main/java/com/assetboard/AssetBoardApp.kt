@@ -9,11 +9,13 @@ import com.assetboard.data.AppDatabase
 import com.assetboard.data.BackupManager
 import com.assetboard.data.BackupWorker
 import com.assetboard.data.DiaryRepository
+import com.assetboard.data.EditorRegistry
 import com.assetboard.data.HabitRepository
 import com.assetboard.data.HealthRepository
 import com.assetboard.data.HolidayRepository
 import com.assetboard.data.LedgerRepository
 import com.assetboard.data.MaintenanceWorker
+import com.assetboard.data.NoteRepository
 import com.assetboard.data.SettingsStore
 import com.assetboard.data.TodoRepository
 import com.assetboard.data.WeatherService
@@ -34,7 +36,7 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
 /**
- * Hand-wired dependencies. The todo, diary, network and reminder parts are lazy and fail on their
+ * Hand-wired dependencies. The todo, diary, note, network and reminder parts are lazy and fail on their
  * own: nothing in them may keep the asset screens from starting.
  */
 class AppContainer(private val context: Context) {
@@ -53,7 +55,10 @@ class AppContainer(private val context: Context) {
             appScope.launch { TodoWidget.refresh(context) }
         }
     }
-    val diary by lazy { DiaryRepository(db, gate) }
+    /** Every open diary and note editor; a restore commits their unsaved text first. */
+    val editors = EditorRegistry()
+    val diary by lazy { DiaryRepository(db, gate, editors = editors) }
+    val notes by lazy { NoteRepository(db, gate, editors) }
     val habits by lazy { HabitRepository(db, gate) }
     val health by lazy { HealthRepository(db, gate) }
     val weather by lazy { WeatherService(context, settings) }
@@ -77,7 +82,7 @@ class AppContainer(private val context: Context) {
 
     val backup by lazy {
         BackupManager(
-            context, db, settings, gate, diary,
+            context, db, settings, gate, diary, notes, editors,
             calendar = { holidays.table.value },
             effects = reminders,
             onRestored = {

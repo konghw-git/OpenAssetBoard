@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,6 +76,10 @@ import com.assetboard.ui.diary.DiaryCalendarScreen
 import com.assetboard.ui.diary.DiaryScreen
 import com.assetboard.ui.diary.DiarySearchScreen
 import com.assetboard.ui.health.HealthScreen
+import com.assetboard.ui.notes.NoteScreen
+import com.assetboard.ui.notes.NoteSearchScreen
+import com.assetboard.ui.notes.NoteTopicsScreen
+import com.assetboard.ui.notes.NotesScreen
 import com.assetboard.ui.overview.OverviewScreen
 import com.assetboard.ui.record.FlowEditScreen
 import com.assetboard.ui.record.ValuationEditScreen
@@ -122,7 +128,7 @@ open class ActionViewModel(container: AppContainer) : ViewModel() {
 }
 
 object Routes {
-    /** The three tabs, side by side in one pager. */
+    /** The four tabs, side by side in one pager. */
     const val HOME = "home"
     const val TREND = "trend"
     const val SETTINGS = "settings"
@@ -131,6 +137,10 @@ object Routes {
     const val PRE_RESTORE = "pre_restore"
     const val REMINDER_GUIDE = "reminder_guide"
     const val DIARY_SEARCH = "diary_search"
+    const val NOTE_SEARCH = "note_search"
+    const val NOTE_TOPICS = "note_topics"
+    /** A note's page; without [id] a new note, placed in [topicId] on its first write. */
+    fun note(id: String? = null, topicId: String? = null) = "note?id=${id.orEmpty()}&topic=${topicId.orEmpty()}"
     fun health(record: Boolean = false) = "health?record=${if (record) "1" else ""}"
     fun stocktake(snapshotId: String? = null) = "stocktake?snapshotId=${snapshotId.orEmpty()}"
     fun account(id: String) = "account/$id"
@@ -155,6 +165,7 @@ private enum class Tab(val label: String, val icon: ImageVector, val selectedIco
     ASSETS("资产", Icons.Outlined.AccountBalanceWallet, Icons.Filled.AccountBalanceWallet),
     TODO("待办", Icons.Outlined.TaskAlt, Icons.Filled.TaskAlt),
     DIARY("日记", Icons.Outlined.EditNote, Icons.Filled.EditNote),
+    NOTES("笔记", Icons.Outlined.AutoStories, Icons.Filled.AutoStories),
 }
 
 private const val PICKED_DATE = "picked_date"
@@ -164,7 +175,7 @@ private fun optional(name: String) = navArgument(name) { type = NavType.StringTy
 private fun NavBackStackEntry.arg(name: String): String? = arguments?.getString(name)?.takeIf { it.isNotEmpty() }
 
 /**
- * The app shell: three tabs in a pager (swipe or tap the bar), pages pushed over them, rebuilt from scratch after every restore
+ * The app shell: four tabs in a pager (swipe or tap the bar), pages pushed over them, rebuilt from scratch after every restore
  * (fresh ViewModels, fresh epoch). Cold start always lands on the assets tab.
  */
 @Composable
@@ -211,6 +222,13 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
         nav.popBackStack(Routes.HOME, inclusive = false)
         scope.launch { pager.scrollToPage(tab.ordinal) }
     }
+    // A note's source: the diary tab, on that day. Only setting the date would leave it pending
+    // until the diary page happened to be composed.
+    val openDiary: (java.time.LocalDate) -> Unit = { d ->
+        nav.getBackStackEntry(Routes.HOME).savedStateHandle[PICKED_DATE] = d.toString()
+        showTab(Tab.DIARY)
+    }
+    val openNote: (String) -> Unit = { id -> nav.navigate(Routes.note(id)) }
     LaunchedEffect(open) {
         when (open) {
             null -> return@LaunchedEffect
@@ -302,8 +320,16 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                                 onSettings = settings,
                                 onStocktake = { nav.navigate(Routes.stocktake()) },
                                 onEditingChange = { diaryEditing = it },
+                                onOpenNote = openNote,
                             )
                         }
+                        Tab.NOTES -> NotesScreen(
+                            onOpen = openNote,
+                            onNew = { topicId -> nav.navigate(Routes.note(topicId = topicId)) },
+                            onSearch = { nav.navigate(Routes.NOTE_SEARCH) },
+                            onTopics = { nav.navigate(Routes.NOTE_TOPICS) },
+                            onSettings = settings,
+                        )
                     }
                 }
             }
@@ -315,6 +341,14 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                 DiaryCalendarScreen(initial = it.arg("date"), onBack = back, onPick = pickDate)
             }
             composable(Routes.DIARY_SEARCH) { DiarySearchScreen(onBack = back, onPick = pickDate) }
+            composable("note?id={id}&topic={topic}", arguments = listOf(optional("id"), optional("topic"))) {
+                NoteScreen(onBack = back, onOpenDiary = openDiary)
+            }
+            composable(Routes.NOTE_SEARCH) {
+                // The results stay underneath: back from a note returns to them.
+                NoteSearchScreen(onBack = back, onOpen = openNote)
+            }
+            composable(Routes.NOTE_TOPICS) { NoteTopicsScreen(onBack = back) }
             composable(Routes.TRASH) { TrashScreen(onBack = back) }
             composable(Routes.PRE_RESTORE) { PreRestoreScreen(onBack = back) }
             composable(Routes.REMINDER_GUIDE) { ReminderGuideScreen(onBack = back) }

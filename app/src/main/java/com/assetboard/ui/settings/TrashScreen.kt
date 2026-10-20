@@ -34,6 +34,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.assetboard.AppContainer
 import com.assetboard.data.DiaryEntry
+import com.assetboard.data.NoteText
 import com.assetboard.data.TodoKind
 import com.assetboard.data.TodoRepository
 import com.assetboard.data.TrashBatch
@@ -52,6 +53,7 @@ import kotlinx.coroutines.flow.stateIn
 class TrashViewModel(private val container: AppContainer) : ActionViewModel(container) {
     private val todos = container.todos
     private val diary = container.diary
+    private val notes = container.notes
     val batches: StateFlow<List<TrashBatch>?> = todos.trash.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     /** A diary restore that would collide with an entry written since: (batch, the current entry). */
     val diaryConflict = MutableStateFlow<Pair<String, DiaryEntry>?>(null)
@@ -59,11 +61,14 @@ class TrashViewModel(private val container: AppContainer) : ActionViewModel(cont
     val purgeConfirm = MutableStateFlow<Pair<String, Int>?>(null)
 
     fun restore(b: TrashBatch) = action {
-        if (b.diary.isNotEmpty()) {
-            val conflict = diary.restoreConflict(b.batch)
-            if (conflict != null) diaryConflict.value = b.batch to conflict else diary.restore(b.batch, replace = false)
-        } else {
-            todos.restoreBatch(b.batch)
+        when {
+            b.diary.isNotEmpty() -> {
+                val conflict = diary.restoreConflict(b.batch)
+                if (conflict != null) diaryConflict.value = b.batch to conflict else diary.restore(b.batch, replace = false)
+            }
+            // Notes never collide with a live one; restoreBatch below knows only lists, sections and todos.
+            b.notes.isNotEmpty() -> notes.restore(b.batch)
+            else -> todos.restoreBatch(b.batch)
         }
     }
 
@@ -93,6 +98,7 @@ fun describe(b: TrashBatch): String {
         b.lists.isNotEmpty() -> "清单 · ${b.lists.first().name}" + if (open.isNotEmpty()) "（含 ${open.size} 条待办）" else ""
         b.sections.isNotEmpty() -> "分区 · ${b.sections.first().name}" + if (open.isNotEmpty()) "（含 ${open.size} 条待办）" else ""
         b.diary.isNotEmpty() -> "日记 · ${b.diary.first().date}"
+        b.notes.isNotEmpty() -> "笔记 · ${b.notes.first().title}"
         b.todos.size == 1 -> "待办 · ${b.todos.first().title}"
         else -> "${b.todos.size} 条待办"
     }
@@ -125,7 +131,7 @@ fun TrashScreen(onBack: () -> Unit) {
         val list = batches ?: return@Scaffold
         if (list.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                Text("回收站是空的。删除的待办、清单和日记会在这里保留 30 天。", color = cs.onSurfaceVariant, modifier = Modifier.padding(40.dp))
+                Text("回收站是空的。删除的待办、清单、日记和笔记会在这里保留 30 天。", color = cs.onSurfaceVariant, modifier = Modifier.padding(40.dp))
             }
             return@Scaffold
         }
@@ -142,7 +148,8 @@ fun TrashScreen(onBack: () -> Unit) {
                 SectionCard(contentPadding = PaddingValues(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 6.dp)) {
                     Text(describe(b), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 12.dp))
                     Text("删除于 ${Dates.dateTime(b.deletedAt)} · 还剩 ${left.coerceAtLeast(0)} 天", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                    b.diary.firstOrNull()?.let { Text(it.body.lineSequence().firstOrNull().orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, end = 12.dp)) }
+                    val preview = b.diary.firstOrNull()?.body?.lineSequence()?.firstOrNull() ?: b.notes.firstOrNull()?.let { NoteText.preview(it.body) }
+                    preview?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, end = 12.dp)) }
                     Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                         val multi = b.todos.size + b.sections.size > 1 || (b.lists.isNotEmpty() && b.todos.isNotEmpty())
                         if (multi) TextButton(onClick = { expanded = if (b.batch in expanded) expanded - b.batch else expanded + b.batch }) { Text(if (b.batch in expanded) "收起" else "展开") }

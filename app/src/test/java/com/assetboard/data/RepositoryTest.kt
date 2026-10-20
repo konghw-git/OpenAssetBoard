@@ -57,7 +57,7 @@ class RepositoryTest {
     }
 
     private fun backupManager() = BackupManager(
-        context, db, SettingsStore(context), gate, DiaryRepository(db, gate),
+        context, db, SettingsStore(context), gate, DiaryRepository(db, gate), NoteRepository(db, gate, EditorRegistry()), EditorRegistry(),
         calendar = { com.assetboard.domain.calendar.WeekdaysOnly },
         effects = object : RestoreEffects { override suspend fun afterRestore(oldTodoIds: List<String>) {} },
         onRestored = {},

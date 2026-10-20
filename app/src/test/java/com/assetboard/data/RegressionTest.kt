@@ -78,7 +78,7 @@ class RegressionTest {
             val entered = CompletableDeferred<Unit>()
             var refreshed = false
             val manager = BackupManager(
-                f.context, f.db, f.settings, f.gate, f.diary, { f.calendar },
+                f.context, f.db, f.settings, f.gate, f.diary, f.notes, f.editors, { f.calendar },
                 object : RestoreEffects {
                     override suspend fun afterRestore(oldTodoIds: List<String>) { entered.complete(Unit); awaitCancellation() }
                 },
