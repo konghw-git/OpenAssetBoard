@@ -508,6 +508,51 @@ class NoteTest {
         assertEquals("定投\n\n一段", com.assetboard.ui.notes.extractBody(" 定投 ", d, listOf("一段")))
     }
 
+    // ------------------------------------------------------------ today's review
+
+    private val week = NoteRepository.REVIEW_MIN_AGE_MS
+
+    @Test fun reviewPicksTheNoteLeftAloneLongestAndKeepsItAllDay() = f.run {
+        val old = note("老笔记")
+        f.now += 1_000
+        val older = note("更老的也会被改")
+        f.now += 1_000
+        repo.setPinned(note("置顶的").id, true)
+        f.now += 1_000
+        repo.append(older.id, "补一句", day)
+        val today = date("2026-10-20")
+        // Nothing is a week old yet.
+        assertNull(repo.reviewPick(today))
+        f.now += week + 10_000
+        assertEquals(old.id, repo.reviewPick(today)!!.id)
+        // Opening it does not change today's pick, even though another note is now older.
+        repo.setReviewed(old.id)
+        assertEquals(old.id, repo.reviewPick(today)!!.id)
+        // Tomorrow the other one comes up.
+        assertEquals(older.id, repo.reviewPick(today.plusDays(1))!!.id)
+    }
+
+    @Test fun reviewPicksAgainWhenItsNoteIsGoneOrPinned() = f.run {
+        val a = note("甲")
+        f.now += 1_000
+        val b = note("乙")
+        f.now += 1_000
+        val c = note("丙")
+        f.now += week + 1
+        val today = date("2026-10-20")
+        assertEquals(a.id, repo.reviewPick(today)!!.id)
+        repo.delete(a.id)
+        assertEquals(b.id, repo.reviewPick(today)!!.id)
+        repo.setPinned(b.id, true)
+        assertEquals(c.id, repo.reviewPick(today)!!.id)
+        // Put away for today: no card until tomorrow, and it goes to the back of the queue.
+        repo.dismissReview(today, c.id)
+        assertNull(repo.reviewPick(today))
+        f.now += week + 1
+        repo.restore(dao.all().first { it.id == a.id }.deleteBatch!!)
+        assertEquals(a.id, repo.reviewPick(today.plusDays(1))!!.id)
+    }
+
     @Test fun textRules() {
         assertEquals("标题", NoteText.title("\n  标题  \n正文"))
         assertEquals(NoteText.UNTITLED, NoteText.title(" \n "))

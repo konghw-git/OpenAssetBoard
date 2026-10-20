@@ -76,6 +76,8 @@ fun ExtractSheet(
     text: String,
     notes: List<Note>,
     topics: List<NoteTopic>,
+    /** The text is what was selected in the diary: all of it starts ticked. */
+    fromSelection: Boolean = false,
     onDismiss: () -> Unit,
     onSaveNew: (body: String) -> Unit,
     onAppend: (note: Note, block: String) -> Unit,
@@ -83,7 +85,7 @@ fun ExtractSheet(
     val cs = MaterialTheme.colorScheme
     val paragraphs = remember(text) { NoteText.paragraphs(text) }
     // A single paragraph is what there is to take; with more, the user picks.
-    var picked by rememberSaveable(text) { mutableStateOf(if (paragraphs.size == 1) listOf(0) else emptyList()) }
+    var picked by rememberSaveable(text) { mutableStateOf(if (paragraphs.size == 1 || fromSelection) paragraphs.indices.toList() else emptyList()) }
     var title by rememberSaveable { mutableStateOf(extractTitle(date)) }
     var choosing by rememberSaveable { mutableStateOf(false) }
     val chosen = paragraphs.filterIndexed { i, _ -> i in picked }
@@ -112,7 +114,7 @@ fun ExtractSheet(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("提炼到笔记", style = MaterialTheme.typography.titleLarge)
-                            Text("${dayLabel(date)}的日记 · 勾选要留下的段落，日记本身不变", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text(if (fromSelection) "${dayLabel(date)}的日记 · 选中的文字，日记本身不变" else "${dayLabel(date)}的日记 · 勾选要留下的段落，日记本身不变", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         if (paragraphs.size > 1) {
                             TextButton(onClick = { picked = if (all) emptyList() else paragraphs.indices.toList() }) { Text(if (all) "全不选" else "全选") }

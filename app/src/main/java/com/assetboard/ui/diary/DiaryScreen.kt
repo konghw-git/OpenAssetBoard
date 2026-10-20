@@ -83,6 +83,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.contextmenu.builder.item
+import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -183,6 +185,8 @@ fun DiaryScreen(
     val body = session?.text?.collectAsStateWithLifecycle()?.value.orEmpty()
     /** The day and its text as they were when 提炼 was tapped: the sheet works on that snapshot. */
     var extracting by remember { mutableStateOf<Pair<LocalDate, String>?>(null) }
+    // Set when the text came from a selection: then all of it is ticked to begin with.
+    var extractingSelection by remember { mutableStateOf(false) }
     ErrorDialog(error) { vm.error.value = null }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
     LaunchedEffect(vm) {
@@ -252,7 +256,7 @@ fun DiaryScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             HeaderAction(Icons.Outlined.Search, "搜索", onSearch)
                             // From the session, not the entry: a save started by 完成 may not have landed yet.
-                            if (entry != null && body.isNotBlank()) HeaderAction(Icons.Outlined.Lightbulb, "提炼到笔记", { extracting = date to body })
+                            if (entry != null && body.isNotBlank()) HeaderAction(Icons.Outlined.Lightbulb, "提炼到笔记", { extractingSelection = false; extracting = date to body })
                             if (entry != null) HeaderAction(Icons.Outlined.Delete, "删除这篇", { askDelete = true })
                             HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
                         }
@@ -310,7 +314,14 @@ fun DiaryScreen(
                     }
                 }
                 session?.let {
-                    Editor(it, onInput = vm::onInput, onFocus = { f -> editing = f }) {
+                    Editor(
+                        it, onInput = vm::onInput, onFocus = { f -> editing = f },
+                        onExtract = { picked ->
+                            focusManager.clearFocus()
+                            extractingSelection = true
+                            extracting = date to picked
+                        },
+                    ) {
                         if (showHabits) HabitRecord(habits, live = date == today)
                     }
                 }
@@ -330,6 +341,7 @@ fun DiaryScreen(
         val topics by remember { container.notes.observeTopics() }.collectAsStateWithLifecycle(emptyList())
         ExtractSheet(
             day, text, notes, topics,
+            fromSelection = extractingSelection,
             onDismiss = { extracting = null },
             onSaveNew = { b -> vm.extractToNew(day, b) { id -> extracting = null; onOpenNote(id) } },
             onAppend = { n, block -> extracting = null; vm.extractAppend(day, n, block) },
@@ -400,8 +412,17 @@ private fun streakText(n: Int): String = when (n) {
     else -> "已连续记录 $n 天"
 }
 
+private object EXTRACT_ITEM
+
 @Composable
-private fun Editor(session: DiarySession, onInput: (String) -> Unit, onFocus: (Boolean) -> Unit, header: @Composable () -> Unit = {}) {
+private fun Editor(
+    session: DiarySession,
+    onInput: (String) -> Unit,
+    onFocus: (Boolean) -> Unit,
+    /** The selected text, from 提炼到笔记 in the selection menu. */
+    onExtract: (String) -> Unit = {},
+    header: @Composable () -> Unit = {},
+) {
     val cs = MaterialTheme.colorScheme
     val text by session.text.collectAsStateWithLifecycle()
     val status by session.status.collectAsStateWithLifecycle()
@@ -460,10 +481,24 @@ private fun Editor(session: DiarySession, onInput: (String) -> Unit, onFocus: (B
                     },
                     textStyle = style,
                     cursorBrush = SolidColor(cs.primary),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 270.dp).onFocusChanged {
-                        focused = it.isFocused
-                        onFocus(it.isFocused)
-                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 270.dp)
+                        .onFocusChanged {
+                            focused = it.isFocused
+                            onFocus(it.isFocused)
+                        }
+                        // Selecting text offers to take just that into a note.
+                        .appendTextContextMenuComponents {
+                            val sel = value.selection
+                            if (!sel.collapsed && value.text.substring(sel.min, sel.max).isNotBlank()) {
+                                separator()
+                                item(EXTRACT_ITEM, "提炼到笔记") {
+                                    onExtract(value.text.substring(sel.min, sel.max).trim())
+                                    close()
+                                }
+                            }
+                        },
                 )
             }
             Spacer(Modifier.height(10.dp))

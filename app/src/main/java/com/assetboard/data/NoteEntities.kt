@@ -138,6 +138,13 @@ interface NoteDao {
 
     @Query("SELECT COUNT(*) FROM notes WHERE topic_id = :topicId AND deleted_at IS NULL") suspend fun liveCountIn(topicId: String): Int
     @Query("SELECT COALESCE(MIN(position), 0) FROM notes") suspend fun minPosition(): Long
+
+    /** The live, unpinned note left alone the longest, if that was before [before]. */
+    @Query(
+        "SELECT * FROM notes WHERE deleted_at IS NULL AND pinned = 0 AND max(updated_at, COALESCE(reviewed_at, 0)) < :before " +
+            "ORDER BY max(updated_at, COALESCE(reviewed_at, 0)), id LIMIT 1",
+    )
+    suspend fun reviewCandidate(before: Long): Note?
     @Query("UPDATE notes SET position = :position WHERE id = :id") suspend fun setPosition(id: String, position: Long)
 
     @Insert suspend fun insert(note: Note)

@@ -40,7 +40,7 @@ class NoteScreenshotTest {
 
     private val today = LocalDate.now()
 
-    private fun demo(empty: Boolean = false): AppContainer {
+    private fun demo(empty: Boolean = false, review: Boolean = false): AppContainer {
         val c = AppContainer(ApplicationProvider.getApplicationContext())
         c.settings.setBool(c.settings.networkEnabled, false)
         runBlocking(c.gate.bound()) {
@@ -62,6 +62,15 @@ class NoteScreenshotTest {
             n.create("《置身事内》读后\n地方政府的激励结构解释了很多看起来不合理的现象。", null, read)
             n.create("火锅局的启发\n换工作之前，先想清楚自己要的是什么。", SourceRef.day(today.minusDays(9)))
             n.saveDraft(null, "一段没能存进正文的文字", "保存失败：磁盘已满")
+            if (!review) return@runBlocking
+            // Written six weeks ago and not touched since: today's review.
+            val longAgo = System.currentTimeMillis() - 42L * 24 * 60 * 60 * 1000
+            c.db.noteDao().insert(
+                com.assetboard.data.Note(
+                    "old", read, "复利的耐心\n真正难的不是算清楚，而是在什么都没发生的那些年里不下车。#长期主义",
+                    bodyRev = 1, position = 99, createdAt = longAgo, updatedAt = longAgo,
+                ),
+            )
         }
         return c
     }
@@ -93,6 +102,13 @@ class NoteScreenshotTest {
         openTab()
         waitFor("定投纪律")
         capture("50-notes")
+    }
+
+    @Test fun reviewCard() {
+        show(demo(review = true))
+        openTab()
+        waitFor("今日回顾")
+        capture("50b-notes-review")
     }
 
     @Test fun notesListDark() {

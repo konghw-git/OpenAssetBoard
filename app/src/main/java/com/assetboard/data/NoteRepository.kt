@@ -149,6 +149,30 @@ class NoteRepository(
         moved.forEachIndexed { i, n -> if (n.position != slots[i]) dao.setPosition(n.id, slots[i]) }
     }
 
+    /**
+     * Today's review: the note left alone the longest (a week at least), the same one all day.
+     * The pick lives in `app_meta` (device-local, never backed up); a day change, or a pick that
+     * no longer exists or was pinned since, chooses again. Null when nothing qualifies or the
+     * card was put away for today.
+     */
+    suspend fun reviewPick(today: LocalDate): Note? = serial {
+        val meta = db.metaDao()
+        val stored = meta.get(REVIEW_PICK)?.split('|')
+        if (stored != null && stored.size >= 2 && stored[0] == today.toString()) {
+            if (stored.getOrNull(2) == REVIEW_DONE) return@serial null
+            dao.note(stored[1])?.takeIf { it.deletedAt == null && !it.pinned }?.let { return@serial it }
+        }
+        val n = dao.reviewCandidate(clock() - REVIEW_MIN_AGE_MS) ?: return@serial null
+        meta.put(AppMeta(REVIEW_PICK, "$today|${n.id}"))
+        n
+    }
+
+    /** Puts today's review away: the note counts as reviewed and the card stays hidden until tomorrow. */
+    suspend fun dismissReview(today: LocalDate, noteId: String) = serial {
+        dao.setReviewed(noteId, clock())
+        db.metaDao().put(AppMeta(REVIEW_PICK, "$today|$noteId|$REVIEW_DONE"))
+    }
+
     suspend fun setReviewed(id: String, at: Long? = clock()) = serial { dao.setReviewed(id, at) }
 
     // ------------------------------------------------------------ trash
@@ -200,6 +224,10 @@ class NoteRepository(
 
     companion object {
         const val TOPIC_NAME_MAX = 16
+        const val REVIEW_PICK = "note_review_pick"
+        private const val REVIEW_DONE = "done"
+        /** A note touched within the last week is too fresh to come back for review. */
+        const val REVIEW_MIN_AGE_MS = 7L * 24 * 60 * 60 * 1000
 
         fun conflictReason(n: Note?) = when {
             n == null -> "这篇笔记已被永久删除"

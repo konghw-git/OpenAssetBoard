@@ -91,6 +91,14 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ripple
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import com.assetboard.data.NoteText
+import com.assetboard.ui.todo.rememberToday
 import androidx.compose.ui.layout.layout
 import com.assetboard.ui.components.GlassSnackbarHost
 import com.assetboard.ui.components.SwipeAction
@@ -108,6 +116,8 @@ import com.assetboard.ui.components.reorderable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import java.time.LocalDate
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -134,6 +144,32 @@ class NotesViewModel(private val container: AppContainer) : ActionViewModel(cont
 
     private val _events = MutableSharedFlow<UndoEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<UndoEvent> = _events
+
+    private val reviewId = MutableStateFlow<String?>(null)
+    private var reviewDay: LocalDate? = null
+    /** Today's review card, kept live as the note changes. */
+    val review: StateFlow<Note?> = combine(all, reviewId) { list, id -> list?.firstOrNull { it.id == id && !it.pinned } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * Picks (or reloads) today's review. Runs on every resume and whenever the list changes, so
+     * a pick that was deleted or pinned meanwhile is replaced. Failing quietly is fine: the card
+     * is a nicety.
+     */
+    fun refreshReview(today: LocalDate) = launchBound {
+        val list = all.value ?: return@launchBound
+        val id = reviewId.value
+        if (reviewDay == today && (id == null || list.any { it.id == id && !it.pinned })) return@launchBound
+        reviewId.value = runCatching { notes.reviewPick(today)?.id }.getOrNull()
+        reviewDay = today
+    }
+
+    fun openReview(n: Note) = launchBound { runCatching { notes.setReviewed(n.id) } }
+
+    fun dismissReview(n: Note, today: LocalDate) = action {
+        notes.dismissReview(today, n.id)
+        reviewId.value = null
+    }
 
     fun setSort(s: NoteSort) {
         container.settings.putString(KEY_SORT, s.name)
@@ -196,6 +232,9 @@ fun NotesScreen(
     val filterRaw by vm.filter.collectAsStateWithLifecycle()
     val sort by vm.sort.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+    val review by vm.review.collectAsStateWithLifecycle()
+    val today = rememberToday()
+    LaunchedEffect(today, all) { vm.refreshReview(today) }
     var draftsOpen by rememberSaveable { mutableStateOf(false) }
     var topicsOpen by rememberSaveable { mutableStateOf(false) }
     var filingId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -276,6 +315,16 @@ fun NotesScreen(
                     }
                     if (drafts.isNotEmpty()) {
                         item(key = "drafts") { DraftBanner(drafts.size, Modifier.animateItem()) { draftsOpen = true } }
+                    }
+                    review?.takeIf { filter == NotesViewModel.ALL }?.let { r ->
+                        item(key = "review") {
+                            ReviewCard(
+                                r, topics, today,
+                                onOpen = { vm.openReview(r); onOpen(r.id) },
+                                onDismiss = { vm.dismissReview(r, today) },
+                                modifier = Modifier.animateItem(),
+                            )
+                        }
                     }
                     when {
                         list == null -> Unit
@@ -520,6 +569,59 @@ private fun AllTopicsButton(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(Icons.Outlined.GridView, "全部主题", tint = cs.onSurface, modifier = Modifier.size(19.dp))
+    }
+}
+
+/**
+ * One older note back in view each day. It says how long it has been; opening it counts as
+ * reviewed (the card stays for the day), and the close button puts it away until tomorrow.
+ */
+@Composable
+private fun ReviewCard(note: Note, topics: List<NoteTopic>, today: LocalDate, onOpen: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    val extra = AppTheme.extra
+    val shape = RoundedCornerShape(24.dp)
+    val source = remember { MutableInteractionSource() }
+    val now = System.currentTimeMillis()
+    // Since it was last written or opened, not counting today's look.
+    val days = Dates.daysBetween(maxOf(note.updatedAt, note.reviewedAt?.takeIf { Dates.daysBetween(it, now) > 0 } ?: 0L), now)
+    val since = if (days < 60) "$days 天没碰过了" else "${days / 30} 个多月没碰过了"
+    val seenToday = note.reviewedAt?.let { Dates.daysBetween(it, System.currentTimeMillis()) == 0L } == true
+    val topic = topics.firstOrNull { it.id == note.topicId }
+    Column(
+        modifier
+            .fillMaxWidth()
+            .pressScale(source, 0.98f)
+            .glass(shape, glass, tint = cs.secondary.copy(alpha = 0.07f), elevation = 12.dp)
+            .clip(shape)
+            .clickable(interactionSource = source, indication = ripple(), onClick = onOpen)
+            .drawBehind {
+                // A warm glow in the corner marks the card as something brought back.
+                drawCircle(Brush.radialGradient(listOf(cs.secondary.copy(alpha = 0.16f), Color.Transparent), center = Offset(size.width, 0f), radius = size.width * 0.6f), size.width * 0.6f, Offset(size.width, 0f))
+            }
+            .padding(start = 18.dp, end = 6.dp, top = 10.dp, bottom = 16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(26.dp).clip(CircleShape).background(Brush.linearGradient(listOf(cs.secondary, cs.secondary.copy(alpha = 0.7f)))), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.History, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+            Spacer(Modifier.width(8.dp))
+            Text("今日回顾", style = MaterialTheme.typography.labelLarge, color = cs.secondary)
+            Text(
+                if (seenToday) " · 今天看过了" else " · $since",
+                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.Close, "今天不看了", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            }
+        }
+        Text(note.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, end = 12.dp))
+        val body = remember(note.body, cs.primary) { tagged(NoteText.preview(note.body), cs.primary) }
+        if (body.isNotEmpty()) {
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, end = 12.dp))
+        }
+        if (topic != null) TopicTag(topic.name, topicColor(topics, topic.id), Modifier.padding(top = 10.dp))
     }
 }
 
