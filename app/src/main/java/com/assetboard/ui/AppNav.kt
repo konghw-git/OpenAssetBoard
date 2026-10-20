@@ -76,6 +76,9 @@ import com.assetboard.ui.week.WeekScreen
 import com.assetboard.ui.components.DustState
 import com.assetboard.ui.components.GlassSnackbarHost
 import com.assetboard.ui.components.LocalDust
+import com.assetboard.ui.components.LocalTabSwipeZones
+import com.assetboard.ui.components.TabSwipeHandles
+import com.assetboard.ui.components.TabSwipeZones
 import com.assetboard.ui.components.backdropSource
 import com.assetboard.ui.components.rememberBackdrop
 import com.assetboard.ui.account.AccountEditScreen
@@ -310,6 +313,10 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
             composable(Routes.HOME, enterTransition = { fadeIn() }, exitTransition = { fadeOut() }) { e ->
                 // Back from another tab goes to the assets tab first, as the bar did before.
                 BackHandler(pager.currentPage != Tab.ASSETS.ordinal) { scope.launch { pager.animateScrollToPage(Tab.ASSETS.ordinal) } }
+                // Strokes over a todo or note row work the row; the handles at the middle of the
+                // edges, and everything that is not a row, turn the tabs.
+                val zones = remember { TabSwipeZones() }
+                CompositionLocalProvider(LocalTabSwipeZones provides zones) {
                 HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !diaryEditing, key = { it }) { page ->
                     when (Tab.entries[page]) {
                         Tab.ASSETS -> OverviewScreen(
@@ -321,12 +328,15 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                             onAddAccount = { groupId -> nav.navigate(Routes.accountEdit(groupId = groupId)) },
                             onHealth = { record -> nav.navigate(Routes.health(record)) },
                         )
-                        Tab.TODO -> TodoHomeScreen(
-                            onSettings = settings,
-                            onGuide = { nav.navigate(Routes.REMINDER_GUIDE) },
-                            request = todoRequest,
-                            onRequestHandled = { todoRequest = null },
-                        )
+                        Tab.TODO -> Box(Modifier.fillMaxSize()) {
+                            TodoHomeScreen(
+                                onSettings = settings,
+                                onGuide = { nav.navigate(Routes.REMINDER_GUIDE) },
+                                request = todoRequest,
+                                onRequestHandled = { todoRequest = null },
+                            )
+                            TabSwipeHandles(pager.isScrollInProgress)
+                        }
                         Tab.DIARY -> {
                             val picked by e.savedStateHandle.getStateFlow<String?>(PICKED_DATE, null).collectAsStateWithLifecycle()
                             DisposableEffect(Unit) { onDispose { diaryEditing = false } }
@@ -342,14 +352,18 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                                 onOpenWeek = openWeek,
                             )
                         }
-                        Tab.NOTES -> NotesScreen(
-                            onOpen = openNote,
-                            onNew = { topicId -> nav.navigate(Routes.note(topicId = topicId)) },
-                            onSearch = { nav.navigate(Routes.NOTE_SEARCH) },
-                            onTopics = { nav.navigate(Routes.NOTE_TOPICS) },
-                            onSettings = settings,
-                        )
+                        Tab.NOTES -> Box(Modifier.fillMaxSize()) {
+                            NotesScreen(
+                                onOpen = openNote,
+                                onNew = { topicId -> nav.navigate(Routes.note(topicId = topicId)) },
+                                onSearch = { nav.navigate(Routes.NOTE_SEARCH) },
+                                onTopics = { nav.navigate(Routes.NOTE_TOPICS) },
+                                onSettings = settings,
+                            )
+                            TabSwipeHandles(pager.isScrollInProgress)
+                        }
                     }
+                }
                 }
             }
             val pickDate: (java.time.LocalDate) -> Unit = { d ->

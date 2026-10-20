@@ -177,11 +177,22 @@ class LedgerRepository(
     suspend fun canDelete(id: String): Boolean =
         dao.flowCount(id) == 0 && dao.valuationCount(id) <= 1 && dao.snapshotItemCount(id) == 0
 
-    suspend fun deleteAccount(id: String) = write {
+    /** Returns what was removed, for [restoreAccount]. */
+    suspend fun deleteAccount(id: String): DeletedAccount = write {
         val a = requireAccount(id)
         ensure(canDelete(id)) { "账户已有记录，只能停用" }
-        dao.valuationAt(id, a.baselineAt)?.let { dao.deleteValuation(it) }
+        val baseline = dao.valuationAt(id, a.baselineAt)
+        baseline?.let { dao.deleteValuation(it) }
         dao.deleteAccount(a)
+        DeletedAccount(a, baseline)
+    }
+
+    /** Undoes [deleteAccount]: the account and its baseline come back as they were. */
+    suspend fun restoreAccount(d: DeletedAccount) = write {
+        if (dao.account(d.account.id) != null) return@write
+        ensure(dao.group(d.account.groupId) != null) { "原来的分组已删除，无法恢复" }
+        dao.insertAccount(d.account)
+        d.baseline?.let { dao.insertValuation(it) }
     }
 
     /**
@@ -380,3 +391,6 @@ class LedgerRepository(
             }
     }
 }
+
+/** An account as [LedgerRepository.deleteAccount] removed it, with its baseline valuation. */
+data class DeletedAccount(val account: Account, val baseline: Valuation?)

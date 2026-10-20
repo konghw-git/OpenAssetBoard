@@ -46,7 +46,7 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Stocktake**: edit every account inline, touch only the ones that moved, backfill historical dates; each stocktake becomes a point on the net worth line.
 - **Trend**: 3 months / 6 months / 1 year / all time, with period high, low, change and change ratio; a bar-and-line chart of assets vs liabilities.
 - **Investment accounts**: buy, redeem, dividend, transfer, repay, borrow, external in/out. Fees have a payer, so the P&L arithmetic stays honest. Market value and net invested drawn as two lines.
-- **Account management**: groups, icons (built-in marks for common banks, payment apps and funds), an include-in-net-worth switch, suspend, "locked until" dates, moving the baseline earlier.
+- **Account management**: groups, icons (built-in marks for common banks, payment apps and funds), an include-in-net-worth switch, suspend, "locked until" dates, moving the baseline earlier. In an open group, swipe an account left to dissolve it (an account with records is suspended instead; both undo), right to change its balance right in the row.
 - **Cash at hand**: the counted accounts minus investments and locked balances, with a bar splitting assets into cash / locked / invested; tapping it lists every cash account.
 - **Health as an asset**: weigh in once a day, record weight (body fat optional), and follow weight, body fat and BMI with a 7-day average; BMI and body-fat grades, fat and lean mass, progress to a target and a nine-cell body type. A day without a weigh-in simply stays empty — no interpolation, no streaks.
 - **Home-screen widget**: net worth plus a one-tap stocktake.
@@ -61,7 +61,7 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Daily habits**: supplements, workout, diet, water, early sleep. Ticked on the todo page, shown read-only at the top of the diary.
 - **Reminders that fire**: normal notifications, a strong reminder (full screen, ring, vibrate — still on time in deep doze), per-occurrence reminders for repeating todos, catch-up after reboot, and recovery after the permission is revoked.
 - **Quick capture**: tap `+` on the widget, type, save — target under 5 seconds.
-- **Swipe actions**: swipe left to delete (the card breaks into dust; a small capsule at the bottom offers undo), right for complete, reschedule and the important flag.
+- **Swipe actions**: swipe left to delete (the card breaks into dust; a small capsule at the bottom offers undo), right for complete, reschedule and the important flag; checklist items swipe away on their own. A swipe on a row works the row; the tabs turn from the short handles halfway down the screen edges, or anywhere off the rows. Pull the list down for a new todo.
 - **Trash and logbook**: deleted todos, lists, diary entries, weekly reviews and notes stay for 30 days; completed occurrences of repeating todos stay in the logbook.
 
 <img src="docs/images/11-todo-home.webp" width="24%" alt="Todo"> <img src="docs/images/12-todo-composer.webp" width="24%" alt="Quick capture"> <img src="docs/images/25-todo-unfold.webp" width="24%" alt="Todo on a foldable"> <img src="docs/images/15-todo-detail.webp" width="24%" alt="Todo detail">

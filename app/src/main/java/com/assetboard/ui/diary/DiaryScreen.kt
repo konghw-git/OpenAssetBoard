@@ -301,7 +301,7 @@ fun DiaryScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
-            // Pinned: the day and its stocktake stay put while the text scrolls.
+            // Pinned: the day stays put while the page scrolls.
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val due by vm.dueWeek.collectAsStateWithLifecycle()
                 due?.takeIf { !editing && date == today }?.let { w -> DuePrompt(w, today) { onOpenWeek(w) } }
@@ -321,7 +321,6 @@ fun DiaryScreen(
                     onJump = { jump = true },
                     onCalendar = { onCalendar(date) },
                 )
-                StocktakeStrip(vm, date, today, onStocktake)
             }
             // Stepping a day slides the new page in from the side it lies on: a later day from the right.
             val lastDate = remember { arrayOf(date) }
@@ -338,6 +337,8 @@ fun DiaryScreen(
                     .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 48.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // Part of the page, above the text, so it scrolls away with it.
+                StocktakeStrip(vm, date, today, onStocktake)
                 drafts.forEach { d ->
                     Box(Modifier.fillMaxWidth().glass(MaterialTheme.shapes.large, glass, cs.tertiary.copy(alpha = 0.12f))) {
                         Column(Modifier.padding(start = 18.dp, end = 8.dp, top = 12.dp)) {
@@ -704,7 +705,7 @@ private fun Chip(icon: ImageVector, text: String, color: Color, onClick: (() -> 
 }
 
 /**
- * The day's stocktake, pinned under the date: net worth and the change since the one before.
+ * The day's stocktake at the head of the page: net worth and the change since the one before.
  * Today without one offers to start it.
  */
 @Composable

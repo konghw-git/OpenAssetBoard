@@ -129,6 +129,20 @@ class RepositoryTest {
         assertEquals(2, repo.loadOnce().accounts.size)
     }
 
+    @Test fun aDeletedAccountComesBackWithItsBaseline() = runBlocking(gate.bound()) {
+        val g = group()
+        val a = repo.createAccount(AccountDraft(g, "钱包"), 0, 320_00, null)
+        val gone = repo.deleteAccount(a)
+        assertTrue(repo.loadOnce().accounts.isEmpty())
+        repo.restoreAccount(gone)
+        val l = repo.loadOnce()
+        assertEquals(listOf("钱包"), l.accounts.map { it.name })
+        assertEquals(320_00L, l.currentBalance(a))
+        // Undoing twice does nothing more.
+        repo.restoreAccount(gone)
+        assertEquals(1, repo.loadOnce().accounts.size)
+    }
+
     @Test fun case13_disablingDoesNotTouchHistory() = runBlocking(gate.bound()) {
         val g = group()
         val fund = repo.createAccount(AccountDraft(g, "fund", kind = AccountKind.INVESTMENT), 0, 10_000_00, null)

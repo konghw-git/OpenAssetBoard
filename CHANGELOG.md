@@ -6,6 +6,31 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-21
+
+### Added
+
+- **Pull the todo list down for a new todo**, as the hub's + does: the field opens under the
+  dial. While it is open (or while selecting or dragging) the list just stops at its top.
+- **Account rows swipe.** In an open group, left turns an account to dust and deletes it, or
+  disables it once it has records (it moves to 已停用); both undo. Right offers 改余额 (市值,
+  欠款), and a full swipe or a tap turns the row itself into the amount field, the old amount
+  selected, keyboard up; saving records it now, with an undo.
+- **Tab handles**: short slivers halfway down the left and right edges of the todo and notes
+  tabs. A swipe that starts on one turns the tabs, even over a row; they light up while the
+  pages move. The system back gesture gives way there.
+
+### Changed
+
+- **A swipe on a row is the row's**, fast or slow; 0.9.0 sent quick flicks to the tabs. The tabs
+  turn from the handles and from anywhere that is not a row.
+- The diary's stocktake strip scrolls with the page instead of staying pinned over the text.
+
+### Fixed
+
+- The allocation legend on the net worth card no longer cuts group names short: each name sits
+  over its amount, the share beside them.
+
 ## [0.9.0] - 2026-10-21
 
 ### Changed

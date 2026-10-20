@@ -26,12 +26,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import com.assetboard.ui.components.DustHost
 import com.assetboard.ui.components.DustState
 import com.assetboard.ui.components.LocalDust
+import com.assetboard.ui.components.TabSwipeHandles
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.plus
@@ -172,6 +174,42 @@ class ModuleScreenshotTest {
     @Test fun todoComposer() {
         val d = demo()
         shot("27-todo-composer", d.c) { TodoHomeScreen({}, {}, request = OpenRequest.QuickAdd) }
+    }
+
+    /** The tab handles at the middle of the edges, at rest and lit while the pages move. */
+    @Test fun todoHandles() {
+        shot("20b-todo-handles", demo().c) { Box { TodoHomeScreen({}, {}, initialView = "today"); TabSwipeHandles(active = false) } }
+    }
+
+    @Test fun todoHandlesLit() {
+        shot("20c-todo-handles-lit", demo().c) { Box { TodoHomeScreen({}, {}, initialView = "today"); TabSwipeHandles(active = true) } }
+    }
+
+    /** Pulling the list down opens the new-todo field; pulling again while it is open opens nothing more. */
+    @Test fun todoPullOpensTheComposer() {
+        val d = demo()
+        shot("20-todo-home", d.c) { TodoHomeScreen({}, {}, initialView = "today") }
+        compose.onAllNodes(hasText("准备做什么？")).assertCountEquals(0)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("待办").performTouchInput { down(center); moveBy(Offset(0f, 40f)); repeat(6) { moveBy(Offset(0f, 100f)) } }
+        repeat(20) { compose.mainClock.advanceTimeByFrame() }
+        compose.onRoot().captureRoboImage("build/screenshots/27a-todo-pull-armed.png")
+        compose.onNodeWithText("松手新建待办", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("待办").performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("准备做什么？")).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(1_000)
+        // Open already: the list stops at its top (the title does not move) and there is still one field.
+        fun titleTop() = compose.onNodeWithText("待办").fetchSemanticsNode().boundsInRoot.top
+        val before = titleTop()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("待办").performTouchInput { down(center); repeat(6) { moveBy(Offset(0f, 100f)) } }
+        repeat(20) { compose.mainClock.advanceTimeByFrame() }
+        assert(titleTop() == before) { "the list should not pull while the field is open" }
+        compose.onNodeWithText("待办").performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onAllNodes(hasText("准备做什么？")).assertCountEquals(1)
     }
 
     @Test fun todoInbox() {

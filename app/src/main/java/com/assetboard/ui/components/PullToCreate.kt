@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -55,7 +56,8 @@ import kotlinx.coroutines.launch
 /**
  * Pulling a list down past its top makes something new: the list follows the finger at half
  * speed, a hint appears in the space it leaves, and letting go past [threshold] calls [onCreate].
- * Scrolling back up first takes the pull back.
+ * Scrolling back up first takes the pull back. While not [enabled] (what it would make is already
+ * open, or the list is busy) the list just stops at its top.
  */
 @Stable
 class PullToCreate internal constructor(
@@ -66,6 +68,7 @@ class PullToCreate internal constructor(
     var pulled by mutableFloatStateOf(0f)
         private set
     internal var onCreate: () -> Unit = {}
+    internal var enabled: () -> Boolean = { true }
     val armed: Boolean get() = pulled >= threshold
     val progress: Float get() = (pulled / threshold).coerceIn(0f, 1f)
 
@@ -86,7 +89,7 @@ class PullToCreate internal constructor(
 
     override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
         // Only a finger pulls; a fling that reaches the top just stops there.
-        if (source == NestedScrollSource.UserInput && available.y > 0f) {
+        if (source == NestedScrollSource.UserInput && available.y > 0f && enabled()) {
             pullBy(available.y * 0.5f)
             return Offset(0f, available.y)
         }
@@ -95,20 +98,22 @@ class PullToCreate internal constructor(
 
     override suspend fun onPreFling(available: Velocity): Velocity {
         if (pulled <= 0f) return Velocity.Zero
-        if (armed) onCreate()
+        if (armed && enabled()) onCreate()
         scope.launch { animate(pulled, 0f, animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { v, _ -> pulled = v.coerceAtLeast(0f) } }
         return available
     }
 }
 
 @Composable
-fun rememberPullToCreate(onCreate: () -> Unit): PullToCreate {
+fun rememberPullToCreate(enabled: Boolean = true, onCreate: () -> Unit): PullToCreate {
     val threshold = with(LocalDensity.current) { 72.dp.toPx() }
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val state = remember { PullToCreate(threshold, haptic, scope) }
     val create by rememberUpdatedState(onCreate)
+    val on by rememberUpdatedState(enabled)
     state.onCreate = { create() }
+    state.enabled = { on }
     return state
 }
 
@@ -118,15 +123,15 @@ fun rememberPullToCreate(onCreate: () -> Unit): PullToCreate {
  * to its top padding: moving the list instead would move the very pointer it is reading.
  */
 @Composable
-fun PullToCreateBox(state: PullToCreate, hint: String, armedHint: String, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+fun PullToCreateBox(state: PullToCreate, hint: String, armedHint: String, modifier: Modifier = Modifier, icon: ImageVector = Icons.Outlined.Edit, content: @Composable BoxScope.() -> Unit) {
     Box(modifier.nestedScroll(state)) {
         content()
-        PullHint(state, hint, armedHint, Modifier.align(Alignment.TopCenter))
+        PullHint(state, hint, armedHint, icon, Modifier.align(Alignment.TopCenter))
     }
 }
 
 @Composable
-private fun PullHint(state: PullToCreate, hint: String, armedHint: String, modifier: Modifier) {
+private fun PullHint(state: PullToCreate, hint: String, armedHint: String, icon: ImageVector, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
     val extra = AppTheme.extra
     val spin by animateFloatAsState(if (state.armed) 1f else 0f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium), label = "armed")
@@ -156,7 +161,7 @@ private fun PullHint(state: PullToCreate, hint: String, armedHint: String, modif
                 .background(Brush.linearGradient(listOf(extra.heroEnd, extra.heroStart))),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Outlined.Edit, null, tint = extra.onHero, modifier = Modifier.size(17.dp))
+            Icon(icon, null, tint = extra.onHero, modifier = Modifier.size(17.dp))
         }
         Spacer(Modifier.width(10.dp))
         AnimatedContent(state.armed, transitionSpec = { (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut()) }, label = "hint") { on ->

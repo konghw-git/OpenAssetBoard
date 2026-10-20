@@ -17,6 +17,11 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -142,6 +147,47 @@ class ScreenshotTest {
         compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("全部收起").assertExists()
         compose.onRoot().captureRoboImage("build/screenshots/01d-overview-accounts-open.png")
+    }
+
+    /**
+     * A right swipe on an account turns its pane into the amount field and saving writes a
+     * valuation now; a left swipe on one with history disables it, with an undo.
+     */
+    @Test fun accountSwipes() {
+        val c = demoContainer()
+        shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        compose.onNode(hasScrollAction()).performScrollToIndex(2)
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("全部展开").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("农行①").performTouchInput { down(center); repeat(6) { moveBy(Offset(30f, 0f)) }; repeat(4) { moveBy(Offset(220f, 0f)) }; up() }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("改余额").assertExists()
+        compose.onRoot().captureRoboImage("build/screenshots/01g-account-edit-inline.png")
+        compose.onNode(hasSetTextAction()).performTextReplacement("123.45")
+        compose.onNodeWithContentDescription("保存").performClick()
+        compose.waitUntil(5_000) {
+            val l = c.repository.ledger.value!!
+            l.currentBalance(l.accounts.first { it.name == "农行①" }.id) == 123_45L
+        }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("改余额").assertDoesNotExist()
+
+        // The clock by hand from here: waiting for idle would run the undo's time out at once.
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("农行②").performTouchInput { down(center); repeat(6) { moveBy(Offset(-30f, 0f)) }; repeat(4) { moveBy(Offset(-220f, 0f)) }; up() }
+        repeat(60) {
+            if (compose.onAllNodes(hasText("撤销")).fetchSemanticsNodes().isEmpty()) {
+                Thread.sleep(20)
+                compose.mainClock.advanceTimeByFrame()
+            }
+        }
+        repeat(20) { compose.mainClock.advanceTimeByFrame() }
+        assert(c.repository.ledger.value!!.accounts.first { it.name == "农行②" }.isDisabled)
+        compose.onRoot().captureRoboImage("build/screenshots/01h-account-disabled-undo.png")
+        compose.onNodeWithText("撤销").performClick()
+        compose.mainClock.autoAdvance = true
+        compose.waitUntil(5_000) { !c.repository.ledger.value!!.accounts.first { it.name == "农行②" }.isDisabled }
     }
 
     @Test fun overviewGoal() {

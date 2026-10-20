@@ -122,6 +122,24 @@ class TodoRepositoryTest {
         assertEquals(1, log().size)
     }
 
+    @Test fun aDeletedChecklistItemComesBackInItsPlace() = f.run {
+        val id = repo.create(TodoDraft("出门"))
+        repo.addChecklistItem(id, "钥匙")
+        val wallet = repo.addChecklistItem(id, "钱包")
+        repo.addChecklistItem(id, "手机")
+        repo.toggleChecklist(wallet)
+        val gone = repo.deleteChecklistItem(wallet)!!
+        assertEquals(listOf("钥匙", "手机"), f.db.todoDao().checklistOf(id).map { it.text })
+        repo.restoreChecklistItem(gone)
+        val items = f.db.todoDao().checklistOf(id)
+        assertEquals(listOf("钥匙", "钱包", "手机"), items.map { it.text })
+        assertTrue(items[1].done)
+        // A second undo, or one for an item already back, changes nothing.
+        repo.restoreChecklistItem(gone)
+        assertEquals(3, f.db.todoDao().checklistOf(id).size)
+        assertNull(repo.deleteChecklistItem("missing"))
+    }
+
     @Test fun p8_undoRestoresEverything() = f.run {
         val id = repeating(daily, "2026-10-20")
         val item = repo.addChecklistItem(id, "a")

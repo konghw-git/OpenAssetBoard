@@ -49,6 +49,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -82,23 +84,18 @@ private val Gap = 8.dp
 private const val FLING = 900f
 
 /**
- * A sideways stroke on a row that is already this fast when it leaves touch slop is a flick
- * meant for the tab pager around the list; slower, the finger was put down to move the row.
- */
-private val FlickSpeed = 500.dp
-
-/**
  * One list row with the app's swipe gestures, the same for todos and notes:
  *
  * - left reveals 删除; swiping on past the threshold, or tapping it, turns the card to dust and
  *   calls [onDelete];
  * - right reveals [actions]; swiping on past the threshold runs the first one.
  *
- * An open row closes when another opens, when it is tapped, or when [group] closes all. A quick
- * flick across a closed row is not taken: it goes on to the tab pager, so the tabs still change
- * with a swipe over a list full of rows (see [rowDrag]). A row inside another (a checklist item
- * in its todo) takes only the directions it has something for; the rest go to the outer row.
- * [compact] is for short rows: the delete button shows its icon only.
+ * An open row closes when another opens, when it is tapped, or when [group] closes all. A stroke
+ * on a row is the row's; the tabs turn from anywhere else, and from the [TabSwipeZones] over the
+ * list (see [rowDrag]). A row inside another (a checklist item in its todo) takes only the
+ * directions it has something for; the rest go to the outer row. [compact] is for short rows:
+ * the delete button shows its icon only. [deleteLabel] and [deleteIcon] name what a left swipe
+ * does when it is not quite a delete (an account with history is disabled instead).
  */
 @Composable
 fun SwipeActionsBox(
@@ -110,6 +107,8 @@ fun SwipeActionsBox(
     onDelete: (() -> Unit)? = null,
     enabled: Boolean = true,
     compact: Boolean = false,
+    deleteLabel: String = "删除",
+    deleteIcon: ImageVector = Icons.Outlined.Delete,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -193,7 +192,7 @@ fun SwipeActionsBox(
                 a.onClick()
             }
         } else if (x < -0.5f) {
-            DeleteAction(-x, endOpen, armedEnd, shape, compact, Modifier.matchParentSize()) { runDelete() }
+            DeleteAction(-x, endOpen, armedEnd, shape, compact, deleteLabel, deleteIcon, Modifier.matchParentSize()) { runDelete() }
         }
         Box(
             Modifier
@@ -248,7 +247,7 @@ private fun StartActions(actions: List<SwipeAction>, x: Float, open: Float, arme
 }
 
 @Composable
-private fun DeleteAction(x: Float, open: Float, armed: Boolean, shape: RoundedCornerShape, compact: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun DeleteAction(x: Float, open: Float, armed: Boolean, shape: RoundedCornerShape, compact: Boolean, label: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
     val density = LocalDensity.current
     val cs = MaterialTheme.colorScheme
     val progress = (x / open).coerceIn(0f, 1f)
@@ -259,7 +258,7 @@ private fun DeleteAction(x: Float, open: Float, armed: Boolean, shape: RoundedCo
     val w = (x - gap * 2).coerceAtLeast(base * progress).coerceAtLeast(1f)
     Box(modifier.padding(end = Gap), contentAlignment = Alignment.CenterEnd) {
         ActionButton(
-            "删除", Icons.Outlined.Delete, cs.error, shape,
+            label, icon, cs.error, shape,
             Modifier
                 .width(with(density) { w.toDp() })
                 .fillMaxHeight()
@@ -294,10 +293,10 @@ private fun ActionButton(label: String, icon: ImageVector, color: Color, shape: 
 
 /**
  * A row's sideways drag, shared with the scrollers around it. Nothing is taken until the stroke
- * leaves touch slop; then the row takes it only when it was put down deliberately (slower than
- * [FlickSpeed]) and [claims] the direction, or when the row is [open] already and the stroke
- * closes it. Otherwise the stroke is left alone: a flick goes on to the tab pager, a direction
- * the row has nothing for to an outer row, a vertical stroke to the list.
+ * leaves touch slop; then the row takes it when it [claims] the direction, or when the row is
+ * [open] already and the stroke closes it. Otherwise the stroke is left alone: a direction the
+ * row has nothing for goes to an outer row, a vertical stroke to the list. A stroke that starts
+ * in one of the [LocalTabSwipeZones] is never the row's: it turns the tabs.
  */
 private fun Modifier.rowDrag(
     enabled: Boolean,
@@ -315,11 +314,14 @@ private fun Modifier.rowDrag(
     val start by rememberUpdatedState(onStart)
     val delta by rememberUpdatedState(onDelta)
     val stop by rememberUpdatedState(onStop)
-    pointerInput(Unit) {
-        val flick = FlickSpeed.toPx()
+    val zones = LocalTabSwipeZones.current
+    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    onGloballyPositioned { coords = it }.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             if (!on) return@awaitEachGesture
+            val at = coords?.takeIf { it.isAttached }?.localToRoot(down.position)
+            if (zones != null && at != null && zones.contains(at)) return@awaitEachGesture
             val slop = viewConfiguration.touchSlop
             val tracker = VelocityTracker().apply { addPointerInputChange(down) }
             var moved = Offset.Zero
@@ -332,12 +334,7 @@ private fun Modifier.rowDrag(
                 moved += c.positionChange()
                 if (abs(moved.y) > slop && abs(moved.y) >= abs(moved.x)) return@awaitEachGesture
                 if (abs(moved.x) > slop) {
-                    // The tracker needs a few samples; a flick may cross slop on the first move,
-                    // so the average since touch down counts too.
-                    val elapsed = (c.uptimeMillis - down.uptimeMillis).coerceAtLeast(1L)
-                    val speed = maxOf(abs(tracker.calculateVelocity().x), abs(moved.x) * 1000f / elapsed)
-                    val take = if (isOpen()) true else speed < flick && wants(moved.x)
-                    if (!take) return@awaitEachGesture
+                    if (!isOpen() && !wants(moved.x)) return@awaitEachGesture
                     c.consume()
                     start()
                     delta(moved.x - sign(moved.x) * slop)

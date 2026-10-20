@@ -1,6 +1,41 @@
 package com.assetboard.ui.overview
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.key
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import com.assetboard.domain.LedgerException
+import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.components.SwipeAction
+import com.assetboard.ui.components.SwipeActionsBox
+import com.assetboard.ui.components.SwipeGroup
+import com.assetboard.ui.components.UndoEvent
+import com.assetboard.ui.components.UndoMessages
+import com.assetboard.ui.components.rememberSwipeGroup
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.FlowRow
@@ -163,6 +198,8 @@ data class AccountRowUi(
     val counted: Boolean,
     val lockDays: Long?,
     val pnl: Long?,
+    /** Holds nothing but its baseline, so a left swipe deletes it; otherwise it is disabled. */
+    val deletable: Boolean = false,
 )
 
 data class GroupUi(val group: AccountGroup, val subtotal: Long, val rows: List<AccountRowUi>)
@@ -191,6 +228,7 @@ fun buildOverview(l: LedgerData, now: Long = System.currentTimeMillis()): Overvi
             counted = a.includeInTotal && !a.isDisabled,
             lockDays = a.lockedUntil?.let { Dates.daysBetween(now, it) }?.takeIf { it > 0 },
             pnl = if (a.isInvestment) l.pnl(a) else null,
+            deletable = l.flowsOf(a.id).isEmpty() && l.valuationsOf(a.id).size <= 1 && l.snapshotItems.none { it.accountId == a.id },
         )
     }
     val active = l.accounts.filter { !it.isDisabled }
@@ -230,6 +268,40 @@ class OverviewViewModel(private val container: AppContainer) : ActionViewModel(c
 
     fun setGoal(cents: Long?) = action { container.goal.set(cents) }
 
+    private val _events = MutableSharedFlow<UndoEvent>(extraBufferCapacity = 4)
+    val events: SharedFlow<UndoEvent> = _events
+
+    /**
+     * A left swipe on an account: one holding only its baseline is deleted, one with history is
+     * disabled (its records stay; it moves to 已停用). Either can be undone.
+     */
+    fun remove(r: AccountRowUi) = action {
+        val repo = container.repository
+        val name = "「" + r.account.name.take(12) + "」"
+        if (r.deletable && repo.canDelete(r.account.id)) {
+            val gone = repo.deleteAccount(r.account.id)
+            _events.tryEmit(UndoEvent("已删除$name") { repo.restoreAccount(gone) })
+        } else {
+            repo.setDisabled(r.account.id, true)
+            val note = if (r.counted && r.display != 0L) "，${Money.format(r.display)} 不再计入" else ""
+            _events.tryEmit(UndoEvent("已停用$name$note") { repo.setDisabled(r.account.id, false) })
+        }
+    }
+
+    /** The inline edit after a right swipe: a valuation now, if the amount changed. */
+    fun setBalance(r: AccountRowUi, input: String, noun: String, onDone: () -> Unit) = action(onDone) {
+        val value = Money.parse(input) ?: throw LedgerException("金额格式不对")
+        if (value == r.display) return@action
+        val repo = container.repository
+        val id = repo.addValuation(r.account.id, System.currentTimeMillis(), value, null)
+        _events.tryEmit(UndoEvent("「${r.account.name.take(12)}」$noun 改为 ${Money.format(value)}") { repo.deleteValuation(id) })
+    }
+
+    fun undo(e: UndoEvent) {
+        val u = e.undo ?: return
+        action { u() }
+    }
+
     fun seedSuishouji() = action { container.repository.seedFromSuishouji() }
     fun seedGroups() = action { container.repository.seedDefaultGroups() }
 }
@@ -251,6 +323,21 @@ fun OverviewScreen(
     val goal by vm.goal.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     ErrorDialog(error) { vm.error.value = null }
+    val snackbar = remember { SnackbarHostState() }
+    UndoMessages(vm.events, snackbar, vm::undo)
+    // Account rows: one open by a swipe at a time, one being edited in place at a time.
+    val swipe = rememberSwipeGroup()
+    var editing by rememberSaveable { mutableStateOf<String?>(null) }
+    BackHandler(editing != null) { editing = null }
+    val listState = rememberLazyListState()
+    LaunchedEffect(listState.isScrollInProgress) { if (listState.isScrollInProgress) swipe.closeAll() }
+    val rows = RowActions(
+        swipe = swipe,
+        editing = editing,
+        onEdit = { id -> swipe.closeAll(); editing = id },
+        onRemove = vm::remove,
+        onSetBalance = { r, input, noun -> vm.setBalance(r, input, noun) { if (editing == r.account.id) editing = null } },
+    )
     var cashOpen by rememberSaveable { mutableStateOf(false) }
     state?.takeIf { cashOpen }?.let { s ->
         CashSheet(s, onOpenAccount = { cashOpen = false; onOpenAccount(it) }, onDismiss = { cashOpen = false })
@@ -266,6 +353,7 @@ fun OverviewScreen(
         CompositionLocalProvider(LocalAmbient provides ambient) {
         Scaffold(
             containerColor = Color.Transparent,
+            snackbarHost = { GlassSnackbarHost(snackbar) },
             topBar = {
                 val accounts = state?.groups?.sumOf { it.rows.size } ?: 0
                 val today = java.time.LocalDate.now()
@@ -287,10 +375,10 @@ fun OverviewScreen(
                 else -> BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                     if (maxWidth >= 600.dp) {
                         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            LazyColumn(Modifier.weight(1.1f), contentPadding = PaddingValues(start = 16.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            LazyColumn(Modifier.weight(1.1f).imePadding(), state = listState, contentPadding = PaddingValues(start = 16.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                 item { Box(Modifier.appear(0)) { hero(s) } }
                                 item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(s, health, { cashOpen = true }, onHealth) } }
-                                accountSections(s, onOpenAccount, onAddAccount, first = 2)
+                                accountSections(s, onOpenAccount, onAddAccount, rows, first = 2)
                             }
                             Column(
                                 Modifier.weight(0.9f).verticalScroll(rememberScrollState()).padding(end = 16.dp, bottom = 32.dp),
@@ -302,13 +390,14 @@ fun OverviewScreen(
                         }
                     } else {
                         LazyColumn(
-                            Modifier.fillMaxSize(),
+                            Modifier.fillMaxSize().imePadding(),
+                            state = listState,
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             item { Box(Modifier.appear(0)) { hero(s) } }
                             item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(s, health, { cashOpen = true }, onHealth) } }
-                            accountSections(s, onOpenAccount, onAddAccount, first = 2)
+                            accountSections(s, onOpenAccount, onAddAccount, rows, first = 2)
                         }
                     }
                 }
@@ -318,8 +407,8 @@ fun OverviewScreen(
     }
 }
 
-private fun LazyListScope.accountSections(s: OverviewState, onOpenAccount: (String) -> Unit, onAddAccount: (String?) -> Unit, first: Int) {
-    item(key = "accounts") { Box(Modifier.appear(first)) { AccountsCard(s, onOpenAccount, onAddAccount) } }
+private fun LazyListScope.accountSections(s: OverviewState, onOpenAccount: (String) -> Unit, onAddAccount: (String?) -> Unit, rows: RowActions, first: Int) {
+    item(key = "accounts") { Box(Modifier.appear(first)) { AccountsCard(s, onOpenAccount, onAddAccount, rows) } }
     if (s.disabled.isNotEmpty()) item(key = "disabled") { DisabledCard(s.disabled, onOpenAccount) }
 }
 
@@ -523,13 +612,16 @@ private fun HeroAllocation(allocation: List<AllocationUi>) {
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (on) extra.onHero.copy(alpha = 0.12f) else Color.Transparent)
                         .clickable { picked = if (on) null else a.group.id }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Dot(shades[i], 7.dp)
                     Spacer(Modifier.width(8.dp))
-                    Text(a.group.name, color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(Money.short(a.value), color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium.merge(NumberStyle))
+                    // The name over its amount: with cents shown, side by side left the name no room.
+                    Column(Modifier.weight(1f)) {
+                        Text(a.group.name, color = extra.onHero.copy(alpha = 0.9f), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(Money.short(a.value), color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall.merge(NumberStyle), maxLines = 1)
+                    }
                     Text(
                         Money.percent(a.value, total), color = extra.onHero, style = MaterialTheme.typography.labelLarge.merge(NumberStyle),
                         textAlign = TextAlign.End, modifier = Modifier.width(62.dp),
@@ -681,7 +773,7 @@ private fun GoalDialog(current: Long?, net: Long, onDismiss: () -> Unit, onSave:
  * opens or folds them all at once.
  */
 @Composable
-private fun AccountsCard(s: OverviewState, onOpenAccount: (String) -> Unit, onAddAccount: (String?) -> Unit) {
+private fun AccountsCard(s: OverviewState, onOpenAccount: (String) -> Unit, onAddAccount: (String?) -> Unit, rows: RowActions) {
     val cs = MaterialTheme.colorScheme
     var open by rememberSaveable { mutableStateOf(listOf<String>()) }
     val all = s.groups.map { it.group.id }
@@ -703,7 +795,7 @@ private fun AccountsCard(s: OverviewState, onOpenAccount: (String) -> Unit, onAd
             GroupSection(
                 g, s.totals.assets, id in open,
                 onToggle = { open = if (id in open) open - id else open + id },
-                onOpenAccount = onOpenAccount, onAddAccount = onAddAccount,
+                onOpenAccount = onOpenAccount, onAddAccount = onAddAccount, rows = rows,
             )
         }
     }
@@ -717,6 +809,7 @@ private fun GroupSection(
     onToggle: () -> Unit,
     onOpenAccount: (String) -> Unit,
     onAddAccount: (String?) -> Unit,
+    rows: RowActions,
 ) {
     val cs = MaterialTheme.colorScheme
     val color = AppTheme.extra.group(g.group.colorIndex)
@@ -782,9 +875,7 @@ private fun GroupSection(
                 }
             }
             g.rows.forEach { r ->
-                Box(Modifier.fillMaxWidth().clip(AccountPaneShape).background(accountPane())) {
-                    AccountRow(r, onClick = { onOpenAccount(r.account.id) }, horizontalPadding = 12.dp)
-                }
+                key(r.account.id) { SwipeAccountPane(r, g.group.isLiability, rows, onOpen = { onOpenAccount(r.account.id) }) }
             }
         }
     }
@@ -792,6 +883,108 @@ private fun GroupSection(
 }
 
 private val AccountPaneShape = RoundedCornerShape(16.dp)
+
+/** What a swipe on an account row can do, from the screen that keeps the state. */
+private class RowActions(
+    val swipe: SwipeGroup,
+    /** The account being edited in place, if any. */
+    val editing: String?,
+    val onEdit: (String?) -> Unit,
+    val onRemove: (AccountRowUi) -> Unit,
+    val onSetBalance: (AccountRowUi, String, String) -> Unit,
+)
+
+/** What a valuation of the account is called: market value, debt or balance. */
+private fun noun(r: AccountRowUi, liability: Boolean) = when {
+    liability -> "欠款"
+    r.account.isInvestment -> "市值"
+    else -> "余额"
+}
+
+/**
+ * An account on its pane, with the todo rows' swipes: left turns it to dust and deletes it (or
+ * disables it, once it has history); right offers 改余额, and a full swipe or a tap on it turns the
+ * pane itself into the amount field, keyboard up, the old amount selected.
+ */
+@Composable
+private fun SwipeAccountPane(r: AccountRowUi, liability: Boolean, rows: RowActions, onOpen: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val id = r.account.id
+    val editing = rows.editing == id
+    val noun = noun(r, liability)
+    val ring by animateColorAsState(if (editing) cs.primary.copy(alpha = 0.55f) else Color.Transparent, tween(200), label = "editRing")
+    SwipeActionsBox(
+        key = "account:$id",
+        group = rows.swipe,
+        shape = AccountPaneShape,
+        enabled = !editing,
+        actions = listOf(SwipeAction("改$noun", Icons.Outlined.Edit, cs.primary) { rows.onEdit(id) }),
+        onDelete = { rows.onRemove(r) },
+        deleteLabel = if (r.deletable) "删除" else "停用",
+        deleteIcon = if (r.deletable) Icons.Outlined.Delete else Icons.Outlined.Block,
+    ) {
+        Box(Modifier.fillMaxWidth().clip(AccountPaneShape).background(accountPane()).border(1.5.dp, ring, AccountPaneShape)) {
+            AnimatedContent(
+                editing,
+                transitionSpec = { (fadeIn(tween(200)) + scaleIn(tween(220), initialScale = 0.97f)) togetherWith fadeOut(tween(120)) using SizeTransform(clip = false) },
+                label = "accountEdit",
+            ) { on ->
+                if (on) {
+                    AccountRowEditor(r, noun, onSave = { input -> rows.onSetBalance(r, input, noun) }, onCancel = { rows.onEdit(null) })
+                } else {
+                    AccountRow(r, onClick = onOpen, horizontalPadding = 12.dp)
+                }
+            }
+        }
+    }
+}
+
+/** The row as an amount field: avatar and name kept, the amount editable where it stood. */
+@Composable
+private fun AccountRowEditor(r: AccountRowUi, noun: String, onSave: (String) -> Unit, onCancel: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val extra = AppTheme.extra
+    val start = Money.toInput(r.display)
+    var value by remember { mutableStateOf(TextFieldValue(start, TextRange(0, start.length))) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val valid = Money.parse(value.text) != null
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AccountAvatar(r.account, extra.group(r.colorIndex))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(r.account.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("改$noun", style = MaterialTheme.typography.labelSmall, color = cs.primary, maxLines = 1)
+        }
+        Spacer(Modifier.width(8.dp))
+        BasicTextField(
+            value = value,
+            onValueChange = { v -> value = v.copy(text = v.text.filter { it.isDigit() || it == '.' || it == ',' || it == '-' }) },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.titleMedium.merge(NumberStyle).copy(color = if (valid) cs.onSurface else cs.error, textAlign = TextAlign.End),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { if (valid) onSave(value.text) }),
+            cursorBrush = SolidColor(cs.primary),
+            modifier = Modifier
+                .width(120.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(cs.primary.copy(alpha = 0.08f))
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .focusRequester(focus),
+        )
+        IconButton(onClick = { if (valid) onSave(value.text) }, enabled = valid, modifier = Modifier.size(40.dp)) {
+            Box(Modifier.size(30.dp).clip(CircleShape).background(if (valid) cs.primary else cs.outlineVariant), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Check, "保存", tint = cs.onPrimary, modifier = Modifier.size(18.dp))
+            }
+        }
+        IconButton(onClick = onCancel, modifier = Modifier.size(36.dp)) {
+            Icon(Icons.Default.Close, "取消", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        }
+    }
+}
 
 /** A pane lighter than the glass under it (darker in the dark theme), the way checklist items sit on a todo. */
 @Composable

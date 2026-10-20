@@ -69,6 +69,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Flag
@@ -157,6 +158,8 @@ import com.assetboard.ui.OpenRequest
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.Ambient
 import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.components.PullToCreateBox
+import com.assetboard.ui.components.rememberPullToCreate
 import com.assetboard.ui.components.LocalDust
 import com.assetboard.ui.components.SwipeAction
 import com.assetboard.ui.components.SwipeActionsBox
@@ -311,6 +314,13 @@ fun TodoHomeScreen(
     val todayRows = remember(d, today) { d?.let { TodoViews.today(it.todos, today) }.orEmpty() }
     val doneToday = todayRows.count { it.done }
     val dialGone by remember { derivedStateOf { listState.firstVisibleItemIndex > DIAL_ITEM } }
+    // Pulling the list down past its top is the hub's +: it opens the field under the dial. Not
+    // while the field is already open (the list just stops), nor while selecting or dragging.
+    val pull = rememberPullToCreate(enabled = !composer && selection.isEmpty() && reorder.dragging == null) {
+        swipe.closeAll()
+        openComposer()
+    }
+    val pullTop = with(LocalDensity.current) { pull.pulled.toDp() }
     val habits by remember(today) { vm.habitsOn(today) }.collectAsStateWithLifecycle(emptySet())
     val dial: @Composable (Modifier) -> Unit = { m ->
         ViewsAndHabits(
@@ -375,8 +385,10 @@ fun TodoHomeScreen(
                     VerticalDivider(color = cs.outlineVariant)
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
-                            LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
-                                viewContent(ctx)
+                            PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize().statusBarsPadding(), icon = Icons.Default.Add) {
+                                LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
+                                    viewContent(ctx)
+                                }
                             }
                         }
                         GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), backdrop)
@@ -384,14 +396,16 @@ fun TodoHomeScreen(
                 }
             } else {
                 Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
+                    PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize().statusBarsPadding(), icon = Icons.Default.Add) {
                     // Keep DIAL_ITEM in step with the item order here.
-                    LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
+                    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
                         item("title") { HomeTitle(today, doneToday, todayRows.size, onSettings) }
                         item("banners") { Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) { ReminderBanners(vm, onGuide) } }
                         item("views") { dial(Modifier.padding(top = 2.dp, bottom = 6.dp)) }
                         item("composer") { composerField() }
                         item("lists") { ListStrip(d, selected, onSelect = { selected = it }, onCreate = { name -> vm.createList(name) { selected = ViewKey.list(it) } }) }
                         viewContent(ctx)
+                    }
                     }
                 }
                 GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), backdrop)
@@ -472,6 +486,8 @@ private fun HomeTitle(today: LocalDate, done: Int, total: Int, onSettings: () ->
 
 /** The dial's index among the narrow layout's LazyColumn items. */
 private const val DIAL_ITEM = 2
+private const val PULL_HINT = "下拉新建待办"
+private const val PULL_ARMED = "松手新建待办"
 
 // ---------------------------------------------------------------- lists
 
