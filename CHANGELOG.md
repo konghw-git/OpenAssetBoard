@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-10-21
+
 ### Fixed
 
 - **Backups never break each other.** The automatic, manual and pre-install backups write the same
