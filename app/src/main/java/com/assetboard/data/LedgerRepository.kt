@@ -321,67 +321,6 @@ class LedgerRepository(
 
     // ---------------------------------------------------------------- seed
 
-    /** The 5 groups and 15 accounts from the Suishouji account page, as of today. */
-    suspend fun seedFromSuishouji() = write {
-        ensure(dao.accounts().isEmpty()) { "已有账户，不能再导入预置数据" }
-        val now = clock()
-        data class Seed(val name: String, val purpose: String?, val cents: Long, val kind: AccountKind = AccountKind.NORMAL, val institution: String? = null)
-        val plan = listOf(
-            Triple("现金账户", false, listOf(Seed("现金", null, 0))),
-            Triple(
-                "储蓄账户", false,
-                listOf(
-                    Seed("农行①", "日常消费", 31, institution = "中国农业银行"),
-                    Seed("农行②", "暂时不用", 1, institution = "中国农业银行"),
-                    Seed("邮储", "周转资金", 100, institution = "中国邮政储蓄银行"),
-                    Seed("SJTU", "理财", 166024),
-                    Seed("宁波银行", null, 0, institution = "宁波银行"),
-                ),
-            ),
-            Triple(
-                "虚拟账户", false,
-                listOf(
-                    Seed("微信钱包", "日常消费", 273481, institution = "微信"),
-                    Seed("余额宝", null, 296200, institution = "支付宝"),
-                ),
-            ),
-            Triple(
-                "负债账户", true,
-                listOf(
-                    Seed("校园贷款", null, 2000000),
-                    Seed("花呗", null, 0, institution = "支付宝"),
-                    Seed("抖音月付", null, 0),
-                    Seed("美团月付", null, 0),
-                    Seed("白条", null, 0, institution = "京东"),
-                ),
-            ),
-            Triple(
-                "投资账户", false,
-                listOf(
-                    Seed("招商产业债券A", "3年后", 1664911, AccountKind.INVESTMENT),
-                    Seed("兴证全球恒悦180天持有期债券A", "半年强制存储", 1120940, AccountKind.INVESTMENT),
-                    Seed("进阶理财", null, 326525, AccountKind.INVESTMENT),
-                ),
-            ),
-        )
-        var order = 0
-        plan.forEachIndexed { gi, (groupName, liability, seeds) ->
-            val gid = newId()
-            dao.insertGroup(AccountGroup(gid, groupName, liability, colorIndex = gi, sortOrder = gi))
-            for (s in seeds) {
-                val value = if (liability) -s.cents else s.cents
-                val account = Account(
-                    id = newId(), groupId = gid, name = s.name, purpose = s.purpose, kind = s.kind,
-                    institution = s.institution, baselineAt = now,
-                    baselineCost = if (s.kind == AccountKind.INVESTMENT) value else null,
-                    sortOrder = order++, createdAt = now,
-                )
-                dao.insertAccount(account)
-                dao.insertValuation(Valuation(newId(), account.id, now, value, note = "期初", createdAt = now))
-            }
-        }
-    }
-
     /** Groups only, for someone starting from scratch. */
     suspend fun seedDefaultGroups() = write {
         if (dao.groups().isNotEmpty()) return@write

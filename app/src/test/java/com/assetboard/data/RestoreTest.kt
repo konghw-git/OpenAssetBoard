@@ -440,4 +440,49 @@ class RestoreTest {
         assertEquals(1L, fresh.epochNow())
         f.db.withTransaction { }
     }
+    // ------------------------------------------------------------ data reset
+
+    @Test fun resetEmptiesEverythingAndKeepsACopy() = f.run {
+        seed()
+        val before = counts()
+        f.backup.reset()
+        assertEquals(listOf(0, 0, 0, 0), counts())
+        assertTrue(f.db.dao().groups().isEmpty())
+        assertTrue(f.db.habitDao().all().isEmpty())
+        assertTrue(f.db.healthDao().all().isEmpty())
+        assertEquals(null, f.db.healthDao().profile())
+        assertEquals(1, f.restoredCount)
+        // The copy brings it all back.
+        f.backup.restore(f.backup.preRestoreCopies().single().uri)
+        assertEquals(before, counts())
+    }
+
+    @Test fun ledgerHistoryResetKeepsBalancesAndEverythingElse() = f.run {
+        seed()
+        val g = f.ledger.createGroup("投资", false, 1)
+        val fund = f.ledger.createAccount(AccountDraft(g, "基金", kind = AccountKind.INVESTMENT), 0, 1_000_00, 800_00)
+        val bank = f.db.dao().accounts().first { it.name == "银行" }.id
+        f.ledger.addValuation(fund, f.at("2026-09-01"), 1_100_00, null)
+        f.ledger.saveFlow(MoneyFlow(newId(), FlowKind.BUY, bank, fund, 50_00, at = f.at("2026-09-10"), createdAt = f.now))
+        f.ledger.createSnapshot(f.at("2026-10-01"), listOf(StocktakeEntry(bank, 60_00), StocktakeEntry(fund, 1_200_00)))
+        val old = f.ledger.loadOnce()
+        val balances = old.accounts.associate { it.id to old.currentBalance(it.id) }
+        val others = counts().drop(1)
+
+        f.now = f.at("2026-10-21", "09:30")
+        f.backup.resetLedgerHistory()
+
+        val l = f.ledger.loadOnce()
+        assertEquals(old.groups.map { it.id }, l.groups.map { it.id })
+        assertEquals(old.accounts.map { it.id }, l.accounts.map { it.id })
+        assertEquals(balances, l.accounts.associate { it.id to l.currentBalance(it.id) })
+        assertTrue(l.accounts.all { it.baselineAt == f.now })
+        assertEquals(l.accounts.size, l.valuations.size)
+        assertTrue(l.flows.isEmpty() && l.snapshots.isEmpty() && l.snapshotItems.isEmpty())
+        // Nothing before today: no point of the old curve survives, and the profit starts over.
+        assertEquals(null, l.balanceAt(fund, f.now - 1))
+        assertEquals(0L, l.pnl(l.accounts.first { it.id == fund }))
+        assertEquals(others, counts().drop(1))
+        assertEquals(1, f.backup.preRestoreCopies().size)
+    }
 }

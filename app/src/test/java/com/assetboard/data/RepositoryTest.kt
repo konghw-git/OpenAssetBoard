@@ -260,8 +260,8 @@ class RepositoryTest {
         assertEquals(120_00L, l.currentBalance(a))
     }
 
-    @Test fun seedMatchesTheScreenshotTotals() = runBlocking(gate.bound()) {
-        repo.seedFromSuishouji()
+    @Test fun demoMatchesTheScreenshotTotals() = runBlocking(gate.bound()) {
+        repo.seedDemo()
         val t = repo.loadOnce().currentTotals()
         assertEquals(38_482_13L, t.assets)
         assertEquals(-20_000_00L, t.liabilities)

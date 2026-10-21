@@ -132,7 +132,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -306,7 +305,6 @@ class OverviewViewModel(private val container: AppContainer) : ActionViewModel(c
         action { u() }
     }
 
-    fun seedSuishouji() = action { container.repository.seedFromSuishouji() }
     fun seedGroups() = action { container.repository.seedDefaultGroups() }
 }
 
@@ -378,7 +376,7 @@ fun OverviewScreen(
             val s = state
             when {
                 s == null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                !s.hasGroups -> Welcome(Modifier.padding(padding), onSeed = vm::seedSuishouji, onBlank = vm::seedGroups)
+                !s.hasGroups -> Welcome(Modifier.padding(padding), onStart = vm::seedGroups)
                 else -> BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                     if (maxWidth >= 600.dp) {
                         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1364,7 +1362,7 @@ private fun RecentStocktakes(s: OverviewState, onEditStocktake: (String) -> Unit
 }
 
 @Composable
-private fun Welcome(modifier: Modifier, onSeed: () -> Unit, onBlank: () -> Unit) {
+private fun Welcome(modifier: Modifier, onStart: () -> Unit) {
     Column(
         modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
@@ -1385,8 +1383,12 @@ private fun Welcome(modifier: Modifier, onSeed: () -> Unit, onBlank: () -> Unit)
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(28.dp))
-        Button(onClick = onSeed, modifier = Modifier.fillMaxWidth()) { Text("导入随手记里的 15 个账户") }
-        Spacer(Modifier.height(10.dp))
-        OutlinedButton(onClick = onBlank, modifier = Modifier.fillMaxWidth()) { Text("从空白开始") }
+        Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("开始使用") }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "会建好现金、储蓄、虚拟、负债、投资 5 个空分组，账户由你自己添加。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

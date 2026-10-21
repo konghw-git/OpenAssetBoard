@@ -31,6 +31,7 @@ import com.assetboard.data.MoneyFlow
 import com.assetboard.data.StocktakeEntry
 import com.assetboard.data.ThemeMode
 import com.assetboard.data.newId
+import com.assetboard.data.seedDemo
 import com.assetboard.ui.account.AccountDetailScreen
 import com.assetboard.ui.account.AccountEditScreen
 import com.assetboard.ui.overview.OverviewScreen
@@ -68,7 +69,7 @@ class ScreenshotTest {
         val c = AppContainer(ApplicationProvider.getApplicationContext())
         val repo = c.repository
         runBlocking(c.gate.bound()) {
-            repo.seedFromSuishouji()
+            repo.seedDemo()
             val now = System.currentTimeMillis()
             val start = now - 200 * day
             var l = repo.loadOnce()

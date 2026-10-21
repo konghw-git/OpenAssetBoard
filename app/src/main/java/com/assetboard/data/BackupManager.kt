@@ -7,6 +7,7 @@ import androidx.room.withTransaction
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.assetboard.AssetBoardApp
+import com.assetboard.domain.Ledger
 import com.assetboard.domain.LedgerException
 import com.assetboard.domain.Rules
 import com.assetboard.domain.calendar.WorkdayCalendar
@@ -123,11 +124,14 @@ class BackupManager(
     /** Fault injection for tests: thrown inside the overwrite transaction, after the inserts. */
     @Volatile internal var failInsideRestoreTransaction = false
 
-    suspend fun exportJson(): String {
+    suspend fun exportJson(): String = json.encodeToString(BackupFile.serializer(), current())
+
+    /** Everything a backup holds, read in one transaction. */
+    private suspend fun current(): BackupFile {
         val dao = db.dao()
         val todo = db.todoDao()
         val d = db.diaryDao()
-        val file = db.withTransaction {
+        return db.withTransaction {
             BackupFile(
                 formatVersion = FORMAT_VERSION,
                 schemaVersion = AppDatabase.SCHEMA_VERSION,
@@ -157,7 +161,6 @@ class BackupManager(
                 weeklyDrafts = db.weekDao().allDrafts(),
             )
         }
-        return json.encodeToString(BackupFile.serializer(), file)
     }
 
     /** Returns the written file's display name. */
@@ -324,12 +327,41 @@ class BackupManager(
      */
     suspend fun restore(uri: Uri): String = withContext(Dispatchers.IO) {
         val text = read(uri)
+        replaceAll { parse(text).also(::validate) }
+    }
+
+    /**
+     * Back to a fresh install: every record goes, by the same path as a restore of an empty
+     * backup, so the current data is saved as the pre-restore copy first. Settings, the backup
+     * folder and the holiday cache stay. Returns where that copy went.
+     */
+    suspend fun reset(): String = withContext(Dispatchers.IO) {
+        replaceAll {
+            BackupFile(
+                formatVersion = FORMAT_VERSION, schemaVersion = AppDatabase.SCHEMA_VERSION, exportedAt = clock(),
+                groups = emptyList(), accounts = emptyList(), snapshots = emptyList(),
+                valuations = emptyList(), snapshotItems = emptyList(), flows = emptyList(),
+            )
+        }
+    }
+
+    /**
+     * Keeps the groups, the accounts and their current balances, and drops the ledger's past:
+     * every valuation, stocktake and flow. Today becomes each account's new baseline, and an
+     * investment's cost restarts at its current value. Todos, diary, notes and the rest stay as
+     * they are. For data that started from someone else's numbers. Returns where the copy went.
+     */
+    suspend fun resetLedgerHistory(): String = withContext(Dispatchers.IO) {
+        replaceAll { withoutLedgerHistory(current(), clock()).also(::validate) }
+    }
+
+    /** Steps 1 to 6 of [restore]; [load] runs once the editors are flushed and must throw on a bad file. */
+    private suspend fun replaceAll(load: suspend () -> BackupFile): String {
         gate.freeze()
         var committed = false
         try {
             flushEditors()
-            val file = parse(text)
-            validate(file)
+            val file = load()
             val savedTo = savePreRestoreCopy()
             val oldIds = db.todoDao().allTodos().map { it.id }
             val epoch = db.withTransaction {
@@ -350,7 +382,7 @@ class BackupManager(
             } catch (e: Exception) {
                 // The data is restored; reminders are rebuilt on the next app start.
             }
-            savedTo
+            return savedTo
         } catch (e: Exception) {
             if (!committed) gate.invalidateCache()
             throw e
@@ -577,6 +609,23 @@ class BackupManager(
 
     companion object {
         const val FORMAT_VERSION = 8
+
+        /** [file] with each account's current balance as its only valuation, at [now]. */
+        internal fun withoutLedgerHistory(file: BackupFile, now: Long): BackupFile {
+            val accounts = file.accounts.map { a ->
+                a.copy(baselineAt = now, baselineCost = if (a.isInvestment) balanceOf(a, file) else null)
+            }
+            return file.copy(
+                accounts = accounts,
+                valuations = accounts.map { a -> Valuation(newId(), a.id, now, balanceOf(a, file), note = "期初", createdAt = now) },
+                snapshots = emptyList(),
+                snapshotItems = emptyList(),
+                flows = emptyList(),
+            )
+        }
+
+        private fun balanceOf(a: Account, file: BackupFile): Long =
+            Ledger.balanceAt(a.id, Long.MAX_VALUE, file.valuations, file.flows) ?: 0L
     }
 }
 

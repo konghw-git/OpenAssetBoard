@@ -43,6 +43,8 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -104,6 +106,33 @@ class SettingsViewModel(container: AppContainer) : RestoreViewModel(container) {
         container.holidays.updateOnline()
         message.value = "节假日数据已检查"
     }
+
+    fun reset(scope: ResetScope) = action {
+        val saved = when (scope) {
+            ResetScope.LEDGER_HISTORY -> container.backup.resetLedgerHistory()
+            ResetScope.EVERYTHING -> container.backup.reset()
+        }
+        container.announce("${scope.done}。原来的数据另存为 ${saved.substringAfterLast('/')}，可在「恢复前副本」里找回")
+    }
+}
+
+enum class ResetScope(val title: String, val subtitle: String, val confirmTitle: String, val confirmText: String, val confirmLabel: String, val done: String) {
+    LEDGER_HISTORY(
+        "清空资产历史",
+        "保留账户和当前余额，以今天为新的期初",
+        "清空资产历史？",
+        "分组、账户和每个账户现在的余额都保留，今天成为新的期初。此前的估值、盘点和转账买卖流水全部删除，趋势图从今天开始画，投资账户的收益从 0 重新计。待办、日记、笔记等其他数据不受影响。",
+        "清空历史",
+        "已清空资产历史",
+    ),
+    EVERYTHING(
+        "彻底清空",
+        "删除全部数据，回到刚安装时的样子",
+        "清空全部数据？",
+        "所有资产、待办、日记、笔记、周复盘、打卡和健康记录都会删除，包括回收站，app 回到刚安装时的样子。设置和备份目录保留。",
+        "全部清空",
+        "已彻底清空",
+    ),
 }
 
 /** "content://…/tree/primary%3ADocuments%2FAssetBoard" -> "内部存储/Documents/AssetBoard" */
@@ -143,6 +172,7 @@ fun SettingsScreen(
     val update by updater.state.collectAsStateWithLifecycle()
     val autoUpdate by settings.autoUpdateCheck.collectAsStateWithLifecycle()
     var editMirror by remember { mutableStateOf(false) }
+    var confirmReset by remember { mutableStateOf<ResetScope?>(null) }
     val snackbar = remember { SnackbarHostState() }
     ErrorDialog(error) { vm.error.value = null }
     RestoreConfirm(vm)
@@ -317,6 +347,27 @@ fun SettingsScreen(
                 )
             }
 
+            SectionCard {
+                SectionHeader("数据初始化")
+                ResetScope.entries.forEachIndexed { i, scope ->
+                    if (i > 0) RowDivider(startIndent = 68.dp)
+                    ListRow(
+                        title = scope.title,
+                        subtitle = scope.subtitle,
+                        leading = {
+                            IconTile(if (scope == ResetScope.EVERYTHING) Icons.Outlined.RestartAlt else Icons.Outlined.History, cs.error)
+                        },
+                        onClick = { confirmReset = scope },
+                    )
+                }
+                Text(
+                    "账户里混进了别人的数据、又已经改成自己的余额时，用「清空资产历史」，改过的余额不会白费。执行前都会自动另存一份当前数据，可以在「恢复前副本」里一键还原。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
+                )
+            }
+
             SectionCard(contentPadding = PaddingValues(bottom = 16.dp)) {
                 SectionHeader("外观")
                 Column(Modifier.padding(horizontal = 20.dp)) {
@@ -347,6 +398,16 @@ fun SettingsScreen(
         }
     }
 
+    confirmReset?.let { scope ->
+        ConfirmDialog(
+            title = scope.confirmTitle,
+            text = scope.confirmText + "\n\n执行前会自动另存一份当前数据，可以在「恢复前副本」里一键还原。",
+            confirmLabel = scope.confirmLabel,
+            destructive = true,
+            onConfirm = { confirmReset = null; vm.reset(scope) },
+            onDismiss = { confirmReset = null },
+        )
+    }
     if (editMirror) {
         MirrorDialog(updater.mirror, onDismiss = { editMirror = false }) { updater.mirror = it; editMirror = false }
     }

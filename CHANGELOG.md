@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-10-21
+
+### Added
+
+- **Settings → 数据初始化**, two ways to start over, each saving the current data as the
+  pre-restore copy first:
+  - **清空资产历史** keeps the groups, the accounts and their current balances and drops every
+    earlier valuation, stocktake and flow: today becomes each account's baseline, the trend
+    starts today and an investment's profit starts at zero. Everything outside the ledger stays.
+  - **彻底清空** removes all data, back to a fresh install. Settings and the backup folder stay.
+
+### Fixed
+
+- **A new install no longer offers the author's own accounts.** The welcome screen's main button
+  imported fifteen accounts with real balances; it now only sets up the five empty groups.
+  Anyone who imported them and has since entered their own balances can use 清空资产历史 to drop
+  the numbers they started from.
+
 ## [0.9.2] - 2026-10-21
 
 ### Added
