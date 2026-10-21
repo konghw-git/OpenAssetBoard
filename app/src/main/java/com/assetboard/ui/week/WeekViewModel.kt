@@ -18,6 +18,7 @@ import com.assetboard.ui.ActionViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -64,6 +65,7 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
 
     private val saveScope: CoroutineScope = container.appScope + epoch
     private var statusJob: Job? = null
+    private var leaving: Job? = null
 
     init {
         open(_start.value)
@@ -72,11 +74,31 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
     fun today(): LocalDate = TodoViews.localDate(System.currentTimeMillis())
 
     /** Steps to the week starting [to], saving this one first. */
-    fun go(to: LocalDate) {
-        if (!mayLeave(to)) return
-        val s = _session.value
-        if (s != null) saveScope.launch { s.saveNow(); s.close() }
-        open(Weeks.start(to))
+    fun go(to: LocalDate) = leave(to) { open(Weeks.start(to)) }
+
+    /** Leaves the page once this week's text is safe. */
+    fun back(onBack: () -> Unit) = leave(null, onBack)
+
+    /**
+     * Saves before leaving for [target] (null for back), and the old session stays on screen
+     * until that landed: text that could not even go into a draft is never dropped without asking.
+     */
+    private fun leave(target: LocalDate?, then: () -> Unit) {
+        val s = _session.value ?: return then()
+        leaving?.cancel()
+        leaving = viewModelScope.launch {
+            // On the save scope, so the save lands even if this screen goes away meanwhile.
+            val saved = saveScope.async { s.saveBeforeLeaving() }.await()
+            when {
+                saved -> {
+                    s.close()
+                    then()
+                }
+                s.status.value == WeekSession.Status.UNSAVED -> unsavedLeave.value = target ?: BACK
+                // A restore holds the gate; it collects this text itself.
+                else -> messages.emit(WeekMessage("正在恢复数据，请稍后再离开"))
+            }
+        }
     }
 
     private fun open(start: LocalDate) {
@@ -125,13 +147,6 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
     fun flush() {
         val s = _session.value ?: return
         saveScope.launch { s.saveNow() }
-    }
-
-    /** True when the page may leave this week now (null for back); otherwise it asks first. */
-    fun mayLeave(target: LocalDate?): Boolean {
-        if (_session.value?.status?.value != WeekSession.Status.UNSAVED) return true
-        unsavedLeave.value = target ?: BACK
-        return false
     }
 
     /** After the user copied the text: leave without saving. */

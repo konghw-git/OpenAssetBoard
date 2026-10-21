@@ -127,18 +127,25 @@ class ReminderScheduler(private val context: Context, private val container: App
         }
     }
 
-    /** Called by the alarm receiver once the token checked out. */
+    /**
+     * Called by the alarm receiver once the token checked out. An alarm the system held back for
+     * more than a day is written off as missed, as [syncOne] would have.
+     */
     suspend fun fire(token: ReminderToken) = lock.withLock {
         val t = container.todos.todo(token.id) ?: return@withLock
         if (token.epoch != container.gate.epochNow() || t.stateSeq != token.seq || !TodoViews.isOpen(t)) return@withLock
-        val (at, _) = ReminderState.pending(t) ?: return@withLock
         val now = System.currentTimeMillis()
-        if (at > now + 60_000) {
-            setAlarm(t, at, token)
-            return@withLock
-        }
         withContext(com.assetboard.data.Epoch(token.epoch)) {
-            deliver(t, token, ((now - at) / 60_000).coerceAtLeast(0), fromBoot = false)
+            when (val plan = ReminderState.plan(t, now)) {
+                ReminderPlan.None -> Unit
+                // Up to a minute early counts as on time.
+                is ReminderPlan.At -> if (plan.at > now + 60_000) setAlarm(t, plan.at, token) else deliver(t, token, 0, fromBoot = false)
+                is ReminderPlan.Late -> deliver(t, token, plan.lateMinutes, fromBoot = false)
+                is ReminderPlan.Missed -> {
+                    addMissed(MissedReminder(t.id, t.title, plan.at, notificationsOff = false))
+                    markReminded(t)
+                }
+            }
         }
     }
 

@@ -174,9 +174,11 @@ fun WeekScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenNote:
         focusManager.clearFocus()
         keyboard?.hide()
     }
-    val back: () -> Unit = { if (vm.mayLeave(null)) onBack() }
-    BackHandler(editing && status != WeekSession.Status.UNSAVED) { done() }
-    BackHandler(status == WeekSession.Status.UNSAVED) { back() }
+    val back: () -> Unit = { vm.back(onBack) }
+    // Every way back waits for the save; while typing, back first puts the keyboard away.
+    val typing = editing && status != WeekSession.Status.UNSAVED
+    BackHandler(!typing) { back() }
+    BackHandler(typing) { done() }
     val thisWeek = Weeks.start(vm.today())
 
     CompositionLocalProvider(LocalAmbient provides ambient) {

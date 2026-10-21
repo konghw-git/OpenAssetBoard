@@ -138,8 +138,11 @@ abstract class TextSession<X>(
     val dirty: Boolean get() = _text.value != savedText
 
     fun onInput(value: String) {
-        if (value == _text.value) return
-        _text.value = value
+        synchronized(snapshotLock) {
+            // An ended session is about to be reloaded: what its draft holds is all it keeps.
+            if (value == _text.value || _status.value == Status.ENDED) return
+            _text.value = value
+        }
         touched = true
         if (_status.value != Status.READY) return
         val now = clock()
@@ -172,6 +175,16 @@ abstract class TextSession<X>(
 
     /** Saves now if anything is unsaved. Returns false while the save could not land. */
     suspend fun saveNow(): Boolean = saveLock.withLock { saveLocked() }
+
+    /** True once nothing of this session can be lost: the body is saved, or the text went into a draft. */
+    suspend fun saveBeforeLeaving(): Boolean {
+        // Typing can go on during a save; a few rounds catch up with it.
+        repeat(3) {
+            if (!saveNow()) return _status.value == Status.ENDED
+            if (!dirty) return true
+        }
+        return !dirty
+    }
 
     private suspend fun saveLocked(): Boolean {
         if (_status.value != Status.READY) return false
@@ -212,11 +225,20 @@ abstract class TextSession<X>(
         }
     }
 
+    /**
+     * Typing goes on while the draft is written, so the session ends only once a draft holds the
+     * text as it stands: anything typed meanwhile goes into another, complete one.
+     */
     private suspend fun endWithDraft(reason: String) {
-        val snapshot = _text.value
         try {
-            writeDraft(rowId, snapshot, reason)
-            _status.value = Status.ENDED
+            while (true) {
+                val snapshot = _text.value
+                writeDraft(rowId, snapshot, reason)
+                val ended = synchronized(snapshotLock) {
+                    (_text.value == snapshot).also { if (it) _status.value = Status.ENDED }
+                }
+                if (ended) break
+            }
             _messages.tryEmit("保存冲突，未保存的内容已存为草稿")
         } catch (e: CancellationException) {
             throw e

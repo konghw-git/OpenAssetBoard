@@ -186,8 +186,8 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
         action { u() }
     }
 
-    // Completing and skipping copy the title into the record and fix the undo revision, so the
-    // typed text goes in first.
+    // Completing and skipping copy the title into the record and fix the undo revision, and the
+    // trash keeps what was deleted, so the typed text goes in first.
     fun complete() = action {
         val t = state.value.todo ?: return@action
         commitText()
@@ -206,7 +206,10 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
         events.tryEmit(UndoEvent("已跳过本期"))
     }
 
-    fun delete(onDeleted: () -> Unit) = action(onSuccess = onDeleted) { repo.delete(id) }
+    fun delete(onDeleted: () -> Unit) = action(onSuccess = onDeleted) {
+        commitText()
+        repo.delete(id)
+    }
 }
 
 /** The detail as a page of its own: notification taps that land outside the todo tab, tests. */

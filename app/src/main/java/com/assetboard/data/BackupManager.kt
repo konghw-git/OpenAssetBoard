@@ -269,6 +269,7 @@ class BackupManager(
         unique(file.snapshotItems, { it.snapshotId to it.accountId }, "盘点明细")
         unique(file.habitChecks, { it.date to it.habit }, "每日指标")
         unique(file.habits, { it.key }, "每日打卡")
+        checkHabits(file.habits)
         val habitKeys = file.habits.ifEmpty { com.assetboard.domain.Habit.DEFAULTS }.map { it.key }.toSet()
         for (h in file.habitChecks) {
             ensure(h.habit in habitKeys) { "备份里有未知的每日指标「${h.habit}」" }
@@ -312,6 +313,22 @@ class BackupManager(
         NoteRepository.checkBackup(file.noteTopics, file.notes, file.noteSources, file.noteDrafts)
         WeekRepository.checkBackup(file.weeklyReviews, file.weeklyDrafts)
         ensure(file.netWorthGoal == null || file.netWorthGoal > 0) { "备份里的目标资产无效" }
+    }
+
+    /** What [HabitRepository] would have allowed: the days each one belongs to read as dates. Empty is the five built in. */
+    private fun checkHabits(habits: List<com.assetboard.domain.Habit>) {
+        if (habits.isEmpty()) return
+        fun date(s: String?) = s?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() ?: throw LedgerException("备份里有日期无效的每日打卡") }
+        for (h in habits) {
+            ensure(h.key.isNotBlank()) { "备份里有每日打卡缺少标识" }
+            ensure(h.label.isNotBlank() && h.label.length <= com.assetboard.domain.Habit.MAX_LABEL) { "备份里有名字无效的每日打卡" }
+            val from = date(h.addedOn)
+            val until = date(h.removedOn)
+            // Removed on the day it was added is fine: it then belongs to no day but keeps its checks.
+            ensure(from == null || until == null || !until.isBefore(from)) { "备份里有每日打卡的移除日期早于添加日期" }
+        }
+        val active = habits.count { it.active }
+        ensure(active in 1..com.assetboard.domain.Habit.MAX_ACTIVE) { "备份里的每日打卡数量无效" }
     }
 
     /**

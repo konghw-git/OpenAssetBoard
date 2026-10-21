@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -64,7 +65,8 @@ class AlarmActivity : ComponentActivity() {
             finish()
         }
         setContent {
-            AssetBoardTheme(container.settings.themeMode.value, upIsRed = true) {
+            val theme by container.settings.themeMode.collectAsState()
+            AssetBoardTheme(theme, upIsRed = true) {
                 AlarmContent(shown?.second.orEmpty(), onDone = { act(ReminderActionReceiver.COMPLETE) }, onSnooze = { act(ReminderActionReceiver.SNOOZE_10) }, onStop = { act(ReminderActionReceiver.STOP) })
             }
         }

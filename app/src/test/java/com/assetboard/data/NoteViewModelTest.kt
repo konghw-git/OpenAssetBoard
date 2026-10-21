@@ -68,17 +68,21 @@ class NoteViewModelTest {
         val vm = NoteViewModel(c, SavedStateHandle(mapOf(NoteViewModel.ARG_ID to id)))
         store.put("note", vm)
         val s = withTimeout(5000) { vm.session.first { it != null }!! }
-        assertTrue(vm.mayLeave(NoteViewModel.Leave.Back))
+        val gone = mutableListOf<NoteViewModel.Leave>()
+        vm.leave(NoteViewModel.Leave.Back) { gone += it }
+        withTimeout(5000) { while (gone.isEmpty()) kotlinx.coroutines.delay(10) }
+        assertEquals(listOf<NoteViewModel.Leave>(NoteViewModel.Leave.Back), gone)
         c.notes.failBodyWrites = true
         c.notes.failDraftWrites = true
         vm.onInput("写不进去的笔记，又加了一句")
         assertFalse(withContext(c.gate.bound()) { s.saveNow() })
         assertEquals(NoteSession.Status.UNSAVED, s.status.value)
-        assertFalse(vm.mayLeave(NoteViewModel.Leave.Back))
-        assertEquals(NoteViewModel.Leave.Back, vm.unsavedLeave.value)
+        vm.leave(NoteViewModel.Leave.Back) { gone += it }
+        assertEquals(NoteViewModel.Leave.Back, withTimeout(5000) { vm.unsavedLeave.first { it != null } })
         val day = java.time.LocalDate.of(2026, 10, 12)
-        assertFalse(vm.mayLeave(NoteViewModel.Leave.Diary(day)))
-        assertEquals(NoteViewModel.Leave.Diary(day), vm.unsavedLeave.value)
+        vm.leave(NoteViewModel.Leave.Diary(day)) { gone += it }
+        assertEquals(NoteViewModel.Leave.Diary(day), withTimeout(5000) { vm.unsavedLeave.first { it is NoteViewModel.Leave.Diary } })
+        assertEquals(1, gone.size)
         assertEquals("写不进去的笔记，又加了一句", s.text.value)
         c.notes.failBodyWrites = false
         c.notes.failDraftWrites = false

@@ -156,7 +156,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         leaving?.cancel()
         leaving = viewModelScope.launch {
             // On the save scope, so the save lands even if this screen goes away meanwhile.
-            val saved = saveScope.async { saveBeforeLeaving(old) }.await()
+            val saved = saveScope.async { old.saveBeforeLeaving() }.await()
             when {
                 saved || dropUnsaved -> {
                     old.close()
@@ -167,16 +167,6 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
                 else -> messages.emit("正在恢复数据，请稍后再切换日期")
             }
         }
-    }
-
-    /** True once nothing of [s] can be lost: the body is saved, or the text went into a draft. */
-    private suspend fun saveBeforeLeaving(s: DiarySession): Boolean {
-        // Typing can go on during a save; a few rounds catch up with it.
-        repeat(3) {
-            if (!s.saveNow()) return s.status.value == DiarySession.Status.ENDED
-            if (!s.dirty) return true
-        }
-        return !s.dirty
     }
 
     private fun show(d: LocalDate) {

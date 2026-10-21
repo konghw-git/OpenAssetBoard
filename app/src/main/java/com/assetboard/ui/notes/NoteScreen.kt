@@ -117,6 +117,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
     val topics by vm.topics.collectAsStateWithLifecycle()
     val pendingTopic by vm.pendingTopic.collectAsStateWithLifecycle()
     val missing by vm.missing.collectAsStateWithLifecycle()
+    val noteId by vm.noteId.collectAsStateWithLifecycle()
     val unsavedLeave by vm.unsavedLeave.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val status = session?.status?.collectAsStateWithLifecycle()?.value
@@ -144,15 +145,17 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
         focusManager.clearFocus()
         keyboard?.hide()
     }
-    fun leave(target: NoteViewModel.Leave) {
-        if (!vm.mayLeave(target)) return
+    val go: (NoteViewModel.Leave) -> Unit = { target ->
         when (target) {
             NoteViewModel.Leave.Back -> onBack()
             is NoteViewModel.Leave.Diary -> onOpenDiary(target.date)
         }
     }
-    BackHandler(editing && status != NoteSession.Status.UNSAVED) { done() }
-    BackHandler(status == NoteSession.Status.UNSAVED) { vm.unsavedLeave.value = NoteViewModel.Leave.Back }
+    fun leave(target: NoteViewModel.Leave) = vm.leave(target, go)
+    // Every way back waits for the save; while typing, back first puts the keyboard away.
+    val typing = editing && status != NoteSession.Status.UNSAVED
+    BackHandler(!typing) { leave(NoteViewModel.Leave.Back) }
+    BackHandler(typing) { done() }
 
     val cs = MaterialTheme.colorScheme
     val exists = note != null && note?.deletedAt == null
@@ -201,7 +204,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             session?.let { s ->
-                Editor(s, autoFocus = vm.noteId.value == null, onInput = vm::onInput, onFocus = { editing = it })
+                Editor(s, autoFocus = noteId == null, onInput = vm::onInput, onFocus = { editing = it })
             }
             if (sources.isNotEmpty()) {
                 Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -240,10 +243,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
             onConfirm = {
                 session?.let { s -> context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("笔记", s.text.value)) }
                 vm.unsavedLeave.value = null
-                when (target) {
-                    NoteViewModel.Leave.Back -> onBack()
-                    is NoteViewModel.Leave.Diary -> onOpenDiary(target.date)
-                }
+                go(target)
             },
             onDismiss = { vm.unsavedLeave.value = null },
         )

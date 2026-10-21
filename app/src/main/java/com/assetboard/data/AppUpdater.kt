@@ -8,6 +8,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.assetboard.BuildConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,7 +36,8 @@ sealed interface UpdateState {
     data class Available(val release: Release) : UpdateState
     /** [progress] is 0..1, or below zero while the size is unknown. */
     data class Downloading(val release: Release, val progress: Float) : UpdateState
-    data class Ready(val release: Release, val file: File) : UpdateState
+    /** [backupFailed] is why the backup before installing did not work; the install waited for the user. */
+    data class Ready(val release: Release, val file: File, val backupFailed: String? = null) : UpdateState
     data class Failed(val message: String, val release: Release? = null) : UpdateState
 }
 
@@ -213,8 +215,12 @@ class AppUpdater(
     private fun signers(p: PackageInfo): Set<String>? =
         p.signingInfo?.apkContentsSigners?.map { it.toCharsString() }?.toSet()
 
-    /** Backs up first when a backup folder is set, then opens the system installer (or, the first time, the permission page). */
-    fun install(file: File) {
+    /**
+     * Backs up first when a backup folder is set, then opens the system installer (or, the first
+     * time, the permission page). A failed backup stops there and says why; [skipBackup] is the
+     * user going on without one.
+     */
+    fun install(file: File, skipBackup: Boolean = false) {
         val pm = context.packageManager
         if (!pm.canRequestPackageInstalls()) {
             context.startActivity(
@@ -223,7 +229,17 @@ class AppUpdater(
             return
         }
         scope.launch {
-            if (settings.backupTreeUri.value != null) runCatching { backup() }
+            if (!skipBackup && settings.backupTreeUri.value != null) {
+                val failed = runCatching { backup() }.exceptionOrNull()
+                if (failed is CancellationException) throw failed
+                if (failed != null) {
+                    val reason = failed.message ?: failed.javaClass.simpleName
+                    _state.value = (_state.value as? UpdateState.Ready)?.copy(backupFailed = reason) ?: UpdateState.Failed("安装前没能备份：$reason")
+                    prompt.value = true
+                    return@launch
+                }
+            }
+            (_state.value as? UpdateState.Ready)?.takeIf { it.backupFailed != null }?.let { _state.value = it.copy(backupFailed = null) }
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
             context.startActivity(
                 Intent(Intent.ACTION_VIEW)

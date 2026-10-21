@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,6 +62,7 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
     /** Saves outlive the screen: the app scope plus the epoch bound for this screen. */
     private val saveScope: CoroutineScope = container.appScope + epoch
     private var statusJob: Job? = null
+    private var leaving: Job? = null
 
     init {
         open()
@@ -113,11 +115,23 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
         saveScope.launch { s.saveNow() }
     }
 
-    /** True when the page may go to [target] now; otherwise the page asks first. */
-    fun mayLeave(target: Leave): Boolean {
-        if (_session.value?.status?.value != NoteSession.Status.UNSAVED) return true
-        unsavedLeave.value = target
-        return false
+    /**
+     * Goes to [target] through [go] once the text is safe: saved, or in a draft. The session stays
+     * on screen until then; text that could not even go into a draft is never dropped without asking.
+     */
+    fun leave(target: Leave, go: (Leave) -> Unit) {
+        val s = _session.value ?: return go(target)
+        leaving?.cancel()
+        leaving = viewModelScope.launch {
+            // On the save scope, so the save lands even if this screen goes away meanwhile.
+            val saved = saveScope.async { s.saveBeforeLeaving() }.await()
+            when {
+                saved -> go(target)
+                s.status.value == NoteSession.Status.UNSAVED -> unsavedLeave.value = target
+                // A restore holds the gate; it collects this text itself.
+                else -> messages.emit("正在恢复数据，请稍后再离开")
+            }
+        }
     }
 
     fun setTopic(topicId: String?) {

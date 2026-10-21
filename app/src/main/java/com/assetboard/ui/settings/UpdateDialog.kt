@@ -69,7 +69,7 @@ fun UpdatePrompt() {
                 when (s) {
                     is UpdateState.Available -> "发现新版本 ${s.release.version}"
                     is UpdateState.Downloading -> "正在下载 ${s.release.version}"
-                    is UpdateState.Ready -> "${s.release.version} 可以安装了"
+                    is UpdateState.Ready -> if (s.backupFailed != null) "安装前没能备份" else "${s.release.version} 可以安装了"
                     UpdateState.UpToDate -> "已是最新版本"
                     is UpdateState.Failed -> "没能完成"
                     else -> "检查更新"
@@ -81,7 +81,11 @@ fun UpdatePrompt() {
             when (s) {
                 is UpdateState.Available -> TextButton(onClick = { updater.download(s.release) }) { Text("下载更新") }
                 is UpdateState.Downloading -> TextButton(onClick = updater::dismiss) { Text("后台下载") }
-                is UpdateState.Ready -> TextButton(onClick = { updater.install(s.file) }) { Text(if (updater.canInstall()) "安装" else "去允许安装") }
+                is UpdateState.Ready -> if (s.backupFailed != null) {
+                    TextButton(onClick = { updater.install(s.file, skipBackup = true) }) { Text("不备份，仍然安装") }
+                } else {
+                    TextButton(onClick = { updater.install(s.file) }) { Text(if (updater.canInstall()) "安装" else "去允许安装") }
+                }
                 is UpdateState.Failed -> TextButton(onClick = { s.release?.let(updater::download) ?: updater.checkNow() }) { Text("重试") }
                 UpdateState.Checking -> {}
                 else -> TextButton(onClick = updater::dismiss) { Text("好") }
@@ -95,7 +99,10 @@ fun UpdatePrompt() {
                         TextButton(onClick = updater::dismiss) { Text("稍后") }
                     }
                     is UpdateState.Downloading -> TextButton(onClick = updater::cancel) { Text("取消下载") }
-                    is UpdateState.Ready -> TextButton(onClick = updater::dismiss) { Text("稍后") }
+                    is UpdateState.Ready -> {
+                        if (s.backupFailed != null) TextButton(onClick = { updater.install(s.file) }) { Text("重试备份") }
+                        TextButton(onClick = updater::dismiss) { Text("稍后") }
+                    }
                     is UpdateState.Failed -> {
                         TextButton(onClick = { openPage(s.release) }) { Text("用浏览器下载") }
                         TextButton(onClick = updater::dismiss) { Text("关闭") }
@@ -141,7 +148,13 @@ private fun UpdateBody(s: UpdateState, updater: AppUpdater) {
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp),
             )
         }
-        is UpdateState.Ready -> Column {
+        is UpdateState.Ready -> if (s.backupFailed != null) Column {
+            Text("备份没有写成：${s.backupFailed}")
+            Text(
+                "安装没有开始。可以先在设置里重新选择备份目录、手动备份一次，再回来安装；也可以不备份直接安装，覆盖安装通常不影响数据。",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp),
+            )
+        } else Column {
             Text("安装包已校验：是本应用、版本更新、签名一致。")
             Text(
                 "安装前会先备份一次（已设置备份目录时），再打开系统的安装界面。" +

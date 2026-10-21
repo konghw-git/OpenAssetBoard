@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Leaving a note or a weekly review waits for its last save.** Going back, stepping to another
+  week or following a note's diary source used to leave at once; if that save and its draft both
+  failed, the text was gone with the page. Now the page stays until the text is saved or in a
+  draft, and asks (offering to copy it) when neither worked, as the diary already did.
+- **Typing on while a save conflict is written into a draft is kept.** The diary, notes and weekly
+  reviews ended the session with a draft of the text as it was when the save failed; whatever was
+  typed while that draft was written disappeared with the reload. The draft now holds it all.
+- **Deleting a todo right after editing it keeps the edit.** The title and notes typed just before
+  went nowhere, so the trash and undo brought back the older text.
+- **A restore checks the daily habits' dates and names** before it replaces anything: a backup with
+  a malformed date was taken in and then broke the diary and the weekly review.
+- **An alarm the system delivers more than a day late is listed as missed**, as one found on
+  restart is, instead of notifying or ringing for something long past.
+- **A failed backup before installing an update stops the install** and says why, with 重试备份
+  and 不备份，仍然安装 to choose from, instead of installing without the promised backup.
+- Two places read app state in a way the screen did not follow (lint errors): the alarm screen's
+  theme and a new note's first focus.
+
 ## [0.9.3] - 2026-10-21
 
 ### Added
