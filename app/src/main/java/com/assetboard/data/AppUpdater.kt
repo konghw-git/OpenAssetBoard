@@ -309,7 +309,8 @@ class AppUpdater(
     private fun inForeground(): Boolean {
         val manager = context.getSystemService(android.app.ActivityManager::class.java) ?: return true
         return manager.runningAppProcesses.orEmpty().any {
-            it.pid == android.os.Process.myPid() && it.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
+            // A visible activity: a foreground service alone does not let the installer start.
+            it.pid == android.os.Process.myPid() && it.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
         }
     }
 

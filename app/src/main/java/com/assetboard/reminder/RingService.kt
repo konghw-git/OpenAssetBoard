@@ -39,13 +39,27 @@ class RingService : Service() {
             return START_NOT_STICKY
         }
         val t = intent?.let { ReminderToken.from(it) } ?: run { stopSelf(); return START_NOT_STICKY }
-        // Checked before anything rings: the todo may be done, edited or gone by now.
+        val title = intent.getStringExtra(AlarmActivity.EXTRA_TITLE).orEmpty()
+        // Started with startForegroundService: it must be in the foreground at once, whatever the
+        // check below says, or the system kills the app.
+        // Every such start needs it, also while another reminder rings: that one keeps its notification.
+        val current = token?.takeIf { it.id != t.id }
+        ServiceCompat.startForeground(
+            this,
+            Notifier.notificationId((current ?: t).id),
+            if (current != null) Notifier.ringing(this, this.title, current) else Notifier.ringing(this, title, t),
+            if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0,
+        )
+        // Then checked before anything sounds: the todo may be done, edited or gone by now.
         val container = ReminderScheduler.container(this)
         container.appScope.launch {
-            if (!container.reminders.stillLive(t)) {
-                if (ringingFor == t.id) stopRinging()
-            } else {
-                ring(t, intent.getStringExtra(AlarmActivity.EXTRA_TITLE).orEmpty())
+            val live = container.reminders.stillLive(t)
+            handler.post {
+                when {
+                    live -> ring(t, title)
+                    // Nothing else is ringing: leave the foreground and stop.
+                    token == null || token?.id == t.id -> stopRinging()
+                }
             }
         }
         return START_NOT_STICKY
