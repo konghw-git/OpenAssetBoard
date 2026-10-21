@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import java.time.LocalDate
@@ -52,8 +53,15 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
     val session: StateFlow<WeekSession?> = _session.asStateFlow()
     val stats = MutableStateFlow<WeekStats?>(null)
     val messages = MutableSharedFlow<WeekMessage>(extraBufferCapacity = 4)
-    /** Leaving (back, or to another week) while the text could neither be saved nor drafted. */
-    val unsavedLeave = MutableStateFlow<LocalDate?>(null)
+    /** Where the page goes once nothing can be lost on the way. */
+    sealed interface Leave {
+        data object Back : Leave
+        data class Week(val start: LocalDate) : Leave
+        data class Diary(val date: LocalDate) : Leave
+    }
+
+    /** A way out the user took while the text could neither be saved nor drafted: asked before it is dropped. */
+    val unsavedLeave = MutableStateFlow<Leave?>(null)
 
     val review: StateFlow<WeeklyReview?> = _start.flatMapLatest { weeks.observe(it) }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val drafts: StateFlow<List<WeeklyDraft>> = _start.flatMapLatest { weeks.observeDrafts(it) }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -74,17 +82,11 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
     fun today(): LocalDate = TodoViews.localDate(System.currentTimeMillis())
 
     /** Steps to the week starting [to], saving this one first. */
-    fun go(to: LocalDate) = leave(to) { open(Weeks.start(to)) }
+    fun go(to: LocalDate) = leave(Leave.Week(Weeks.start(to))) { open(Weeks.start(to)) }
 
-    /** Leaves the page once this week's text is safe. */
-    fun back(onBack: () -> Unit) = leave(null, onBack)
-
-    /**
-     * Saves before leaving for [target] (null for back), and the old session stays on screen
-     * until that landed: text that could not even go into a draft is never dropped without asking.
-     */
-    private fun leave(target: LocalDate?, then: () -> Unit) {
-        val s = _session.value ?: return then()
+    /** Back to the diary tab, or the page before: the review is saved first either way. */
+    fun leave(target: Leave, go: (Leave) -> Unit) {
+        val s = _session.value ?: return go(target)
         leaving?.cancel()
         leaving = viewModelScope.launch {
             // On the save scope, so the save lands even if this screen goes away meanwhile.
@@ -92,11 +94,11 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
             when {
                 saved -> {
                     s.close()
-                    then()
+                    go(target)
                 }
-                s.status.value == WeekSession.Status.UNSAVED -> unsavedLeave.value = target ?: BACK
-                // A restore holds the gate; it collects this text itself.
-                else -> messages.emit(WeekMessage("正在恢复数据，请稍后再离开"))
+                s.status.value == WeekSession.Status.UNSAVED -> unsavedLeave.value = target
+                // A restore holds the gate and collects this text itself; otherwise a save is behind.
+                else -> messages.emit(WeekMessage(if (container.gate.frozen.value) "正在恢复数据，请稍后再离开" else "刚才的输入还没写完，请停手片刻再离开"))
             }
         }
     }
@@ -129,8 +131,9 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
         if (_start.value == start) stats.value = s
     }
 
-    private suspend fun watch(s: WeekSession) {
-        launchBound { s.messages.collect { messages.emit(WeekMessage(it)) } }
+    /** The session's messages and status together: both end with the status job, on reload or on leaving. */
+    private suspend fun watch(s: WeekSession): Unit = coroutineScope {
+        launch { s.messages.collect { messages.emit(WeekMessage(it)) } }
         s.status.collect { st ->
             // The text went into a draft: reload the week from the database.
             if (st == WeekSession.Status.ENDED && _session.value === s) {
@@ -150,12 +153,12 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
     }
 
     /** After the user copied the text: leave without saving. */
-    fun leaveUnsaved(): LocalDate? {
-        val target = unsavedLeave.value
+    fun leaveUnsaved(go: (Leave) -> Unit) {
+        val target = unsavedLeave.value ?: return
         unsavedLeave.value = null
         _session.value?.close()
         _session.value = null
-        return target?.takeIf { it != BACK }?.also { open(Weeks.start(it)) }
+        if (target is Leave.Week) open(target.start) else go(target)
     }
 
     fun appendDraft(d: WeeklyDraft) = action {
@@ -200,7 +203,5 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
     companion object {
         /** The route's argument and the saved week: its Monday, or any day in it. */
         const val KEY_START = "start"
-        /** [unsavedLeave] for going back rather than to another week. */
-        private val BACK: LocalDate = LocalDate.MIN
     }
 }

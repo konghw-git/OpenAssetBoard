@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.ViewModelStore
 import com.assetboard.AppContainer
+import com.assetboard.TestContainers
 import com.assetboard.domain.LedgerException
 import com.assetboard.domain.todo.RepeatRule
 import com.assetboard.domain.todo.RepeatType
@@ -112,7 +113,7 @@ class RegressionTest {
 
     @Test fun missedRemindersSurviveARestartedScheduler() {
         val f = Fixture()
-        val container = AppContainer(f.context)
+        val container = TestContainers.open(f.context)
         try {
             val first = ReminderScheduler(f.context, container)
             first.clearMissed()
@@ -123,8 +124,7 @@ class RegressionTest {
             restarted.refreshMissed()
             assertEquals(listOf("first", "second"), restarted.missed.value.map { it.todoId })
         } finally {
-            container.appScope.cancel()
-            container.db.close()
+            TestContainers.closeAll()
             f.close()
         }
     }
@@ -168,7 +168,7 @@ class RegressionTest {
     @Test fun diaryTextThatCannotBeSavedKeepsTheDayOpenUntilDropped() = runBlocking<Unit> {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         val f = Fixture()
-        val container = AppContainer(f.context)
+        val container = TestContainers.open(f.context)
         val store = ViewModelStore()
         try {
             container.settings.setBool(container.settings.networkEnabled, false)
@@ -192,8 +192,7 @@ class RegressionTest {
             assertFalse(original in container.diary.editors)
         } finally {
             store.clear()
-            container.appScope.cancel()
-            container.db.close()
+            TestContainers.closeAll()
             f.close()
             Dispatchers.resetMain()
         }
@@ -202,7 +201,7 @@ class RegressionTest {
     @Test fun switchingDiaryDaysWaitsForTheSave() = runBlocking<Unit> {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         val f = Fixture()
-        val container = AppContainer(f.context)
+        val container = TestContainers.open(f.context)
         val store = ViewModelStore()
         try {
             container.settings.setBool(container.settings.networkEnabled, false)
@@ -216,8 +215,7 @@ class RegressionTest {
             assertEquals("saved before leaving", container.diary.entryOn(LocalDate.now())?.body)
         } finally {
             store.clear()
-            container.appScope.cancel()
-            container.db.close()
+            TestContainers.closeAll()
             f.close()
             Dispatchers.resetMain()
         }
@@ -226,7 +224,7 @@ class RegressionTest {
     @Test fun completingARepeatRightAfterEditingKeepsTheNewTitleAndUndo() = runBlocking<Unit> {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         val f = Fixture()
-        val container = AppContainer(f.context)
+        val container = TestContainers.open(f.context)
         val store = ViewModelStore()
         try {
             val id = withContext(container.gate.bound()) {
@@ -249,8 +247,7 @@ class RegressionTest {
             assertEquals(UndoOutcome.RESTORED, outcome)
         } finally {
             store.clear()
-            container.appScope.cancel()
-            container.db.close()
+            TestContainers.closeAll()
             f.close()
             Dispatchers.resetMain()
         }

@@ -3,6 +3,7 @@ package com.assetboard.data
 import android.content.Context
 import androidx.room.withTransaction
 import com.assetboard.domain.calendar.HolidayTable
+import com.assetboard.domain.ensure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +54,8 @@ class HolidayRepository(private val context: Context, private val db: AppDatabas
     private suspend fun store(text: String, source: String): Boolean {
         val file = json.decodeFromString(HolidayCnFile.serializer(), text)
         if (file.days.isEmpty()) return false
+        // A single bad date would fail every later read, leaving the whole table empty.
+        ensure(file.days.all { runCatching { LocalDate.parse(it.date) }.isSuccess }) { "节假日数据里有无效日期" }
         db.withTransaction {
             db.metaDao().clearHolidayYear(file.year.toString())
             db.metaDao().putHolidays(file.days.map { Holiday(it.date, it.name, it.isOffDay) })
@@ -66,9 +69,10 @@ class HolidayRepository(private val context: Context, private val db: AppDatabas
      * are silent; the weekly worker simply tries again.
      */
     suspend fun updateOnline(today: LocalDate = LocalDate.now()) = withContext(Dispatchers.IO) {
+        // November on: next year's schedule, and this year's again, as it can still change.
         val years = buildList {
             if (today.monthValue >= 11) add(today.year + 1)
-            if (!_table.value.hasYear(today.year)) add(today.year)
+            add(today.year)
         }
         var changed = false
         for (y in years) {

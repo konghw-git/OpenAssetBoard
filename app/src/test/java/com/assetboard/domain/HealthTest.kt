@@ -41,7 +41,8 @@ class HealthTest {
         assertEquals(FatGrade.STANDARD, Health.fatGrade(2_000, Sex.MALE, 40))
         assertEquals(FatGrade.HIGH, Health.fatGrade(2_500, Sex.MALE, 60))
         assertEquals(FatGrade.STANDARD, Health.fatGrade(2_100, Sex.FEMALE, 25))
-        assertEquals(FatGrade.HIGH, Health.fatGrade(3_200, Sex.FEMALE, 25))
+        assertEquals(FatGrade.STANDARD, Health.fatGrade(3_250, Sex.FEMALE, 25))
+        assertEquals(FatGrade.HIGH, Health.fatGrade(3_300, Sex.FEMALE, 25))
         assertEquals(FatGrade.LOW, Health.fatGrade(2_299, Sex.FEMALE, 45))
         assertEquals(FatGrade.STANDARD, Health.fatGrade(3_500, Sex.FEMALE, 70))
         // A grade is fixed by the measurement day: the birthday the day after does not move it.

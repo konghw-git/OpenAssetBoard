@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.assetboard.domain.Dates
 import com.assetboard.ui.theme.AssetBoardTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
 
@@ -85,8 +87,17 @@ class AlarmActivity : ComponentActivity() {
         val token = ReminderToken.from(intent) ?: run { finish(); return false }
         val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         if (intent.getBooleanExtra(EXTRA_FROM_BOOT, false) && takeOverRinging) {
-            getSystemService(NotificationManager::class.java).cancel(Notifier.notificationId(token.id))
-            RingService.start(this, token, title)
+            val container = ReminderScheduler.container(this)
+            container.appScope.launch {
+                // The todo may be done or edited by now; then neither the note nor the ring is due.
+                if (container.reminders.stillLive(token)) {
+                    container.reminders.cancelUnhandled(token)
+                    getSystemService(NotificationManager::class.java).cancel(Notifier.notificationId(token.id))
+                    RingService.start(this@AlarmActivity, token, title)
+                } else {
+                    getSystemService(NotificationManager::class.java).cancel(Notifier.notificationId(token.id))
+                }
+            }
         }
         shown = token to title
         return true
@@ -116,7 +127,14 @@ private fun AlarmContent(title: String, onDone: () -> Unit, onSnooze: () -> Unit
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(Dates.time(System.currentTimeMillis()), fontSize = 64.sp, fontWeight = FontWeight.Light, color = cs.onPrimaryContainer)
+        // A ring can last five minutes: the clock must not stand still meanwhile.
+        val now by produceState(System.currentTimeMillis()) {
+            while (true) {
+                delay(1_000)
+                value = System.currentTimeMillis()
+            }
+        }
+        Text(Dates.time(now), fontSize = 64.sp, fontWeight = FontWeight.Light, color = cs.onPrimaryContainer)
         Spacer(Modifier.height(24.dp))
         Text(title, style = MaterialTheme.typography.headlineSmall, color = cs.onPrimaryContainer, textAlign = TextAlign.Center)
         Spacer(Modifier.height(64.dp))

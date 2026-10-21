@@ -83,7 +83,7 @@ object Health {
                 else -> 1_300 to 2_500
             }
             Sex.FEMALE -> when {
-                age < 40 -> 2_100 to 3_200
+                age < 40 -> 2_100 to 3_300
                 age < 60 -> 2_300 to 3_400
                 else -> 2_400 to 3_600
             }

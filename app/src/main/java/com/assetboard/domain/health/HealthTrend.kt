@@ -54,8 +54,9 @@ object HealthTrend {
         if (all.isEmpty()) return null
         val sorted = all.sortedBy { it.date }
         if (days == null) return Period(sorted, anchored = false)
-        val cutoff = now - days * DAY_MS
-        val firstIn = sorted.indexOfFirst { measurementAt(it) >= cutoff }
+        // By local dates, not epoch milliseconds: a fixed 24 h window drifts over a DST change.
+        val from = com.assetboard.domain.Dates.localDate(now).minusDays(days - 1).toString()
+        val firstIn = sorted.indexOfFirst { it.date >= from }
         return when {
             // Nothing inside the period: only the latest record, as where things stand.
             firstIn < 0 -> Period(listOf(sorted.last()), anchored = true)
@@ -88,10 +89,8 @@ object HealthTrend {
             val from = date.minusDays(WINDOW_DAYS - 1L)
             val values = sorted.filter { val d = LocalDate.parse(it.date); !d.isBefore(from) && !d.isAfter(date) }.mapNotNull(of)
             // A day without its own reading, or a window with fewer than two readings, has no point.
-            if (of(m) == null || values.size < 2) {
-                open = null
-                continue
-            }
+            // Only a gap of a whole window ends a run; a day without the figure does not.
+            if (of(m) == null || values.size < 2) continue
             val avg = values.sum() / values.size
             val run = open
             if (run != null && lastDate != null && ChronoUnit.DAYS.between(lastDate, date) < WINDOW_DAYS) {

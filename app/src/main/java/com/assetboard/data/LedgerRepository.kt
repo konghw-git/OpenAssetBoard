@@ -254,6 +254,13 @@ class LedgerRepository(
         val from = flow.fromAccountId?.let { dao.account(it) }
         val to = flow.toAccountId?.let { dao.account(it) }
         Rules.checkFlow(flow, from, to)
+        // A valuation at the same instant already contains the flows of its day: this one would
+        // never move the balance. A date-only flow and a date-only valuation both sit at 23:59:59.
+        for (a in listOfNotNull(from, to)) {
+            ensure(dao.valuationAt(a.id, flow.at) == null) {
+                "「${a.name}」在这一刻有一条估值，已包含当天流水；这笔流水不会改变余额，请改流水时间或先改那条估值"
+            }
+        }
         if (dao.flow(flow.id) == null) dao.insertFlow(flow) else dao.updateFlow(flow)
     }
 

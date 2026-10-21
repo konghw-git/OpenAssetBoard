@@ -2,6 +2,7 @@ package com.assetboard.reminder
 
 import android.app.AlarmManager
 import android.app.NotificationManager
+import android.os.Build
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -66,20 +67,23 @@ class ReminderActionReceiver : BroadcastReceiver() {
             val container = ReminderScheduler.container(context)
             val nm = context.getSystemService(NotificationManager::class.java)
             val nid = Notifier.notificationId(token.id)
-            if (RingService.ringingFor == token.id) RingService.stop(context)
             if (token.id == ReminderScheduler.TEST_ID) {
                 nm.cancel(nid)
                 return
             }
             if (action == UNHANDLED) {
-                // Only if the boot-time ringing notification is still up, unanswered.
+                // Only if the boot-time ringing notification is still up, unanswered; a page that
+                // took it over has cancelled this timer, but a late one must not stop its ring.
                 val up = nm.activeNotifications.any { it.id == nid && it.notification.channelId == Notifier.CH_STRONG_BOOT }
                 val t = container.todos.todo(token.id)
-                if (up && t != null && t.stateSeq == token.seq && TodoViews.isOpen(t)) {
+                val open = t != null && t.stateSeq == token.seq && TodoViews.isOpen(t)
+                if (up && open && t != null) {
+                    if (RingService.ringingFor == token.id) RingService.stop(context)
                     nm.notify(nid, Notifier.unhandled(context, t.title, token))
                 }
                 return
             }
+            if (RingService.ringingFor == token.id) RingService.stop(context)
             if (action == STOP) {
                 nm.cancel(nid)
                 return
@@ -132,7 +136,10 @@ class DiaryReminderReceiver : BroadcastReceiver() {
             val entry = runCatching { container.diary.entryOn(LocalDate.now()) }.getOrNull()
             if (container.settings.diaryReminderEnabled.value && needsNudge(entry?.body)) {
                 val nm = context.getSystemService(NotificationManager::class.java)
-                if (nm.areNotificationsEnabled()) nm.notify(Notifier.DIARY_NOTIFICATION_ID, Notifier.diary(context))
+                val channel = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) null else nm.getNotificationChannel(Notifier.CH_DIARY)
+                if (nm.areNotificationsEnabled() && channel?.importance != NotificationManager.IMPORTANCE_NONE) {
+                    nm.notify(Notifier.DIARY_NOTIFICATION_ID, Notifier.diary(context))
+                }
             }
             container.reminders.scheduleDiaryReminder()
         }

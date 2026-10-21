@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
+import com.assetboard.CloseTestContainers
+import com.assetboard.TestContainers
 import com.assetboard.data.DiarySession
 import com.assetboard.data.ThemeMode
 import com.assetboard.data.TodoDraft
@@ -41,6 +43,8 @@ import androidx.compose.ui.test.performTextReplacement
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.test.performClick
 import org.junit.Rule
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -57,14 +61,16 @@ import java.time.LocalTime
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
 class ModuleScreenshotTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
+    private val compose get() = composeRule
 
     private val today = LocalDate.now()
 
     private class Demo(val c: AppContainer, val listId: String, val detailId: String)
 
     private fun demo(): Demo {
-        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         val t = c.todos
         var listId = ""
         var detail = ""

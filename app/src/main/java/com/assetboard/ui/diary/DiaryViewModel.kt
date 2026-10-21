@@ -30,6 +30,7 @@ import com.assetboard.data.Weeks
 import com.assetboard.data.WeeklyReview
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import java.time.LocalDate
@@ -163,8 +164,8 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
                     show(d)
                 }
                 old.status.value == DiarySession.Status.UNSAVED -> unsavedLeave.value = d
-                // A restore holds the gate; it collects this text itself.
-                else -> messages.emit("正在恢复数据，请稍后再切换日期")
+                // A restore holds the gate and collects this text itself; otherwise a save is behind.
+                else -> messages.emit(if (container.gate.frozen.value) "正在恢复数据，请稍后再切换日期" else "刚才的输入还没写完，请停手片刻再切换日期")
             }
         }
     }
@@ -187,8 +188,9 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         }
     }
 
-    private suspend fun watch(s: DiarySession) {
-        launchBound { s.messages.collect { messages.emit(it) } }
+    /** The session's messages and status together: both end with the status job, on reload or on leaving. */
+    private suspend fun watch(s: DiarySession): Unit = coroutineScope {
+        launch { s.messages.collect { messages.emit(it) } }
         s.status.collect { st ->
             // The draft is written; reload the day from the database.
             if (st == DiarySession.Status.ENDED && _session.value === s) open(s.date)

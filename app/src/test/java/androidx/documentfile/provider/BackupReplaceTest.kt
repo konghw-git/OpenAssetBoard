@@ -6,6 +6,11 @@ import android.net.Uri
 import com.assetboard.data.BackupKind
 import com.assetboard.data.Fixture
 import com.assetboard.domain.LedgerException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -70,17 +75,23 @@ class BackupReplaceTest {
 
     @Test fun providerWithoutRenameRewritesTheFileInPlace() {
         File(dir, name).writeText("old backup")
-        replace(TestProvider(DocumentFile.fromFile(dir), { _, _ -> false }, { it != name }))
+        replace(TestProvider(DocumentFile.fromFile(dir), { _, _ -> false }, { true }))
         assertEquals(mapOf(name to "new backup"), files())
     }
 
     @Test fun failedRenameOfTheNewFilePutsTheOldOneBackBeforeRewriting() {
         File(dir, name).writeText("old backup")
         // The old file moves aside, the new one cannot take its name, and no final file can be created.
-        val provider = TestProvider(DocumentFile.fromFile(dir), { from, _ -> from == name || from?.contains("previous") == true }, { it != name })
+        // Only the old file may move away and back; the new text cannot take its name.
+        val provider = TestProvider(
+            DocumentFile.fromFile(dir),
+            { from, to -> (from == name && to.contains("previous")) || (from?.contains("previous") == true && to == name) },
+            { true },
+        )
         replace(provider)
         assertEquals("new backup", files()[name])
         assertFalse(files().keys.any { "previous" in it || "partial" in it })
+        assertTrue(files().values.all { it == "new backup" || it == "old backup" })
     }
 
     @Test fun whenNothingWorksTheOldBackupAndTheCompleteNewOneBothSurvive() {
@@ -94,5 +105,28 @@ class BackupReplaceTest {
         }
         // The raw file provider appends the MIME extension again; real providers keep the name.
         assertEquals(listOf("new backup"), files().filterKeys { it.startsWith("asset-board-backup.partial") }.values.toList())
+    }
+
+    @Test fun anOldFileThatWillNotMoveIsRewrittenInPlace() {
+        File(dir, name).writeText("old backup")
+        // Nothing can be renamed; the existing file is rewritten where it stands.
+        val provider = TestProvider(DocumentFile.fromFile(dir), { _, _ -> false }, { it != name })
+        replace(provider)
+        assertEquals(mapOf(name to "new backup"), files())
+    }
+
+    @Test fun runsSideBySideStillLeaveOneCompleteFile() = f.run {
+        val provider = TestProvider(DocumentFile.fromFile(dir), { _, _ -> true }, { true })
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(3).asCoroutineDispatcher()
+        try {
+            runBlocking(Dispatchers.Default) {
+                (1..3).map { i -> async(pool) { f.backup.replaceInFolder(provider, name, "backup $i") } }.awaitAll()
+            }
+        } finally {
+            pool.close()
+        }
+        val left = files()
+        assertEquals(setOf(name), left.keys)
+        assertTrue(left.getValue(name).startsWith("backup "))
     }
 }

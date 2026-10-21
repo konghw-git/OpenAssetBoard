@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
 import com.assetboard.AppContainer
+import com.assetboard.TestContainers
 import com.assetboard.ui.notes.NoteViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,14 +32,13 @@ class NoteViewModelTest {
     private fun withContainer(block: suspend (AppContainer, ViewModelStore) -> Unit) = runBlocking<Unit> {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         val f = Fixture()
-        val container = AppContainer(f.context)
+        val container = TestContainers.open(f.context)
         val store = ViewModelStore()
         try {
             block(container, store)
         } finally {
             store.clear()
-            container.appScope.cancel()
-            container.db.close()
+            TestContainers.closeAll()
             f.close()
             Dispatchers.resetMain()
         }

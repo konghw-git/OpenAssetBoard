@@ -26,6 +26,8 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
+import com.assetboard.CloseTestContainers
+import com.assetboard.TestContainers
 import com.assetboard.data.FlowKind
 import com.assetboard.data.MoneyFlow
 import com.assetboard.data.StocktakeEntry
@@ -47,6 +49,8 @@ import java.time.LocalDate
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -61,12 +65,14 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
 class ScreenshotTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
+    private val compose get() = composeRule
 
     private val day = 24L * 3600 * 1000
 
     private fun demoContainer(): AppContainer {
-        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         val repo = c.repository
         runBlocking(c.gate.bound()) {
             repo.seedDemo()

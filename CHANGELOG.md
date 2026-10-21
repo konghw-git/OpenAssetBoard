@@ -8,6 +8,42 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Backups never break each other.** The automatic, manual and pre-install backups write the same
+  file; run together, they could delete each other's side files and leave no complete copy. They
+  now run one at a time, each with side files of its own, and a failed run leaves either the old
+  backup or the complete new one, named in the error.
+- **A weekly review's diary days wait for its last save too**, as going back and stepping weeks do.
+- **清空资产历史 starts the trend today**, with a stocktake of the balances it keeps; it used to wait
+  for the next manual one. A valuation dated later than today no longer passes for today's balance.
+- **Restoring an older backup says what it will drop**: custom daily habits (before format 8) and
+  the net worth goal (before format 7). `docs/backup-format.md` describes format 8.
+- **A restore refuses** two stocktakes at one instant, two valuations of one account at one instant,
+  and a note or weekly review marked deleted without its trash batch, instead of failing midway or
+  breaking the trash afterwards.
+- **A flow at the very instant of a valuation is refused**: the valuation already holds that day's
+  flows, so the flow could never move the balance. The valuation form says so.
+- **A reminder whose channel is switched off** is listed as missed instead of being marked delivered.
+  The diary reminder checks its channel too.
+- **Ringing checks the todo first**: a todo completed, edited or restored away no longer rings, and a
+  boot-time strong reminder taken over by its alarm page is no longer cut short five minutes in.
+- **Updates**: cancelling a download no longer turns into “download failed”; the installer opens
+  only while the app is in front and reports when it cannot; an APK without signatures is refused;
+  a mirror without a trailing slash works; with the network off, nothing is downloaded.
+- **Body fat**: the 7-day average no longer breaks at a day weighed without body fat, and women
+  18–39 read as standard up to 33%, as in Gallagher et al. (2000).
+- The diary calendar shows Gregorian festivals (国庆节, 元旦 …) as well as traditional ones.
+- An account locked until a day is unlocked on that day, as its page says.
+- The account chart forgets the picked point when its range changes.
+- The amount typed into an account row survives a rotation; a new account cannot be saved twice by
+  a double tap; the diary cannot be deleted while its text cannot be saved.
+- The alarm page's clock ticks.
+- A holiday file with a bad date is refused before it replaces the table, and the current year is
+  refreshed along with the next.
+- A leave that cannot finish says why: a restore in progress, or typing still being saved.
+- Message collectors no longer pile up when the diary, notes or weekly review switch days.
+- The test suite no longer fails at random: every test now waits for its background work to stop
+  before closing its database.
+
 - **Leaving a note or a weekly review waits for its last save.** Going back, stepping to another
   week or following a note's diary source used to leave at once; if that save and its draft both
   failed, the text was gone with the page. Now the page stays until the text is saved or in a

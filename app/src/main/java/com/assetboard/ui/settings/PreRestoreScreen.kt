@@ -74,6 +74,8 @@ fun RestoreConfirm(vm: RestoreViewModel) {
             (if (p.formatVersion < 4 && p.currentHealthRecords > 0) "这份备份不含健康数据，恢复后当前 ${p.currentHealthRecords} 条健康记录会清空。" else "") +
             (if (p.formatVersion < 5 && p.currentNotes > 0) "这份备份不含笔记，恢复后当前 ${p.currentNotes} 篇笔记会清空。" else "") +
             (if (p.formatVersion < 6 && p.currentWeeks > 0) "这份备份不含周复盘，恢复后当前 ${p.currentWeeks} 篇周复盘会清空。" else "") +
+            (if (p.formatVersion < 8 && p.habits == 0) "这份备份不含自定义的每日打卡，恢复后会回到内置的五项。" else "") +
+            (if (p.formatVersion < 7) "这份备份不含目标资产，恢复后目标会被清空。" else "") +
             "\n\n当前的全部数据会被替换。恢复前会自动另存一份当前数据。"
     }
     ConfirmDialog(

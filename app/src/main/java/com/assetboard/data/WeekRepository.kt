@@ -122,6 +122,8 @@ class WeekRepository(
             for (r in reviews) {
                 ensure(Weeks.isMonday(r.weekStart)) { "备份里有日期无效的周复盘" }
                 ensure(r.bodyRev >= 0) { "有周复盘的版本号无效" }
+                // The trash reads both together.
+                ensure((r.deletedAt == null) == (r.deleteBatch == null)) { "有周复盘的删除标记不完整" }
             }
             val live = reviews.filter { it.deletedAt == null }.map { it.weekStart }
             ensure(live.toSet().size == live.size) { "备份里同一周有多篇复盘" }

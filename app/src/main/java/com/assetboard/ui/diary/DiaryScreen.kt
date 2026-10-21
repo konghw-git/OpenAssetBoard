@@ -188,6 +188,7 @@ fun DiaryScreen(
     val vm: DiaryViewModel = viewModel { DiaryViewModel(container) }
     val date by vm.date.collectAsStateWithLifecycle()
     val session by vm.session.collectAsStateWithLifecycle()
+    val sessionStatus = session?.status?.collectAsStateWithLifecycle()?.value
     val entry by vm.entry.collectAsStateWithLifecycle()
     val drafts by vm.drafts.collectAsStateWithLifecycle()
     val pastMidnight by vm.pastMidnight.collectAsStateWithLifecycle()
@@ -296,7 +297,8 @@ fun DiaryScreen(
                             HeaderAction(Icons.Outlined.Search, "搜索", onSearch)
                             // From the session, not the entry: a save started by 完成 may not have landed yet.
                             if (entry != null && body.isNotBlank()) HeaderAction(Icons.Outlined.Lightbulb, "提炼到笔记", { extractingSelection = false; extracting = date to body })
-                            if (entry != null) HeaderAction(Icons.Outlined.Delete, "删除这篇", { askDelete = true })
+                            // Nothing to delete while the text cannot be saved: the trash would keep the old body.
+                            if (entry != null && sessionStatus != DiarySession.Status.UNSAVED) HeaderAction(Icons.Outlined.Delete, "删除这篇", { askDelete = true })
                             HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
                         }
                     }

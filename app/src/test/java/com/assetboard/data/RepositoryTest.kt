@@ -7,9 +7,11 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.domain.LedgerException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.After
@@ -43,7 +45,8 @@ class RepositoryTest {
     }
 
     @After fun tearDown() {
-        scope.cancel()
+        // The scope's queries end before the database closes, or they throw into the next test.
+        runBlocking { withTimeoutOrNull(3_000) { scope.coroutineContext[Job]!!.cancelAndJoin() } }
         db.close()
     }
 

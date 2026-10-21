@@ -957,9 +957,11 @@ private fun AccountRowEditor(r: AccountRowUi, noun: String, onSave: (String) -> 
     val cs = MaterialTheme.colorScheme
     val extra = AppTheme.extra
     val start = Money.toInput(r.display)
-    var value by remember { mutableStateOf(TextFieldValue(start, TextRange(0, start.length))) }
+    // Kept across a rotation, and re-read per account so another row never shows the last amount.
+    var text by rememberSaveable(r.account.id) { mutableStateOf(start) }
+    var value by remember(r.account.id) { mutableStateOf(TextFieldValue(text, TextRange(0, text.length))) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(r.account.id) { runCatching { focus.requestFocus() } }
     val valid = Money.parse(value.text) != null
     Row(
         Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
@@ -974,7 +976,10 @@ private fun AccountRowEditor(r: AccountRowUi, noun: String, onSave: (String) -> 
         Spacer(Modifier.width(8.dp))
         BasicTextField(
             value = value,
-            onValueChange = { v -> value = v.copy(text = v.text.filter { it.isDigit() || it == '.' || it == ',' || it == '-' }) },
+            onValueChange = { v ->
+                value = v.copy(text = v.text.filter { it.isDigit() || it == '.' || it == ',' || it == '-' })
+                text = value.text
+            },
             singleLine = true,
             textStyle = MaterialTheme.typography.titleMedium.merge(NumberStyle).copy(color = if (valid) cs.onSurface else cs.error, textAlign = TextAlign.End),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),

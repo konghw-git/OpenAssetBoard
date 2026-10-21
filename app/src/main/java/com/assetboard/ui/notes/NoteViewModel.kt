@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import java.time.LocalDate
@@ -94,8 +95,9 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
         }
     }
 
-    private suspend fun watch(s: NoteSession) {
-        launchBound { s.messages.collect { messages.emit(it) } }
+    /** The session's messages and status together: both end with the status job, on reload or on leaving. */
+    private suspend fun watch(s: NoteSession): Unit = coroutineScope {
+        launch { s.messages.collect { messages.emit(it) } }
         s.status.collect { st ->
             // The text went into a draft; reload the note from the database.
             if (st == NoteSession.Status.ENDED && _session.value === s) {
@@ -128,8 +130,8 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
             when {
                 saved -> go(target)
                 s.status.value == NoteSession.Status.UNSAVED -> unsavedLeave.value = target
-                // A restore holds the gate; it collects this text itself.
-                else -> messages.emit("正在恢复数据，请稍后再离开")
+                // A restore holds the gate and collects this text itself; otherwise a save is behind.
+                else -> messages.emit(if (container.gate.frozen.value) "正在恢复数据，请稍后再离开" else "刚才的输入还没写完，请停手片刻再离开")
             }
         }
     }

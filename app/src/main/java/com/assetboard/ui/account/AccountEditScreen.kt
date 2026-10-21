@@ -157,7 +157,12 @@ class AccountEditViewModel(
         note = note,
     )
 
+    /** A second tap while the first is still writing would create a second account. */
+    var saving by mutableStateOf(false)
+        private set
+
     fun save(onCreated: (String) -> Unit, onSaved: () -> Unit) {
+        if (saving) return
         val id = accountId
         if (id != null) {
             action(onSaved) { repo.updateAccount(id, draft()) }
@@ -166,6 +171,7 @@ class AccountEditViewModel(
         action {
             val base = Money.parse(baselineInput) ?: throw LedgerException("期初金额格式不对")
             val cost = costInput.takeIf { it.isNotBlank() }?.let { Money.parse(it) ?: throw LedgerException("期初成本格式不对") }
+            saving = true
             val newId = repo.createAccount(draft(), baselineAt, base, cost)
             onCreated(newId)
         }
@@ -223,7 +229,7 @@ fun AccountEditScreen(
             TopAppBar(
                 title = { Text(if (isNew) "新建账户" else "账户设置") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                actions = { TextButton(onClick = { vm.save(onCreated, onBack) }, enabled = vm.loaded) { Text("保存") } },
+                actions = { TextButton(onClick = { vm.save(onCreated, onBack) }, enabled = vm.loaded && !vm.saving) { Text("保存") } },
                 colors = glassBarColors(),
             )
         },
@@ -419,7 +425,8 @@ fun AccountEditScreen(
         DatePickDialog(
             initial = vm.lockedUntil?.let { Dates.localDate(it) } ?: java.time.LocalDate.now().plusMonths(6),
             onDismiss = { pickLock = false },
-            onPick = { vm.lockedUntil = Dates.endOfDay(it); pickLock = false },
+            // The day itself is unlocked, as the account page says ("已于 … 解锁").
+            onPick = { vm.lockedUntil = it.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(); pickLock = false },
             maxDate = null,
         )
     }

@@ -9,7 +9,9 @@ import com.assetboard.domain.calendar.WorkdayCalendar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.fail
 import java.time.LocalDate
@@ -63,8 +65,9 @@ class Fixture {
     /** Runs [block] with the epoch bound now, as a freshly opened screen would. */
     fun run(block: suspend CoroutineScope.() -> Unit) = runBlocking(gate.bound(), block)
 
+    /** The scope's queries end before the database closes, or they throw into the next test. */
     fun close() {
-        scope.cancel()
+        runBlocking { withTimeoutOrNull(3_000) { scope.coroutineContext[Job]!!.cancelAndJoin() } }
         db.close()
     }
 }

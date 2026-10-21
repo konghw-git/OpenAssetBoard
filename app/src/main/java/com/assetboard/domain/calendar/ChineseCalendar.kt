@@ -67,11 +67,11 @@ object ChineseCalendar {
         )
     }
 
-    /** Short label for a calendar cell: festival, else solar term, else the lunar day ("初一" shows the month). */
+    /** Short label for a calendar cell: festival (traditional or Gregorian), else solar term, else the lunar day. */
     fun cellLabel(date: LocalDate): String {
         val solar = Solar.fromYmd(date.year, date.monthValue, date.dayOfMonth)
         val lunar = solar.lunar
-        lunar.festivals.firstOrNull()?.let { return it }
+        (lunar.festivals + solar.festivals).firstOrNull()?.let { return it }
         lunar.jieQi.takeIf { it.isNotEmpty() }?.let { return it }
         return if (lunar.day == 1) lunar.monthInChinese + "月" else lunar.dayInChinese
     }

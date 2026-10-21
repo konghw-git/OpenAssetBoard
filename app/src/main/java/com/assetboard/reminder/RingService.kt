@@ -39,13 +39,26 @@ class RingService : Service() {
             return START_NOT_STICKY
         }
         val t = intent?.let { ReminderToken.from(it) } ?: run { stopSelf(); return START_NOT_STICKY }
+        // Checked before anything rings: the todo may be done, edited or gone by now.
+        val container = ReminderScheduler.container(this)
+        container.appScope.launch {
+            if (!container.reminders.stillLive(t)) {
+                if (ringingFor == t.id) stopRinging()
+            } else {
+                ring(t, intent.getStringExtra(AlarmActivity.EXTRA_TITLE).orEmpty())
+            }
+        }
+        return START_NOT_STICKY
+    }
+
+    private fun ring(t: ReminderToken, title: String) {
         val previous = token
         if (previous != null && previous.id != t.id) {
             // A second strong reminder takes over; the first stays as an unhandled note.
-            getSystemService(NotificationManager::class.java).notify(Notifier.notificationId(previous.id), Notifier.unhandled(this, title, previous))
+            getSystemService(NotificationManager::class.java).notify(Notifier.notificationId(previous.id), Notifier.unhandled(this, this.title, previous))
         }
         token = t
-        title = intent.getStringExtra(AlarmActivity.EXTRA_TITLE).orEmpty()
+        this.title = title
         ringingFor = t.id
         val n = Notifier.ringing(this, title, t)
         ServiceCompat.startForeground(
@@ -55,7 +68,6 @@ class RingService : Service() {
         startSound()
         handler.removeCallbacksAndMessages(null)
         handler.postDelayed({ timeout() }, MAX_RING_MS)
-        return START_NOT_STICKY
     }
 
     private fun startSound() {

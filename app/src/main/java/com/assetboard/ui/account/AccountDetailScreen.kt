@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -356,6 +357,8 @@ private fun ChartCard(d: AccountDetail) {
     val extra = AppTheme.extra
     var range by rememberSaveable { mutableStateOf(ChartRange.ALL) }
     var selected by remember { mutableStateOf<Int?>(null) }
+    // The index means nothing in another range: a shorter list would show another day.
+    LaunchedEffect(range) { selected = null }
     val points = remember(d.series, range) { range.filter(d.series, { it.at }) }
     val valueColor = extra.group(d.group?.colorIndex ?: 0)
     SectionCard(contentPadding = PaddingValues(20.dp)) {

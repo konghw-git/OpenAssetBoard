@@ -478,7 +478,11 @@ class RestoreTest {
         assertEquals(balances, l.accounts.associate { it.id to l.currentBalance(it.id) })
         assertTrue(l.accounts.all { it.baselineAt == f.now })
         assertEquals(l.accounts.size, l.valuations.size)
-        assertTrue(l.flows.isEmpty() && l.snapshots.isEmpty() && l.snapshotItems.isEmpty())
+        assertTrue(l.flows.isEmpty())
+        // One stocktake today, so the trend starts now rather than at the next manual one.
+        assertEquals(listOf(f.now), l.snapshots.map { it.at })
+        assertEquals(l.accounts.size, l.snapshotItems.size)
+        assertEquals(listOf(f.now), l.netWorthSeries().map { it.snapshot.at })
         // Nothing before today: no point of the old curve survives, and the profit starts over.
         assertEquals(null, l.balanceAt(fund, f.now - 1))
         assertEquals(0L, l.pnl(l.accounts.first { it.id == fund }))

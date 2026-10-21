@@ -207,7 +207,7 @@ fun ValuationEditScreen(accountId: String, valuationId: String?, onBack: () -> U
                     supportingText = when {
                         vm.isBaseline -> "期初请在账户设置里修改"
                         vm.inStocktake -> "属于一次盘点，日期随那次盘点修改"
-                        else -> "只选日期时记为当天 23:59:59，排在当天流水之后"
+                        else -> "只选日期时记为当天 23:59:59；同一时刻的流水视为已包含在估值里"
                     },
                 )
                 Spacer(Modifier.height(4.dp))

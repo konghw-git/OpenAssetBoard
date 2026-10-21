@@ -174,7 +174,14 @@ fun WeekScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenNote:
         focusManager.clearFocus()
         keyboard?.hide()
     }
-    val back: () -> Unit = { vm.back(onBack) }
+    val go: (WeekViewModel.Leave) -> Unit = { target ->
+        when (target) {
+            WeekViewModel.Leave.Back -> onBack()
+            is WeekViewModel.Leave.Week -> Unit
+            is WeekViewModel.Leave.Diary -> onOpenDiary(target.date)
+        }
+    }
+    val back: () -> Unit = { vm.leave(WeekViewModel.Leave.Back, go) }
     // Every way back waits for the save; while typing, back first puts the keyboard away.
     val typing = editing && status != WeekSession.Status.UNSAVED
     BackHandler(!typing) { back() }
@@ -226,7 +233,7 @@ fun WeekScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenNote:
             )
             if (!editing) {
                 Section("这一周的日记") {
-                    DayList(start, vm.today(), days, onOpenDiary = onOpenDiary, onExtract = { d, t -> extracting = ExtractOrigin.day(d) to t })
+                    DayList(start, vm.today(), days, onOpenDiary = { d -> vm.leave(WeekViewModel.Leave.Diary(d), go) }, onExtract = { d, t -> extracting = ExtractOrigin.day(d) to t })
                 }
                 Section(if (taken.isEmpty()) "从这周提炼的笔记" else "从这周提炼的笔记 · ${taken.size}") {
                     if (taken.isEmpty()) {
@@ -280,7 +287,7 @@ fun WeekScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenNote:
             "这周的复盘没能保存", "正文和草稿都写不进去，离开就会丢失。可以先把全文复制到剪贴板，再离开。", "复制并离开",
             onConfirm = {
                 context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("周复盘", text))
-                if (vm.leaveUnsaved() == null) onBack()
+                vm.leaveUnsaved(go)
             },
             onDismiss = { vm.unsavedLeave.value = null },
         )

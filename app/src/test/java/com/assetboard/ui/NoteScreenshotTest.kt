@@ -17,6 +17,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextInputSelection
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
+import com.assetboard.CloseTestContainers
+import com.assetboard.TestContainers
 import com.assetboard.data.DiarySession
 import com.assetboard.data.SourceRef
 import com.assetboard.data.ThemeMode
@@ -27,6 +29,8 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -39,12 +43,14 @@ import java.time.LocalDate
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
 class NoteScreenshotTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
+    private val compose get() = composeRule
 
     private val today = LocalDate.now()
 
     private fun demo(empty: Boolean = false, review: Boolean = false): AppContainer {
-        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         c.settings.setBool(c.settings.networkEnabled, false)
         runBlocking(c.gate.bound()) {
             c.repository.seedDefaultGroups()

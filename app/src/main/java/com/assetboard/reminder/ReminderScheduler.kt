@@ -54,7 +54,25 @@ class ReminderScheduler(private val context: Context, private val container: App
 
     // ------------------------------------------------------------ permissions
 
+    /**
+     * Whether [token] still names an open todo as this app knows it: the todo can have been
+     * completed, edited or restored away while the alarm or the page was on its way.
+     */
+    suspend fun stillLive(token: ReminderToken): Boolean = runCatching {
+        if (token.epoch != container.gate.epochNow()) return@runCatching false
+        val t = container.todos.todo(token.id) ?: return@runCatching false
+        t.stateSeq == token.seq && TodoViews.isOpen(t)
+    }.getOrDefault(false)
+
     fun notificationsEnabled(): Boolean = nm.areNotificationsEnabled()
+
+    /** The app's switch and, since Android 8, the channel's own: a channel set to "off" drops what is posted to it. */
+    fun channelEnabled(channelId: String): Boolean {
+        if (!nm.areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        val channel = runCatching { nm.getNotificationChannel(channelId) }.getOrNull() ?: return true
+        return channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
 
     fun exactAllowed(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
 
@@ -150,7 +168,9 @@ class ReminderScheduler(private val context: Context, private val container: App
     }
 
     private suspend fun deliver(t: Todo, token: ReminderToken, lateMinutes: Long, fromBoot: Boolean) {
-        if (!notificationsEnabled()) {
+        // A blocked channel drops the notification, so the period would be lost; it goes missed instead.
+        val canPost = if (!t.strongRemind) channelEnabled(Notifier.CH_REMINDER) else fromBoot && channelEnabled(Notifier.CH_STRONG_BOOT)
+        if (!canPost && !(t.strongRemind && !fromBoot && notificationsEnabled())) {
             addMissed(MissedReminder(t.id, t.title, ReminderState.pending(t)?.first ?: System.currentTimeMillis(), notificationsOff = true))
         } else if (t.strongRemind) {
             if (fromBoot) {
@@ -210,14 +230,25 @@ class ReminderScheduler(private val context: Context, private val container: App
         }
     }
 
-    /** Five minutes after a boot-time strong reminder: swap it for a silent "unhandled" note. */
-    private fun scheduleUnhandled(token: ReminderToken, title: String) {
-        val pi = PendingIntent.getBroadcast(
+    /** The boot reminder was taken over by its page or answered: nothing left to write off in five minutes. */
+    fun cancelUnhandled(token: ReminderToken) {
+        unhandledIntent(token, "")?.let {
+            am.cancel(it)
+            it.cancel()
+        }
+    }
+
+    private fun unhandledIntent(token: ReminderToken, title: String): PendingIntent? =
+        PendingIntent.getBroadcast(
             context, Notifier.notificationId(token.id) xor 0x1000,
             token.into(Intent(context, ReminderActionReceiver::class.java).setAction(ReminderActionReceiver.UNHANDLED).setData(Uri.parse("assetboard://unhandled/${token.id}")))
                 .putExtra(AlarmActivity.EXTRA_TITLE, title),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+
+    /** Five minutes after a boot-time strong reminder: swap it for a silent "unhandled" note. */
+    private fun scheduleUnhandled(token: ReminderToken, title: String) {
+        val pi = unhandledIntent(token, title) ?: return
         am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + RingService.MAX_RING_MS, pi)
     }
 

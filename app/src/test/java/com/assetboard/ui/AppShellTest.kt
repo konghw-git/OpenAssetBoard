@@ -16,6 +16,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
+import com.assetboard.CloseTestContainers
+import com.assetboard.TestContainers
 import com.assetboard.data.ThemeMode
 import com.assetboard.domain.todo.RepeatRule
 import com.assetboard.domain.todo.RepeatType
@@ -31,6 +33,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.isSelectable
 import org.junit.Rule
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -42,7 +46,9 @@ import java.time.LocalDate
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
 class AppShellTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
+    private val compose get() = composeRule
 
     /** Bumping it throws the whole shell away, as a cold start does. */
     private var launches by mutableIntStateOf(0)
@@ -57,7 +63,7 @@ class AppShellTest {
     }
 
     @Test fun s1_coldStartOpensTheAssetsTab() {
-        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         show(c)
         compose.onNodeWithText("日记").performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("今天过得怎么样？")).fetchSemanticsNodes().isNotEmpty() }
@@ -70,7 +76,7 @@ class AppShellTest {
 
     /** A finger sliding along the bottom bar drags the tabs with it and settles on the nearest. */
     @Test fun aSlideAlongTheBarTurnsTheTabs() {
-        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         show(c)
         compose.onNodeWithText("资产").assertIsSelected()
         // From over 资产 to over 日记: two tabs along.
@@ -86,7 +92,7 @@ class AppShellTest {
 
     /** Leaving the diary while typing ends the typing, so the tabs swipe again afterwards. */
     @Test fun leavingTheDiaryWhileTypingLetsTheTabsSwipe() {
-        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         show(c)
         compose.onNodeWithText("日记").performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("今天过得怎么样？")).fetchSemanticsNodes().isNotEmpty() }
@@ -108,7 +114,7 @@ class AppShellTest {
     }
 
     @Test fun s2_noNetworkNoPermissionsStillShowsAssets() {
-        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         c.settings.setBool(c.settings.networkEnabled, false)
         show(c)
         compose.onNodeWithText("资产").assertIsSelected()
@@ -117,7 +123,7 @@ class AppShellTest {
     }
 
     @Test fun r14_restoreClosesOpenScreensAndReturnsHome() {
-        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         runBlocking(c.gate.bound()) { c.repository.seedDefaultGroups() }
         val file = File(c.db.openHelper.readableDatabase.path!!).parentFile!!.resolve("r14.json")
         runBlocking { file.writeText(c.backup.exportJson()) }
@@ -131,7 +137,7 @@ class AppShellTest {
     }
 
     @Test fun builtInHolidaysDriveTheWorkdayRule() = runBlocking {
-        val c = AppContainer(ApplicationProvider.getApplicationContext())
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         c.holidays.init()
         val table = c.holidays.table.value
         assertTrue(table.hasYear(2026))

@@ -17,13 +17,16 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
  * Format 2 adds the todo and diary tables, format 3 the daily habit checks, format 4 the health
  * profile and weigh-ins, format 5 the notes, format 6 the notes' order and the weekly reviews,
- * format 7 the net worth goal; older files read with the newer tables empty. Device-local
+ * format 7 the net worth goal, format 8 the habits themselves (a file without them reads as the
+ * five built in); older files read with the newer tables empty. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -87,6 +90,10 @@ data class BackupPreview(
     val currentNotes: Int = 0,
     val weeks: Int = 0,
     val currentWeeks: Int = 0,
+    /** The habits the backup itself carries; empty in files before format 8. */
+    val habits: Int = 0,
+    /** Whether the backup names a net worth goal; files before format 7 do not. */
+    val hasGoal: Boolean = false,
 )
 
 /** A saved copy of the data as it was right before a restore. */
@@ -163,30 +170,54 @@ class BackupManager(
         }
     }
 
+    /**
+     * One backup at a time: the automatic, manual and pre-install ones write the same file, and
+     * interleaving their side files could leave no complete copy.
+     */
+    private val backupLock = Mutex()
+
     /** Returns the written file's display name. */
-    suspend fun backupNow(kind: BackupKind): String = withContext(Dispatchers.IO) {
+    suspend fun backupNow(kind: BackupKind): String = backupLock.withLock {
+        withContext(Dispatchers.IO) {
+            writeBackup(kind)
+        }
+    }
+
+    private suspend fun writeBackup(kind: BackupKind): String {
         val tree = settings.backupTreeUri.value ?: throw LedgerException("请先选择备份目录")
         val dir = runCatching { DocumentFile.fromTreeUri(context, Uri.parse(tree)) }.getOrNull()
             ?.takeIf { it.canWrite() } ?: throw LedgerException("备份目录不可写，请重新选择")
         val name = replaceInFolder(dir, kind.fileName, exportJson())
         val legacy = if (kind == BackupKind.PRE_RESTORE) legacyPreRestore else legacyBackup
         dir.listFiles().filter { f -> f.name?.let(legacy::matches) == true }.forEach { runCatching { it.delete() } }
+        // Leftovers of runs that failed before this one; after it, the new file is complete.
+        staleParts(dir, kind.fileName).forEach { runCatching { it.delete() } }
         if (kind != BackupKind.PRE_RESTORE) settings.setLastBackupAt(clock())
-        name
+        return name
+    }
+
+    /** Side files an earlier run left behind for [name]. */
+    private fun staleParts(dir: DocumentFile, name: String): List<DocumentFile> {
+        val base = name.removeSuffix(".json")
+        return dir.listFiles().filter { f ->
+            f.name?.let { it.startsWith("$base.partial-") || it.startsWith("$base.previous-") } == true
+        }
     }
 
     /**
-     * Writes [text] as [name], replacing the old file only once the new one is complete: into a
-     * side file first, then renamed over, with the old file moved aside until that worked.
-     * Providers that cannot rename get the file rewritten in place. Whatever fails, either the
-     * old file or the complete side file is left behind.
+     * Writes [text] as [name], replacing the old file only once the new one is complete: the
+     * complete text goes into a side file of its own name, which is then renamed over the old one,
+     * with the old file moved aside until that worked. Whatever fails, one complete copy is left
+     * behind: the new one, the old one, or the side file the error names.
      */
     internal fun replaceInFolder(dir: DocumentFile, name: String, text: String): String {
         val base = name.removeSuffix(".json")
-        val partName = "$base.partial.json"
-        val asideName = "$base.previous.json"
-        dir.findFile(partName)?.delete()
-        val part = dir.createFile("application/json", partName) ?: throw LedgerException("无法在备份目录创建文件")
+        // Unique to this run: another run's side file may be the only complete copy left.
+        val tag = newId().take(8)
+        val partName = "$base.partial-$tag.json"
+        val asideName = "$base.previous-$tag.json"
+        val part = dir.createFile("application/json", partName)
+            ?: throw LedgerException("无法在备份目录创建文件")
         try {
             writeDoc(part.uri, text)
         } catch (e: Exception) {
@@ -197,22 +228,23 @@ class BackupManager(
         val old = dir.findFile(name)
         if (old == null) {
             if (rename(part, name)) return part.name ?: name
-        } else {
-            dir.findFile(asideName)?.delete()
-            if (rename(old, asideName)) {
-                if (rename(part, name)) {
-                    old.delete()
-                    return part.name ?: name
-                }
-                rename(old, name)
+        } else if (rename(old, asideName)) {
+            if (rename(part, name)) {
+                old.delete()
+                return part.name ?: name
             }
+            // The old file is back where it was; from here the new text goes in beside it.
+            rename(old, name)
         }
-        val doc = dir.findFile(name) ?: dir.createFile("application/json", name)
-            ?: throw LedgerException("无法在备份目录创建文件，新备份暂存为 $partName")
+        // The provider cannot rename (or the new file would not take the name): write in place.
+        // The complete new text is already in the side file, which the error names and the next
+        // successful backup clears.
+        val doc = dir.findFile(name) ?: runCatching { dir.createFile("application/json", name) }.getOrNull()
+            ?: throw LedgerException("无法在备份目录创建文件，新备份暂存为 ${part.name ?: partName}")
         try {
             writeDoc(doc.uri, text)
         } catch (e: Exception) {
-            throw LedgerException("无法写入备份文件，新备份暂存为 $partName")
+            throw LedgerException("无法写入备份文件，完整的新备份暂存为 ${part.name ?: partName}")
         }
         part.delete()
         dir.findFile(asideName)?.delete()
@@ -254,6 +286,8 @@ class BackupManager(
             currentNotes = db.noteDao().all().count { it.deletedAt == null },
             weeks = file.weeklyReviews.count { it.deletedAt == null && it.body.isNotBlank() },
             currentWeeks = db.weekDao().all().count { it.deletedAt == null && it.body.isNotBlank() },
+            habits = file.habits.size,
+            hasGoal = file.netWorthGoal != null,
         )
     }
 
@@ -267,6 +301,9 @@ class BackupManager(
         unique(file.valuations, { it.id }, "估值")
         unique(file.flows, { it.id }, "流水")
         unique(file.snapshotItems, { it.snapshotId to it.accountId }, "盘点明细")
+        // The schema's unique indexes: a clash would only fail inside the overwrite transaction.
+        unique(file.snapshots, { it.at }, "同一时刻的盘点")
+        unique(file.valuations, { it.accountId to it.at }, "同一账户同一时刻的估值")
         unique(file.habitChecks, { it.date to it.habit }, "每日指标")
         unique(file.habits, { it.key }, "每日打卡")
         checkHabits(file.habits)
@@ -369,7 +406,8 @@ class BackupManager(
      * they are. For data that started from someone else's numbers. Returns where the copy went.
      */
     suspend fun resetLedgerHistory(): String = withContext(Dispatchers.IO) {
-        replaceAll { withoutLedgerHistory(current(), clock()).also(::validate) }
+        val now = clock()
+        replaceAll { withoutLedgerHistory(current(), now).also(::validate) }
     }
 
     /** Steps 1 to 6 of [restore]; [load] runs once the editors are flushed and must throw on a bad file. */
@@ -478,12 +516,16 @@ class BackupManager(
     private suspend fun flushEditors() {
         for (editor in editors) {
             val p = editor.pendingForRestore() ?: continue
-            val body = runCatching { db.withTransaction { writeBody(p) } }.getOrNull()
+            val body = runCatching { db.withTransaction { writeBody(p) } }
+                .onFailure { if (it is CancellationException) throw it }
+                .getOrNull()
             if (body != null) {
                 editor.flushedByRestore(body.first, body.second)
                 continue
             }
-            val drafted = runCatching { db.withTransaction { writeDraft(p) } }.isSuccess
+            val drafted = runCatching { db.withTransaction { writeDraft(p) } }
+                .onFailure { if (it is CancellationException) throw it }
+                .isSuccess
             if (!drafted) {
                 throw LedgerException(
                     when (p) {
@@ -601,6 +643,9 @@ class BackupManager(
             try {
                 part.writeText(exportJson())
                 if (!part.renameTo(f)) throw IllegalStateException("重命名失败")
+            } catch (e: CancellationException) {
+                part.delete()
+                throw e
             } catch (e: Exception) {
                 part.delete()
                 throw LedgerException("无法保存恢复前副本：" + (e.message ?: ""))
@@ -627,22 +672,35 @@ class BackupManager(
     companion object {
         const val FORMAT_VERSION = 8
 
-        /** [file] with each account's current balance as its only valuation, at [now]. */
+        /**
+         * [file] with each account's current balance as its only valuation at [now], and one
+         * stocktake at [now] over the accounts a stocktake would take: the trend then starts
+         * today rather than at the next manual stocktake.
+         */
         internal fun withoutLedgerHistory(file: BackupFile, now: Long): BackupFile {
             val accounts = file.accounts.map { a ->
-                a.copy(baselineAt = now, baselineCost = if (a.isInvestment) balanceOf(a, file) else null)
+                a.copy(baselineAt = now, baselineCost = if (a.isInvestment) balanceOf(a, file, now) else null)
+            }
+            val valuations = accounts.map { a -> Valuation(newId(), a.id, now, balanceOf(a, file, now), note = "期初", createdAt = now) }
+            val snapshot = Snapshot(newId(), now, "数据初始化")
+            val items = accounts.filter { !it.isDisabled }.map { a ->
+                SnapshotItem(snapshot.id, a.id, valuations.first { it.accountId == a.id }.id, included = a.includeInTotal)
             }
             return file.copy(
                 accounts = accounts,
-                valuations = accounts.map { a -> Valuation(newId(), a.id, now, balanceOf(a, file), note = "期初", createdAt = now) },
-                snapshots = emptyList(),
-                snapshotItems = emptyList(),
+                valuations = valuations,
+                snapshots = listOf(snapshot),
+                snapshotItems = items,
                 flows = emptyList(),
             )
         }
 
-        private fun balanceOf(a: Account, file: BackupFile): Long =
-            Ledger.balanceAt(a.id, Long.MAX_VALUE, file.valuations, file.flows) ?: 0L
+        /** The balance as of [now]: a valuation dated later is not today's balance. */
+        internal fun balanceOf(a: Account, file: BackupFile, now: Long = Long.MAX_VALUE): Long =
+            Ledger.balanceAt(a.id, now, file.valuations, file.flows)
+                ?: a.baselineCost
+                ?: file.valuations.firstOrNull { it.accountId == a.id }?.value
+                ?: 0L
     }
 }
 
@@ -653,6 +711,8 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         return try {
             container.backup.backupNow(BackupKind.AUTO)
             Result.success()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.retry()
         }

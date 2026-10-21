@@ -257,6 +257,8 @@ class NoteRepository(
             for (n in notes) {
                 ensure(n.topicId == null || n.topicId in topicIds) { "有笔记指向不存在的主题" }
                 ensure(n.bodyRev >= 0) { "有笔记的版本号无效" }
+                // The trash reads both together.
+                ensure((n.deletedAt == null) == (n.deleteBatch == null)) { "有笔记的删除标记不完整" }
             }
             ensure(sources.map { Triple(it.noteId, it.kind, it.ref) }.toSet().size == sources.size) { "备份里有重复的笔记来源" }
             for (s in sources) {

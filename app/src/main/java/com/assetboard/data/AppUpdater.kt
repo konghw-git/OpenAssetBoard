@@ -154,16 +154,24 @@ class AppUpdater(
 
     fun download(r: Release) {
         if (job?.isActive == true) return
+        if (!settings.networkEnabled.value) {
+            _state.value = UpdateState.Failed("联网已关闭，可以在设置 › 联网里打开", r)
+            return
+        }
         _state.value = UpdateState.Downloading(r, if (r.size > 0) 0f else -1f)
-        job = scope.launch {
+        val run = scope.launch {
             _state.value = try {
                 val file = fetch(r)
                 verify(file)
                 UpdateState.Ready(r, file)
+            } catch (e: CancellationException) {
+                // The user cancelled: cancel() already put the state back.
+                throw e
             } catch (e: Exception) {
                 UpdateState.Failed("下载失败：${reason(e)}", r)
             }
         }
+        job = run
     }
 
     fun cancel() {
@@ -176,7 +184,7 @@ class AppUpdater(
         val dir = File(context.cacheDir, DIR).apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
         val part = File(dir, "OpenAssetBoard-${r.version}.apk.part")
-        val mirror = settings.string(KEY_MIRROR)?.trim().orEmpty()
+        val mirror = normalizeMirror(settings.string(KEY_MIRROR).orEmpty())
         get(URL(mirror + r.apkUrl), timeoutMs = 30_000) { input ->
             part.outputStream().use { out ->
                 val buf = ByteArray(64 * 1024)
@@ -208,8 +216,8 @@ class AppUpdater(
         }
         val mine = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
         if (apk.longVersionCode <= mine.longVersionCode) throw IOException("安装包的版本不比当前新")
-        val theirs = signers(apk)
-        if (theirs != null && theirs != signers(mine)) throw IOException("安装包的签名与当前应用不一致，已拒绝安装")
+        val theirs = signers(apk) ?: throw IOException("安装包没有签名信息，已拒绝安装")
+        if (theirs != signers(mine)) throw IOException("安装包的签名与当前应用不一致，已拒绝安装")
     }
 
     private fun signers(p: PackageInfo): Set<String>? =
@@ -240,12 +248,24 @@ class AppUpdater(
                 }
             }
             (_state.value as? UpdateState.Ready)?.takeIf { it.backupFailed != null }?.let { _state.value = it.copy(backupFailed = null) }
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW)
-                    .setDataAndType(uri, "application/vnd.android.package-archive")
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
+            // Android 10+ drops an activity started from the background: the installer opens on the
+            // main thread, and only while the app is in front.
+            withContext(Dispatchers.Main.immediate) {
+                if (!inForeground()) {
+                    _state.value = UpdateState.Failed("备份已完成。回到 app 后再点一次安装", downloading())
+                    return@withContext
+                }
+                try {
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW)
+                            .setDataAndType(uri, "application/vnd.android.package-archive")
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                } catch (e: Exception) {
+                    _state.value = UpdateState.Failed("无法打开系统安装器：" + (e.message ?: e.javaClass.simpleName), downloading())
+                }
+            }
         }
     }
 
@@ -260,7 +280,7 @@ class AppUpdater(
 
     var mirror: String
         get() = settings.string(KEY_MIRROR).orEmpty()
-        set(value) = settings.putString(KEY_MIRROR, value.trim().ifEmpty { null })
+        set(value) = settings.putString(KEY_MIRROR, normalizeMirror(value).ifEmpty { null })
 
     private inline fun <T> get(url: URL, timeoutMs: Int = 15_000, read: (java.io.InputStream) -> T): T {
         val c = url.openConnection() as HttpURLConnection
@@ -276,6 +296,30 @@ class AppUpdater(
         } finally {
             c.disconnect()
         }
+    }
+
+    /** A prefix for the release URL: https only, and ending in a slash so it simply replaces the host. */
+    private fun normalizeMirror(raw: String): String {
+        val v = raw.trim()
+        if (v.isEmpty()) return ""
+        return if (v.endsWith("/")) v else "$v/"
+    }
+
+    /** Whether any activity is resumed; starting the installer from the background would be dropped. */
+    private fun inForeground(): Boolean {
+        val manager = context.getSystemService(android.app.ActivityManager::class.java) ?: return true
+        return manager.runningAppProcesses.orEmpty().any {
+            it.pid == android.os.Process.myPid() && it.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
+        }
+    }
+
+    /** The release this install is for, for a failure after the download. */
+    private fun downloading(): Release? = when (val s = _state.value) {
+        is UpdateState.Ready -> s.release
+        is UpdateState.Downloading -> s.release
+        is UpdateState.Failed -> s.release
+        is UpdateState.Available -> s.release
+        else -> null
     }
 
     private fun reason(e: Exception): String = when (e) {

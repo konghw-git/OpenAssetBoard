@@ -1,5 +1,7 @@
 package com.assetboard.ui
 
+import com.assetboard.CloseTestContainers
+import com.assetboard.TestContainers
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
@@ -28,6 +30,8 @@ import com.assetboard.ui.theme.AssetBoardTheme
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -39,7 +43,9 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
 class SwipeDeleteTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
+    private val compose get() = composeRule
 
     private val dust = DustState()
     private val rows = mutableStateListOf("甲", "乙", "丙")
