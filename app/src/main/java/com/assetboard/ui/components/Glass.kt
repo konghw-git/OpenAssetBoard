@@ -58,10 +58,8 @@ enum class GlassMode(val label: String) { CLEAR("清透"), DEEP("深色") }
 val LocalGlassMode = staticCompositionLocalOf { GlassMode.CLEAR }
 
 /**
- * The glass material of list cards, chips and floating bars, after the iOS 26 kind: the page's
- * colour seen through a frosted, translucent body, a lit rim brighter at the top left, a glow
- * along the inside of the top edge, and a shadow kept outside the shape so the body never greys
- * over it.
+ * Quiet translucent surfaces with a fine rim. Cards use a denser fill instead of per-card blur;
+ * floating navigation still frosts the content beneath it. Text stays clear over either mode.
  */
 @Immutable
 data class GlassStyle(
@@ -80,51 +78,51 @@ data class GlassStyle(
 )
 
 private val LightClear = GlassStyle(
-    fill = Color.White.copy(alpha = 0.32f),
-    sheen = Color.White.copy(alpha = 0.42f),
+    fill = Color.White.copy(alpha = 0.80f),
+    sheen = Color.White.copy(alpha = 0.16f),
     rimLight = Color.White,
     rimShade = Color.White.copy(alpha = 0.55f),
     glow = Color.White.copy(alpha = 0.85f),
     edge = Color(0xFF1E3A33).copy(alpha = 0.06f),
-    shadow = Color(0xFF1E3A33).copy(alpha = 0.13f),
-    floatFill = Color.White.copy(alpha = 0.45f),
-    blur = 26.dp,
+    shadow = Color(0xFF1E3A33).copy(alpha = 0.055f),
+    floatFill = Color.White.copy(alpha = 0.82f),
+    blur = 0.dp,
 )
 
 private val LightDeep = GlassStyle(
-    fill = Color(0xFFF7F8F5).copy(alpha = 0.82f),
-    sheen = Color.White.copy(alpha = 0.30f),
+    fill = Color(0xFFE4EBE6).copy(alpha = 0.94f),
+    sheen = Color.White.copy(alpha = 0.12f),
     rimLight = Color.White,
     rimShade = Color.White.copy(alpha = 0.25f),
     glow = Color.White.copy(alpha = 0.9f),
     edge = Color(0xFF1E3A33).copy(alpha = 0.09f),
-    shadow = Color(0xFF1E3A33).copy(alpha = 0.16f),
-    floatFill = Color(0xFFF7F8F5).copy(alpha = 0.78f),
-    blur = 26.dp,
+    shadow = Color(0xFF1E3A33).copy(alpha = 0.07f),
+    floatFill = Color(0xFFE4EBE6).copy(alpha = 0.94f),
+    blur = 0.dp,
 )
 
 private val DarkClear = GlassStyle(
-    fill = Color.White.copy(alpha = 0.075f),
-    sheen = Color.White.copy(alpha = 0.10f),
-    rimLight = Color.White.copy(alpha = 0.38f),
-    rimShade = Color.White.copy(alpha = 0.14f),
-    glow = Color.White.copy(alpha = 0.22f),
+    fill = Color(0xFF21332B).copy(alpha = 0.88f),
+    sheen = Color.White.copy(alpha = 0.025f),
+    rimLight = Color.White.copy(alpha = 0.13f),
+    rimShade = Color.White.copy(alpha = 0.04f),
+    glow = Color.White.copy(alpha = 0.07f),
     edge = Color.Black.copy(alpha = 0.25f),
-    shadow = Color.Black.copy(alpha = 0.45f),
-    floatFill = Color(0xFF26302C).copy(alpha = 0.55f),
-    blur = 26.dp,
+    shadow = Color.Black.copy(alpha = 0.20f),
+    floatFill = Color(0xFF21332B).copy(alpha = 0.90f),
+    blur = 0.dp,
 )
 
 private val DarkDeep = GlassStyle(
-    fill = Color(0xFF080B0A).copy(alpha = 0.55f),
-    sheen = Color.White.copy(alpha = 0.05f),
-    rimLight = Color.White.copy(alpha = 0.22f),
-    rimShade = Color.White.copy(alpha = 0.06f),
-    glow = Color.White.copy(alpha = 0.12f),
+    fill = Color(0xFF14221C).copy(alpha = 0.96f),
+    sheen = Color.White.copy(alpha = 0.02f),
+    rimLight = Color.White.copy(alpha = 0.10f),
+    rimShade = Color.White.copy(alpha = 0.03f),
+    glow = Color.White.copy(alpha = 0.05f),
     edge = Color.Black.copy(alpha = 0.35f),
-    shadow = Color.Black.copy(alpha = 0.55f),
-    floatFill = Color(0xFF101513).copy(alpha = 0.78f),
-    blur = 26.dp,
+    shadow = Color.Black.copy(alpha = 0.25f),
+    floatFill = Color(0xFF14221C).copy(alpha = 0.96f),
+    blur = 0.dp,
 )
 
 /** The glass for the current theme and the mode picked in settings. */
@@ -216,8 +214,7 @@ internal fun DrawScope.rim(path: Path, style: GlassStyle) {
 val LocalAmbient = compositionLocalOf<Ambient?> { null }
 
 /**
- * Colour fields fixed behind a page, for the glass over it to show: green from the top left,
- * sand from the right, blue lower down and teal at the bottom, from the app's group palette. A
+ * Restrained mineral-green and warm fields fixed behind a page. A
  * sticky header draws its own slice of the same fields ([ambientSlice]), so it covers the rows
  * under it without showing a seam.
  */
@@ -241,11 +238,9 @@ private fun DrawScope.drawAmbient(a: Ambient, w: Float, h: Float) {
         Brush.radialGradient(0f to c.copy(alpha = alpha), 0.55f to c.copy(alpha = alpha * 0.7f), 1f to Color.Transparent, center = Offset(x, y), radius = r),
         r, Offset(x, y),
     )
-    val k = if (a.dark) 1.15f else 1f
-    orb(a.palette[0], 0.30f * k, w * 0.10f, h * 0.05f, w * 0.80f)
-    orb(a.palette[2], 0.26f * k, w * 1.00f, h * 0.26f, w * 0.62f)
-    orb(a.palette[1], 0.22f * k, w * 0.02f, h * 0.58f, w * 0.72f)
-    orb(a.palette[5], 0.22f * k, w * 0.92f, h * 0.88f, w * 0.68f)
+    val k = if (a.dark) 1.3f else 1f
+    orb(a.palette[0], 0.065f * k, w * 0.10f, h * 0.05f, w * 0.85f)
+    orb(a.palette[2], 0.035f * k, w, h * 0.40f, w * 0.70f)
 }
 
 /** A page with [Ambient] colour behind [content], for the glass on it. */

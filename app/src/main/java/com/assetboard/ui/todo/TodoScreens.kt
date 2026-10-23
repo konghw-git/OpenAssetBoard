@@ -1,5 +1,7 @@
 package com.assetboard.ui.todo
 
+import androidx.compose.foundation.gestures.scrollBy
+
 import com.assetboard.ui.components.GlassSheet
 import com.assetboard.ui.components.glass
 import com.assetboard.ui.components.LocalAmbient
@@ -351,8 +353,8 @@ fun TodoHomeScreen(
             carried = ride
             listState.heightAbove(key, ride.map { it.key })
         },
-        // Slid right while held, a todo (and the selected ones riding with it) goes into the open
-        // todo above as checklist items, as 并入已有待办的检查项 does from the selection bar.
+        // Rest over an open todo to merge into it; the right-slide shortcut still uses the one
+        // above. Selected companions ride along, as with the selection bar's merge action.
         canNest = { key, into ->
             val goes = listOf(key) + carried.map { it.key }
             val target = (order.firstOrNull { it.key == into } as? Line.Item)?.row
@@ -368,6 +370,14 @@ fun TodoHomeScreen(
     )
     // The lists in the order on screen; a drag rearranges them here and saves the order on release.
     val shownLists = remember(d) { d?.lists?.filter { it.archivedAt == null }.orEmpty() }
+    val checklistDrag = rememberChecklistDragState(
+        d?.checklist.orEmpty(),
+        allowed = if (editingId != null || selection.isNotEmpty() || reorder.dragging != null) emptySet()
+            else order.mapNotNull { (it as? Line.Item)?.row?.todo?.takeIf(TodoViews::isOpen)?.id }.toSet(),
+        scroll = { listState.scrollBy(it) },
+        onStart = { swipe.closeAll() },
+        onMove = vm::moveChecklist,
+    )
     var listOrder by remember(shownLists) { mutableStateOf(shownLists) }
     // The unfolded layout's side column, where the lists are then.
     val sideState = rememberLazyListState()
@@ -376,7 +386,7 @@ fun TodoHomeScreen(
     val dialGone by remember { derivedStateOf { listState.firstVisibleItemIndex > DIAL_ITEM } }
     // Pulling the list down past its top is the hub's +: it opens the field under the dial. Not
     // while the field is already open (the list just stops), nor while selecting or dragging.
-    val pull = rememberPullToCreate(enabled = !composer && selection.isEmpty() && reorder.dragging == null) {
+    val pull = rememberPullToCreate(enabled = !composer && selection.isEmpty() && reorder.dragging == null && checklistDrag.item == null) {
         swipe.closeAll()
         openComposer()
     }
@@ -459,8 +469,8 @@ fun TodoHomeScreen(
 
     // A Surface, so text outside a Scaffold still gets the theme's content color.
     Surface(color = Color.Transparent, modifier = Modifier.fillMaxSize().ambient(ambient)) {
-        CompositionLocalProvider(LocalAmbient provides ambient) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalAmbient provides ambient, LocalChecklistDrag provides checklistDrag) {
+        BoxWithConstraints(Modifier.fillMaxSize().checklistDragHost(checklistDrag)) {
             val wide = maxWidth >= 600.dp
             val listReorder = rememberReorderState(
                 if (wide) sideState else listState,
@@ -502,7 +512,7 @@ fun TodoHomeScreen(
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
                             PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize().statusBarsPadding(), icon = Icons.Default.Add) {
-                                LazyColumn(Modifier.fillMaxSize().imePadding().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
+                                LazyColumn(Modifier.fillMaxSize().imePadding().scrollIndicator(listState).checklistViewport(checklistDrag), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
                                     viewContent(ctx)
                                 }
                             }
@@ -514,7 +524,7 @@ fun TodoHomeScreen(
                 Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
                     PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize().statusBarsPadding(), icon = Icons.Default.Add) {
                     // Keep DIAL_ITEM in step with the item order here.
-                    LazyColumn(Modifier.fillMaxSize().imePadding().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
+                    LazyColumn(Modifier.fillMaxSize().imePadding().scrollIndicator(listState).checklistViewport(checklistDrag), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
                         item("title") { HomeTitle(today, doneToday, todayRows.size, onSettings) }
                         item("banners") { Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) { ReminderBanners(vm, onGuide) } }
                         item("views") { dial(Modifier.padding(top = 2.dp, bottom = 6.dp)) }
@@ -527,6 +537,7 @@ fun TodoHomeScreen(
                 // Over the keyboard: an undo offered while a todo is edited in place stays in reach.
                 GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = 8.dp), backdrop)
             }
+            ChecklistDragPreview(checklistDrag)
         }
     }
 }
@@ -919,7 +930,9 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                 val selecting = c.selection.isNotEmpty()
                 val logbook = c.view == TodoView.LOGBOOK
                 val editing = c.editing == t.id
-                val movable = line.band != null && c.editing == null
+                val checklistDrag = LocalChecklistDrag.current
+                val checklistMoving = checklistDrag?.item != null
+                val movable = line.band != null && c.editing == null && !checklistMoving
                 val dragged = c.reorder.dragging == t.id
                 val nesting = dragged && c.reorder.nestInto != null
                 val stack = if (dragged) c.carried.size else 0
@@ -944,7 +957,7 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                         key = todoKey(t.id),
                         group = c.swipe,
                         shape = TodoCardShape,
-                        enabled = !selecting && !logbook && !editing && c.reorder.dragging == null,
+                        enabled = !selecting && !logbook && !editing && c.reorder.dragging == null && !checklistMoving,
                         actions = todoActions(t, line.row.done, c),
                         onDelete = { c.vm.delete(listOf(t.id)) },
                     ) {
@@ -992,19 +1005,20 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             },
                             // A movable row is picked up by a long press; held still, that selects it.
                             onLongClick = if (logbook || line.row.done || movable) null else ({ c.onSelection(c.selection.toggle(t.id)) }),
-                            modifier = Modifier.reorderable(c.reorder, t.id, enabled = movable),
+                            headerModifier = Modifier.reorderable(c.reorder, t.id, enabled = movable),
                             lifted = dragged,
                             selected = t.id in c.selection || c.reorder.nestInto == t.id,
                             inUpcoming = c.view == TodoView.UPCOMING,
                             checklist = if (logbook) emptyList() else items.sortedBy { it.sortOrder },
-                            onToggleItem = if (selecting) null else ({ id -> if (!c.reorder.ownsClick(t.id)) c.vm.toggleChecklist(id) }),
-                            onDeleteItem = if (selecting || c.reorder.dragging != null) null else c.vm::deleteChecklistItem,
+                            onToggleItem = if (selecting) null else ({ id -> if (!c.reorder.ownsClick(t.id) && checklistDrag?.ownsClick(id) != true) c.vm.toggleChecklist(id) }),
+                            onDeleteItem = if (selecting || c.reorder.dragging != null || checklistMoving) null else c.vm::deleteChecklistItem,
                             swipe = c.swipe,
                         )
                     }
                     when {
                         // At the leading corner: the card has slid right, its trailing one off the screen.
                         nesting -> CarryBadge(if (stack > 0) "${stack + 1} 条并入检查项" else "并入检查项", Modifier.align(Alignment.TopStart).padding(start = 28.dp))
+                        dragged && c.reorder.hovering != null -> CarryBadge("停留后并入检查项", Modifier.align(Alignment.TopStart).padding(start = 28.dp))
                         stack > 0 -> CarryBadge("${stack + 1} 条", Modifier.align(Alignment.TopEnd).padding(end = 6.dp))
                     }
                 }

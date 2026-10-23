@@ -1,5 +1,8 @@
 package com.assetboard.ui.todo
 
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.material.icons.outlined.DragHandle
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -181,6 +184,10 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
     fun addItem(text: String) = action { if (text.isNotBlank()) repo.addChecklistItem(id, text) }
     fun toggleItem(itemId: String) = action { repo.toggleChecklist(itemId) }
     fun editItem(itemId: String, text: String) = action { repo.setChecklistText(itemId, text) }
+    fun moveChecklist(itemId: String, into: String, before: String?) = action {
+        val undo = repo.moveChecklistItem(itemId, into, before) ?: return@action
+        events.tryEmit(UndoEvent("已移动检查项") { repo.undoChecklistMove(undo) })
+    }
     fun deleteItem(itemId: String) = action {
         val item = repo.deleteChecklistItem(itemId) ?: return@action
         events.tryEmit(UndoEvent("已删除检查项「${item.text.take(14)}」") { repo.restoreChecklistItem(item) })
@@ -257,9 +264,14 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
     val done = !TodoViews.isOpen(t)
     val ended = t.kind == TodoKind.REPEAT_SOURCE && t.repeatEndedAt != null
     val editable = !record && !ended
+    val detailScroll = rememberScrollState()
+    val checklistDrag = rememberChecklistDragState(
+        state.checklist, if (!done) setOf(t.id) else emptySet(),
+        scroll = { detailScroll.scrollBy(it) }, onMove = vm::moveChecklist,
+    )
 
-    Box(modifier.fillMaxWidth()) {
-        CompositionLocalProvider(LocalDust provides dust) {
+    Box(modifier.fillMaxWidth().checklistDragHost(checklistDrag)) {
+        CompositionLocalProvider(LocalDust provides dust, LocalChecklistDrag provides checklistDrag) {
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onClose) {
@@ -275,7 +287,7 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
                 }
             }
             Column(
-                Modifier.fillMaxWidth().weight(1f, fill = false).verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp),
+                Modifier.fillMaxWidth().weight(1f, fill = false).checklistViewport(checklistDrag).verticalScrollWithIndicator(detailScroll).padding(horizontal = 16.dp).padding(bottom = 40.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 // Title and notes
@@ -312,7 +324,7 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
                     }
                 }
 
-                if (state.checklist.isNotEmpty() || editable) Checklist(state.checklist, editable, vm)
+                if (state.checklist.isNotEmpty() || editable) Checklist(t.id, state.checklist, editable, vm)
 
                 if (record) {
                     RecordCard(t, state.source, onOpenSource = { state.source?.let { onOpenTodo(it.id) } }, onUndo = { vm.uncomplete() })
@@ -360,6 +372,7 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
         }
         DustHost(dust)
         GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+        ChecklistDragPreview(checklistDrag)
     }
 
     when (dialog) {
@@ -525,16 +538,16 @@ private fun AdvanceDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -> 
 }
 
 @Composable
-private fun Checklist(items: List<ChecklistItem>, editable: Boolean, vm: TodoDetailViewModel) {
+private fun Checklist(todoId: String, items: List<ChecklistItem>, editable: Boolean, vm: TodoDetailViewModel) {
     val cs = MaterialTheme.colorScheme
     val dust = LocalDust.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    SectionCard {
+    SectionCard(Modifier.checklistTarget(todoId)) {
         SectionHeader("检查项" + if (items.isNotEmpty()) "  ${items.count { it.done }}/${items.size}" else "")
         items.forEach { item ->
             key(item.id) {
-            Row(Modifier.fillMaxWidth().dissolvable(checklistKey(item.id)).padding(start = 4.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().checklistRow(item, handle = false).dissolvable(checklistKey(item.id)).padding(start = 4.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 CheckCircle(item.done, false, onToggle = { if (editable) vm.toggleItem(item.id) })
                 var text by remember(item.id) { mutableStateOf(item.text) }
                 var focused by remember(item.id) { mutableStateOf(false) }
@@ -555,6 +568,7 @@ private fun Checklist(items: List<ChecklistItem>, editable: Boolean, vm: TodoDet
                     },
                 )
                 if (editable) {
+                    Icon(Icons.Outlined.DragHandle, "拖动检查项：${item.text}", Modifier.size(32.dp).checklistHandle(item.id), tint = cs.outline)
                     IconButton(
                         onClick = {
                             // The item alone turns to dust, as a swiped todo does.

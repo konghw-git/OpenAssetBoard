@@ -396,7 +396,9 @@ class ScreenshotTest {
     /** Mid-switch frames: the thumb on its way and the weight line morphing into body fat. */
     @Test fun healthSwitchMidway() {
         val c = withHealth(demoContainer())
-        shot("11-health-switch-midway", c) { HealthScreen(noop) }
+        shot("11-health-switch-midway", c, until = {
+            compose.onAllNodes(hasText("体脂率") and hasClickAction()).fetchSemanticsNodes().isNotEmpty()
+        }) { HealthScreen(noop) }
         compose.mainClock.autoAdvance = false
         compose.onNode(hasText("体脂率") and hasClickAction()).performClick()
         for (ms in listOf(40, 80, 120, 160, 200, 260)) {

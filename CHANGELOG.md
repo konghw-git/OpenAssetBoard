@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.10] - 2026-10-24
+
+### Added
+
+- Drag a todo's title over another open todo and hold briefly to merge directly into its
+  checklist. A quick drop still reorders; the existing right-slide shortcut remains available.
+- Checklist items can be dragged within a todo or between todos, with an insertion line,
+  automatic edge scrolling and undo. Their identity, text and checked state are preserved.
+  The detail editor provides drag handles so dragging does not interfere with text editing.
+
+### Changed
+
+- Refined light and dark themes with ink green, mineral neutrals and champagne accents. Cards
+  use quieter backgrounds and shadows; entrances and amount transitions are shorter, without
+  continuous decorative motion in the overview, health and food hero cards.
+- The overview separates net worth, allocation and account details. Allocation emphasizes
+  proportions without repeating amounts, and larger text or narrow screens adapt their layout.
+
+### Fixed
+
+- Checklist dragging keeps control after a large initial movement and continues while the
+  source scrolls off screen. Cancelled drags make no changes; stale undo cannot overwrite later edits.
+- Amounts show their actual value on the first frame, interrupted updates reach the latest value,
+  and large amounts remain readable on narrow screens. Custom cards inherit the dark theme's foreground.
+- The health chart screenshot waits for its metric control before switching, avoiding a loading race.
+
 ## [0.9.9] - 2026-10-24
 
 ### Added
@@ -498,7 +524,8 @@ between minor versions; backup format v3 reads v1 and v2.
 - Reminder punctuality depends on the phone's autostart and background permissions; the in-app
   checklist walks through them.
 
-[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.9.9...HEAD
+[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.9.10...HEAD
+[0.9.10]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.9.9...v0.9.10
 [0.9.9]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.9.8...v0.9.9
 [0.8.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.0...v0.7.1

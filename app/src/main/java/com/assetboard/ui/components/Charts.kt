@@ -3,10 +3,6 @@ package com.assetboard.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -355,16 +351,17 @@ private fun nearestIndex(points: List<ChartPoint>, x: Float, bounds: FloatArray,
     return points.indices.minByOrNull { abs(points[it].x - target) }
 }
 
-/** Axis-free line for small spaces like the hero card; [animate] draws it in and pulses the last point. */
+/** Axis-free line with a bounded reveal; the endpoint stays still once the data is visible. */
 @Composable
 fun Sparkline(values: List<Long>, color: Color, modifier: Modifier = Modifier, animate: Boolean = false) {
     if (values.size < 2) return
     val reveal = remember { Animatable(if (animate) 0f else 1f) }
-    LaunchedEffect(values) { if (animate) reveal.animateTo(1f, tween(1_200, delayMillis = 200, easing = FastOutSlowInEasing)) }
-    val pulse = if (animate) {
-        val t = rememberInfiniteTransition(label = "spark")
-        t.animateFloat(0f, 1f, infiniteRepeatable(tween(1_800, easing = LinearEasing)), label = "pulse").value
-    } else 0f
+    LaunchedEffect(values, animate) {
+        if (animate) {
+            reveal.snapTo(0f)
+            reveal.animateTo(1f, tween(360, easing = FastOutSlowInEasing))
+        } else reveal.snapTo(1f)
+    }
     Canvas(modifier) {
         val min = values.min()
         val max = values.max()
@@ -389,7 +386,7 @@ fun Sparkline(values: List<Long>, color: Color, modifier: Modifier = Modifier, a
         if (reveal.value >= 1f) {
             val last = values.last()
             val end = Offset(size.width, size.height - size.height * ((last - min).toFloat() / span))
-            if (animate) drawCircle(color.copy(alpha = 0.35f * (1f - pulse)), (3f + 7f * pulse).dp.toPx(), end)
+            drawCircle(color.copy(alpha = 0.12f), 5.dp.toPx(), end)
             drawCircle(color, 3.dp.toPx(), end)
         }
     }

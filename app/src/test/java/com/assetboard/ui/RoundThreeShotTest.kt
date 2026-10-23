@@ -103,9 +103,9 @@ class RoundThreeShotTest {
     /** A long press held still on [text]'s row: on a row that can move, that selects it. */
     private fun hold(text: String) {
         compose.mainClock.autoAdvance = false
-        compose.onNodeWithText(text).performTouchInput { down(center) }
+        compose.onNodeWithText(text, useUnmergedTree = true).performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(1_000)
-        compose.onNodeWithText(text).performTouchInput { up() }
+        compose.onNodeWithText(text, useUnmergedTree = true).performTouchInput { up() }
         compose.mainClock.autoAdvance = true
         compose.mainClock.advanceTimeBy(500)
     }

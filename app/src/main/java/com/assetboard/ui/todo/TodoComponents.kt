@@ -196,6 +196,7 @@ fun TodoRow(
     onToggle: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    headerModifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     selected: Boolean = false,
     inUpcoming: Boolean = false,
@@ -211,25 +212,28 @@ fun TodoRow(
     trailing: @Composable (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
+    val checklistDrag = LocalChecklistDrag.current
+    val highlighted = selected || (checklistDrag?.item != null && checklistDrag.drop?.todoId == todo.id && checklistDrag.item?.todoId != todo.id)
     val badge = if (done) null else TodoViews.trailing(todo, today, inUpcoming)
     val points = if (done) emptyList() else checklist
     val content by animateFloatAsState(if (done) 0.55f else 1f, tween(260), label = "done")
-    val tint by animateColorAsState(if (selected) cs.primary.copy(alpha = 0.16f) else Color.Transparent, tween(200), label = "tint")
+    val tint by animateColorAsState(if (highlighted) cs.primary.copy(alpha = 0.16f) else Color.Transparent, tween(200), label = "tint")
     val lift by animateFloatAsState(if (lifted) 1f else 0f, spring(stiffness = Spring.StiffnessMediumLow), label = "lift")
     var headerHeight by remember { mutableIntStateOf(0) }
     Column(
         modifier
             .fillMaxWidth()
+            .checklistTarget(todo.id)
             .graphicsLayer { scaleX = 1f + 0.03f * lift; scaleY = scaleX }
             .glass(TodoCardShape, glass, tint, elevation = if (done) 0.dp else 6.dp + 18.dp * lift)
             .clip(TodoCardShape)
-            .then(if (selected) Modifier.border(1.5.dp, cs.primary, TodoCardShape) else Modifier)
+            .then(if (highlighted) Modifier.border(1.5.dp, cs.primary, TodoCardShape) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .heightIn(min = 50.dp)
             .padding(start = 4.dp, end = 12.dp, top = 2.dp, bottom = if (points.isEmpty()) 2.dp else 8.dp),
     ) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 46.dp).onSizeChanged { headerHeight = it.height },
+        Modifier.fillMaxWidth().then(headerModifier).heightIn(min = 46.dp).onSizeChanged { headerHeight = it.height },
         // With check points under the title, the box and badge stay with the title line.
         verticalAlignment = if (points.isEmpty()) Alignment.CenterVertically else Alignment.Top,
     ) {
@@ -342,7 +346,7 @@ private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> U
     Column(modifier.padding(top = ChecklistGap).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(ChecklistGap)) {
         items.forEachIndexed { i, item ->
             key(item.id) {
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).checklistRow(item)) {
                     CheckNode(item, above = if (i == 0) lead + ChecklistGap else ChecklistGap, last = i == items.lastIndex, onToggle)
                     Box(Modifier.weight(1f)) {
                         if (onDelete == null) {

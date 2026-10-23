@@ -57,7 +57,8 @@ This app is built for it. One stocktake walks every account, you change the thre
 ### Todo
 
 - **Things 3 structure**: inbox → today → upcoming → someday, plus lists with sections. Items carry deadlines, an important flag, notes and checklists; every checklist item sits on its own strip under the todo's card and ticks with one tap.
-- **Drag to sort**: long press a todo and drag it in Today, Upcoming, the inbox, someday and lists; overdue and flagged todos keep their groups. A long press held still selects; dragging one of the selected carries the rest along. Slide right while holding to merge into the todo above as checklist items, with undo.
+- **Drag todos**: hold the title and move quickly to reorder within its group. Rest over another open todo until it highlights, then release to merge into its checklist, with undo. The right-slide shortcut into the row above remains available. A stationary long press selects; selected companions move together.
+- **Drag checklist items**: hold an item's text to reorder it or place it between another todo's items. An insertion line shows the destination; dragging near the list edge scrolls automatically. Moves preserve the item's text and checked state and can be undone. In the detail page, hold the drag handle to reorder while the text remains editable.
 - **List cards**: one card per row on phones and unfolded screens, with the deadline below the name. Swipe left to archive or right to delete, both with undo; hold and drag to reorder. Todo date tags appear below the title, before the reminder, and wrap when space is tight.
 - **Tidy a selection**: reschedule, move or delete it, make it the checklist of a new todo (named in place, undoable), or add it to an existing todo's checklist; a todo with a checklist can be dissolved back into separate todos.
 - **A radial dial**: the home screen puts views on a wheel with live counts, one tap to switch; today's daily habits sit beside it.
@@ -92,7 +93,8 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Local first**: everything lives in SQLite on the phone. The backup is one JSON file written to a folder you pick and overwritten each time.
 - **Versioned backup and restore**: format v7, reads v1–v6. Restore replaces the whole database, copies the current data aside first, and runs behind a write gate so an in-flight old operation can't land in the restored data.
 - **Networking is optional and one switch away**: turn it off and the app makes no request at all — holidays come from built-in data and no weather is shown.
-- **Dark mode**, system theme, adjustable up/down colours (red-up by default, as in Chinese markets), and a two-pane layout on foldables; frosted-glass cards on every tab, clear or deep.
+- **Ink green, mineral neutrals and champagne accents**, with dark mode, system theme, adjustable up/down colours and a two-pane layout on foldables. Clear and deep card styles use quieter shadows and bounded motion. Amounts show their actual value immediately, then transition briefly when updated.
+- **A clearer asset overview**: separate net worth, allocation and account details, with less repeated information and adaptive layouts for narrow screens, large text and large amounts.
 - **In-app updates**: Settings › 应用更新 downloads the latest GitHub release, checks its signature and hands it to the system installer, keeping your data; checks once a day by default, can be turned off.
 - **Launcher shortcuts** straight to stocktake, quick capture and the diary.
 

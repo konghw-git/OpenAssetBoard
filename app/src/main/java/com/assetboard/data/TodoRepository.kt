@@ -91,6 +91,9 @@ data class TodoDraft(
 /** A checklist line as an edit in place left it: [id] for an item that was there, null for a new one. */
 data class InlineItem(val id: String?, val text: String)
 
+/** The affected checklists before a move, guarded against edits made after it. */
+data class ChecklistMoveUndo(val before: List<ChecklistItem>, val revisionsAfter: Map<String, Int>)
+
 /** What a reschedule does to the time of day: keeps it, clears it or sets it. */
 sealed interface TimeChange {
     data object Keep : TimeChange
@@ -725,6 +728,40 @@ class TodoRepository(
         ensure(t.kind != TodoKind.COMPLETION) { "完成记录不能修改" }
         dao.updateChecklistItem(item.copy(done = !item.done))
         dao.updateTodo(t.bump(seq = false))
+    }
+
+    /** Move the existing item before [beforeId], or to the end, keeping its id, text and tick. */
+    suspend fun moveChecklistItem(itemId: String, targetId: String, beforeId: String?): ChecklistMoveUndo? = tx {
+        val item = dao.checklistItem(itemId) ?: throw LedgerException("检查项不存在")
+        val source = live(item.todoId)
+        val target = if (targetId == source.id) source else live(targetId)
+        ensure(TodoViews.isOpen(source) && TodoViews.isOpen(target)) { "只能移动未完成待办的检查项" }
+        if (beforeId == itemId && targetId == source.id) return@tx null
+        val parents = listOf(source, target).distinctBy { it.id }
+        val before = parents.flatMap { dao.checklistOf(it.id) }
+        val destination = before.filter { it.todoId == targetId && it.id != itemId }.toMutableList()
+        val at = if (beforeId == null) destination.size else destination.indexOfFirst { it.id == beforeId }
+        ensure(at >= 0) { "目标检查项已变化，请重新拖动" }
+        destination.add(at, item.copy(todoId = targetId))
+        if (source.id == targetId && destination.map { it.id } == before.map { it.id }) return@tx null
+        val next = destination.mapIndexed { i, x -> x.copy(sortOrder = i) } +
+            if (source.id == targetId) emptyList() else before.filter { it.todoId == source.id && it.id != itemId }.mapIndexed { i, x -> x.copy(sortOrder = i) }
+        val old = before.associateBy { it.id }
+        val changed = next.filter { it != old[it.id] }
+        if (changed.isEmpty()) return@tx null
+        dao.updateChecklistItems(changed)
+        val after = parents.map { it.bump(seq = false) }
+        after.forEach { save(it) }
+        ChecklistMoveUndo(before, after.associate { it.id to it.revision })
+    }
+
+    /** Refuse a stale undo rather than overwrite a later tick, edit, deletion or move. */
+    suspend fun undoChecklistMove(undo: ChecklistMoveUndo) = tx {
+        val parents = undo.revisionsAfter.map { (id, revision) ->
+            live(id).also { ensure(it.revision == revision) { "检查项已经改过，无法撤销此次移动" } }
+        }
+        dao.updateChecklistItems(undo.before)
+        parents.forEach { save(it.bump(seq = false)) }
     }
 
     /** Returns the item as it was, for [restoreChecklistItem]; null if it was already gone. */

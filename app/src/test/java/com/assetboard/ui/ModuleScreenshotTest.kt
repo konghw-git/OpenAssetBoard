@@ -269,12 +269,12 @@ class ModuleScreenshotTest {
         shot("21-todo-today-drag-reorder", d.c, until = habitsShown) { TodoHomeScreen({}, {}, initialView = "today") }
         compose.onAllNodes(hasScrollToIndexAction())[0].performScrollToIndex(6)
         compose.mainClock.advanceTimeBy(500)
-        fun top(text: String) = compose.onNodeWithText(text).fetchSemanticsNode().boundsInRoot.top
+        fun top(text: String) = compose.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
         val (upper, lower) = listOf("准备组会 PPT", "整理数据集").sortedBy(::top)
         val gap = top(lower) - top(upper)
         // While a row is held the list keeps watching its edges every frame: step the clock by hand.
         compose.mainClock.autoAdvance = false
-        val row = compose.onNodeWithText(lower)
+        val row = compose.onNodeWithText(lower, useUnmergedTree = true)
         row.performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(800)
         row.performTouchInput { moveBy(Offset(0f, -gap / 2)) }

@@ -151,6 +151,11 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
 
     fun reorder(ids: List<String>) = action { repo.reorder(ids) }
 
+    fun moveChecklist(itemId: String, into: String, before: String?) = action {
+        val undo = repo.moveChecklistItem(itemId, into, before) ?: return@action
+        _events.tryEmit(TodoEvent("已移动检查项") { repo.undoChecklistMove(undo) })
+    }
+
     /** [onResult] hears whether the todo was written; a failure also shows the error. */
     fun quickAdd(draft: TodoDraft, onResult: (saved: Boolean) -> Unit = {}) = action {
         try {

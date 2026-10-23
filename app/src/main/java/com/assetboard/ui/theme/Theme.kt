@@ -3,6 +3,7 @@ package com.assetboard.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -19,10 +20,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.assetboard.data.ThemeMode
 
-// Warm paper neutrals with a deep green accent: quiet enough for a screen full of numbers.
+// Mineral neutrals, ink green and restrained brass accents. Color carries meaning, not noise.
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF1E5B4F),
+    primary = Color(0xFF246456),
     onPrimary = Color.White,
     primaryContainer = Color(0xFFD3E9E1),
     onPrimaryContainer = Color(0xFF0A2E26),
@@ -34,19 +35,19 @@ private val LightColors = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFDCE5F5),
     onTertiaryContainer = Color(0xFF14243D),
-    background = Color(0xFFF5F3EE),
-    onBackground = Color(0xFF1D1C1A),
-    surface = Color(0xFFF5F3EE),
-    onSurface = Color(0xFF1D1C1A),
-    surfaceVariant = Color(0xFFEAE6DE),
-    onSurfaceVariant = Color(0xFF6B675F),
+    background = Color(0xFFF2F5F3),
+    onBackground = Color(0xFF192D29),
+    surface = Color(0xFFF2F5F3),
+    onSurface = Color(0xFF192D29),
+    surfaceVariant = Color(0xFFE4EBE7),
+    onSurfaceVariant = Color(0xFF5C6D66),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFCFBF8),
+    surfaceContainerLow = Color(0xFFF8FAF8),
     surfaceContainer = Color(0xFFFFFFFF),
-    surfaceContainerHigh = Color(0xFFF0EDE6),
-    surfaceContainerHighest = Color(0xFFE9E5DD),
-    outline = Color(0xFFCFCAC0),
-    outlineVariant = Color(0xFFE6E2D9),
+    surfaceContainerHigh = Color(0xFFEBF0ED),
+    surfaceContainerHighest = Color(0xFFDFE7E2),
+    outline = Color(0xFF82948B),
+    outlineVariant = Color(0xFFDCE5DF),
     error = Color(0xFFB3261E),
     onError = Color.White,
     errorContainer = Color(0xFFF9DEDC),
@@ -66,17 +67,17 @@ private val DarkColors = darkColorScheme(
     onTertiary = Color(0xFF173055),
     tertiaryContainer = Color(0xFF2F466B),
     onTertiaryContainer = Color(0xFFD8E4FA),
-    background = Color(0xFF121413),
-    onBackground = Color(0xFFE5E2DB),
-    surface = Color(0xFF121413),
-    onSurface = Color(0xFFE5E2DB),
+    background = Color(0xFF101917),
+    onBackground = Color(0xFFE6EDE8),
+    surface = Color(0xFF101917),
+    onSurface = Color(0xFFE6EDE8),
     surfaceVariant = Color(0xFF2A2E2C),
-    onSurfaceVariant = Color(0xFFA9A49B),
+    onSurfaceVariant = Color(0xFFA5B6AC),
     surfaceContainerLowest = Color(0xFF0D0F0E),
-    surfaceContainerLow = Color(0xFF171A19),
-    surfaceContainer = Color(0xFF1B1F1D),
-    surfaceContainerHigh = Color(0xFF242826),
-    surfaceContainerHighest = Color(0xFF2E3230),
+    surfaceContainerLow = Color(0xFF15201C),
+    surfaceContainer = Color(0xFF1B2823),
+    surfaceContainerHigh = Color(0xFF24332C),
+    surfaceContainerHighest = Color(0xFF2D3E35),
     outline = Color(0xFF454B48),
     outlineVariant = Color(0xFF323735),
     error = Color(0xFFF2B8B5),
@@ -94,6 +95,7 @@ data class ExtraColors(
     val heroEnd: Color,
     val onHero: Color,
     val onHeroMuted: Color,
+    val onHeroAccent: Color,
     val groupPalette: List<Color>,
     val chartGrid: Color,
 ) {
@@ -102,8 +104,8 @@ data class ExtraColors(
 }
 
 private val LightPalette = listOf(
-    Color(0xFF2F7D6B), Color(0xFF5477B8), Color(0xFFD39B3A), Color(0xFFC4604F),
-    Color(0xFF8467B5), Color(0xFF3E9FB0), Color(0xFFB86E8A), Color(0xFF7A8450),
+    Color(0xFF347A66), Color(0xFF587BA3), Color(0xFFAD8543), Color(0xFFB76B59),
+    Color(0xFF8474A7), Color(0xFF458895), Color(0xFFA56882), Color(0xFF7B8751),
 )
 private val DarkPalette = listOf(
     Color(0xFF6CC3AC), Color(0xFF8EA8DE), Color(0xFFE6BA66), Color(0xFFE38D7D),
@@ -116,12 +118,13 @@ private fun extraColors(dark: Boolean, upIsRed: Boolean): ExtraColors {
     return ExtraColors(
         gain = if (upIsRed) red else green,
         loss = if (upIsRed) green else red,
-        heroStart = if (dark) Color(0xFF1F4D43) else Color(0xFF1B5246),
-        heroEnd = if (dark) Color(0xFF15302A) else Color(0xFF2F7D6B),
-        onHero = Color(0xFFF7F5EF),
-        onHeroMuted = Color(0xFFF7F5EF).copy(alpha = 0.72f),
+        heroStart = if (dark) Color(0xFF203E34) else Color(0xFF163C32),
+        heroEnd = if (dark) Color(0xFF152D25) else Color(0xFF2C6452),
+        onHero = Color(0xFFF4F8F3),
+        onHeroMuted = Color(0xFFD2E3D9),
+        onHeroAccent = Color(0xFFE9CE91),
         groupPalette = if (dark) DarkPalette else LightPalette,
-        chartGrid = if (dark) Color(0xFF2E3330) else Color(0xFFE6E2D9),
+        chartGrid = if (dark) Color(0xFF2D3E35) else Color(0xFFDCE5DF),
     )
 }
 
@@ -132,7 +135,7 @@ val NumberStyle = TextStyle(fontFeatureSettings = "tnum")
 
 private val AppTypography = Typography().let { t ->
     t.copy(
-        displaySmall = t.displaySmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp, fontFeatureSettings = "tnum"),
+        displaySmall = t.displaySmall.copy(fontWeight = FontWeight.Medium, letterSpacing = (-1).sp, fontFeatureSettings = "tnum"),
         headlineMedium = t.headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.25).sp),
         headlineSmall = t.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
         titleLarge = t.titleLarge.copy(fontWeight = FontWeight.SemiBold),
@@ -157,9 +160,11 @@ fun AssetBoardTheme(themeMode: ThemeMode, upIsRed: Boolean, content: @Composable
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
-    CompositionLocalProvider(LocalExtraColors provides extraColors(dark, upIsRed)) {
+    val colors = if (dark) DarkColors else LightColors
+    // Transparent scaffolds and custom cards inherit this instead of Compose's default black.
+    CompositionLocalProvider(LocalExtraColors provides extraColors(dark, upIsRed), LocalContentColor provides colors.onBackground) {
         MaterialTheme(
-            colorScheme = if (dark) DarkColors else LightColors,
+            colorScheme = colors,
             typography = AppTypography,
             shapes = AppShapes,
             content = content,

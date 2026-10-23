@@ -14,11 +14,6 @@ import com.assetboard.ui.components.PullToCreateBox
 import com.assetboard.ui.components.rememberPullToCreate
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -343,24 +338,20 @@ private fun DayHero(
     onWeigh: () -> Unit,
 ) {
     val extra = AppTheme.extra
-    val motion = rememberInfiniteTransition(label = "food-hero")
-    val drift by motion.animateFloat(0f, 1f, infiniteRepeatable(tween(12_000, easing = LinearEasing), RepeatMode.Reverse), label = "drift")
     val intake = animatedCents(day.intakeCal)
     val isToday = day.date == today
     val burn = day.burn
     Box(
         Modifier
             .fillMaxWidth()
-            .shadow(18.dp, MaterialTheme.shapes.extraLarge, ambientColor = extra.heroStart, spotColor = extra.heroStart)
+            .shadow(8.dp, MaterialTheme.shapes.extraLarge, ambientColor = extra.heroStart, spotColor = extra.heroStart)
             .clip(MaterialTheme.shapes.extraLarge)
             .background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd)))
             .drawBehind {
                 val w = size.width
                 val h = size.height
-                val a = Offset(w * (0.2f + 0.6f * drift), h * 0.25f)
-                drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.14f), Color.Transparent), a, w * 0.5f), w * 0.5f, a)
-                val b = Offset(w * (0.95f - 0.5f * drift), h * 0.9f)
-                drawCircle(Brush.radialGradient(listOf(Color(0xFFF2CF74).copy(alpha = 0.14f), Color.Transparent), b, w * 0.45f), w * 0.45f, b)
+                val a = Offset(w, h * 0.1f)
+                drawCircle(Brush.radialGradient(listOf(extra.onHeroAccent.copy(alpha = 0.10f), Color.Transparent), a, w), w, a)
             }
             .padding(22.dp),
     ) {

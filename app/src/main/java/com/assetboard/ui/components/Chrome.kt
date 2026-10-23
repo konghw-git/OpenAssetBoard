@@ -68,7 +68,7 @@ fun TabHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.headlineMedium, color = cs.onBackground)
+            Text(title, style = MaterialTheme.typography.headlineSmall, color = cs.onBackground)
             if (subtitle != null) {
                 AnimatedContent(subtitle, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "subtitle") {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -152,13 +152,13 @@ fun PrimaryActionButton(icon: ImageVector, text: String, onClick: () -> Unit, mo
     Row(
         modifier
             .pressScale(source, 0.93f)
-            .shadow(18.dp, shape, ambientColor = extra.heroStart, spotColor = extra.heroStart)
+            .shadow(8.dp, shape, ambientColor = extra.heroStart, spotColor = extra.heroStart)
             .clip(shape)
             .background(Brush.linearGradient(listOf(extra.heroEnd, extra.heroStart)))
             .drawWithContent {
                 drawContent()
                 // A soft gloss over the top half.
-                drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent), endY = size.height * 0.6f))
+                drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.05f), Color.Transparent), endY = size.height * 0.6f))
             }
             .clickable(interactionSource = source, indication = null, onClick = onClick)
             .height(58.dp)

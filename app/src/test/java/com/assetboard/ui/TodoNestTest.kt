@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
@@ -30,8 +31,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * A todo held and slid right goes into the todo above it as a checklist item; held and moved up
- * or down, even with a long rest before letting go, it only changes places.
+ * A held todo merges when it rests over another card, or slides right toward the row above.
+ * A quick vertical drop reorders; a cancelled drag never merges.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -104,6 +105,40 @@ class TodoNestTest {
         assertTrue(runBlocking { c.todos.loadOnce() }.checklistByTodo.values.all { it.isEmpty() })
     }
 
+    @Test fun heldOverANonAdjacentTodoItMergesIntoThatTodo() {
+        val c = show()
+        fun top(text: String) = compose.onNodeWithText(text).fetchSemanticsNode().boundsInRoot.top
+        val distance = top("最后的") - top("先写的")
+        drag("先写的", dx = 0f, dy = distance, rest = 800)
+        compose.waitUntil(5_000) { "先写的" !in titles(c) }
+        val d = runBlocking { c.todos.loadOnce() }
+        val target = d.todos.first { it.title == "最后的" }
+        assertEquals(listOf("先写的"), d.checklistByTodo[target.id].orEmpty().map { it.text })
+    }
+
+    @Test fun aTodoCanReachAMergeTargetAfterEdgeScrolling() {
+        val c = show()
+        runBlocking(c.gate.bound()) { repeat(12) { c.todos.create(TodoDraft("远处 $it")) } }
+        compose.waitUntil(10_000) { c.todos.data.value?.todos?.size == 15 }
+        compose.mainClock.advanceTimeBy(1_000)
+        val start = compose.onNodeWithText("先写的", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
+        val bounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        compose.mainClock.autoAdvance = false
+        compose.onRoot().performTouchInput { down(start) }
+        compose.mainClock.advanceTimeBy(900)
+        compose.onRoot().performTouchInput { moveTo(Offset(start.x, bounds.bottom - 40f)) }
+        repeat(150) { compose.mainClock.advanceTimeBy(32); Thread.sleep(5) }
+        val target = compose.onNodeWithText("远处 11", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
+        compose.onRoot().performTouchInput { moveTo(target) }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onRoot().performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+        compose.waitUntil(5_000) { "先写的" !in titles(c) }
+        val d = runBlocking { c.todos.loadOnce() }
+        val into = d.todos.first { it.title == "远处 11" }
+        assertEquals(listOf("先写的"), d.checklistByTodo[into.id].orEmpty().map { it.text })
+    }
+
     @Test fun selectedRowsMergeIntoTheVisibleRowAbove() {
         val c = show()
         compose.mainClock.autoAdvance = false
@@ -122,11 +157,11 @@ class TodoNestTest {
         assertEquals(setOf("后写的", "最后的"), d.checklistByTodo[target.id].orEmpty().map { it.text }.toSet())
     }
 
-    @Test fun movedUpAndRestedItOnlyChangesPlaces() {
+    @Test fun aQuickVerticalDropOnlyChangesPlaces() {
         val c = show()
         fun top(text: String) = compose.onNodeWithText(text).fetchSemanticsNode().boundsInRoot.top
         val gap = top("最后的") - top("后写的")
-        drag("最后的", dx = 0f, dy = -gap - 20f, rest = 1_500)
+        drag("最后的", dx = 0f, dy = -gap - 20f, rest = 0)
         compose.waitUntil(5_000) { titles(c) == listOf("先写的", "最后的", "后写的") }
         assertTrue(runBlocking { c.todos.loadOnce() }.checklistByTodo.values.all { it.isEmpty() })
     }

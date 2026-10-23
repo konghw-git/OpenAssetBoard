@@ -38,6 +38,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 /**
  * Long-press-and-drag reordering for a LazyColumn. The screen keeps its own copy of the order:
@@ -51,7 +52,8 @@ import kotlinx.coroutines.launch
  * Where [onNest] is set, the row can also go into the one above it: slid to the right past
  * [nestArm] while held, it shows [nestInto] (the row above, when [canNest] allows it), and let go
  * there it calls [onNest] instead of [onDrop]. The sideways slide never moves rows up or down, so
- * a reorder stays a reorder however long the finger rests.
+ * a reorder stays a reorder while it travels. Holding over another row for a moment also arms
+ * a merge into that row, in either direction; a quick release still changes the order.
  */
 @Stable
 class ReorderState internal constructor(
@@ -81,6 +83,12 @@ class ReorderState internal constructor(
     internal var canNest: (row: Any, into: Any) -> Boolean = { _, _ -> false }
     internal var onNest: ((row: Any, into: Any) -> Unit)? = null
     private var scroller: Job? = null
+    private var hoverJob: Job? = null
+    private var hover: Any? = null
+    /** The candidate under the finger, not yet armed until the finger rests. */
+    val hovering: Any? get() = hover
+    private var hoverPoint = Offset.Zero
+    private var grabY = 0f
     private var travelled = 0f
     private var moved = false
     private var released: Any? = null
@@ -93,12 +101,15 @@ class ReorderState internal constructor(
     fun ownsClick(key: Any): Boolean =
         dragging == key || (released == key && System.nanoTime() - releasedAt < CLICK_AFTER_RELEASE_NS)
 
-    internal fun start(key: Any) {
+    internal fun start(key: Any, point: Offset = Offset.Zero) {
         haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
         dragging = key
         offset = onStart(key)
         nestOffset = 0f
         nestInto = null
+        hover = null
+        hoverJob?.cancel()
+        grabY = point.y
         travelled = 0f
         moved = false
         scroller?.cancel()
@@ -112,15 +123,19 @@ class ReorderState internal constructor(
             nestOffset = (nestOffset + dx).coerceIn(0f, nestMax)
             travelled += kotlin.math.abs(dx)
         }
-        swapIfCrossed()
         updateNest()
+        if (hover == null) swapIfCrossed()
     }
 
     internal fun end(cancelled: Boolean = false) {
         val key = dragging ?: return
         scroller?.cancel()
+        hoverJob?.cancel()
         // A cancelled drag releases the row; it must never turn into a merge.
         val into = nestInto.takeUnless { cancelled }
+        // A quick drop over a card sorts it; only the highlighted, armed target merges.
+        if (!cancelled && into == null) hover?.let { if (onMove(key, it)) moved = true }
+        hover = null
         dragging = null
         offset = 0f
         nestOffset = 0f
@@ -138,14 +153,35 @@ class ReorderState internal constructor(
     }
 
     /**
-     * Past [nestArm] the row goes into the row right above its slot, if it may; back under two
-     * thirds of that it stays a row, so a finger resting on the edge does not flicker between.
+     * Resting over another row arms that target. Otherwise the right-slide shortcut uses the
+     * row above, with hysteresis so a finger on its threshold does not flicker between states.
      */
     private fun updateNest() {
         val key = dragging ?: return
         if (onNest == null) return
         val before = nestInto
+        val visible = list.layoutInfo.visibleItemsInfo
+        val me = visible.firstOrNull { it.key == key }
+        val finger = me?.let { it.offset + offset + grabY }
+        val over = finger?.let { y -> visible.firstOrNull {
+            it.key != key && it.size > 0 && y >= it.offset + 4 && y < it.offset + it.size - 4 && canNest(key, it.key)
+        }?.key }
+        val point = Offset(nestOffset, finger ?: 0f)
+        if (over != hover || (over != null && (point - hoverPoint).getDistance() > slop)) {
+            hoverJob?.cancel()
+            hover = over
+            hoverPoint = point
+            nestInto = null
+            if (over != null) hoverJob = scope.launch {
+                delay(450)
+                if (dragging == key && hover == over && canNest(key, over)) {
+                    nestInto = over
+                    haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+                }
+            }
+        }
         nestInto = when {
+            over != null -> nestInto?.takeIf { it == over }
             nestOffset >= nestArm -> above(key)?.takeIf { canNest(key, it) }
             nestOffset < nestArm * 2 / 3 -> null
             else -> before?.takeIf { it == above(key) }
@@ -204,8 +240,8 @@ class ReorderState internal constructor(
             if (speed != 0f) {
                 val moved = list.scrollBy(speed)
                 offset += moved
-                swapIfCrossed()
                 updateNest()
+                if (hover == null) swapIfCrossed()
             }
         }
     }
@@ -309,7 +345,7 @@ private val NestMax = 72.dp
 fun Modifier.reorderable(state: ReorderState, key: Any, enabled: Boolean = true): Modifier =
     if (!enabled) this else pointerInput(state, key) {
         detectDragGesturesAfterLongPress(
-            onDragStart = { state.start(key) },
+            onDragStart = { state.start(key, it) },
             onDrag = { change, amount ->
                 change.consume()
                 state.drag(amount.x, amount.y)
