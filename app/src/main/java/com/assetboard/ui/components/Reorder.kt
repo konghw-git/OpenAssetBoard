@@ -1,6 +1,20 @@
 package com.assetboard.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
@@ -30,7 +44,9 @@ import kotlinx.coroutines.launch
  * [onMove] swaps two keys in it (returning false where the move is not allowed, such as across
  * sections), and [onDrop] saves it. The dragged row follows the finger; near either edge the
  * list scrolls under it. A row picked up and let go without moving calls [onHold] instead, when
- * there is one: the long press keeps its other meaning, such as selecting.
+ * there is one: the long press keeps its other meaning, such as selecting. [onStart] hears the
+ * pick-up, before anything moves, and may fold other rows away to carry them along; it answers
+ * how far that moved the row's slot up, so the row stays under the finger.
  */
 @Stable
 class ReorderState internal constructor(
@@ -48,6 +64,7 @@ class ReorderState internal constructor(
     internal var onMove: (from: Any, to: Any) -> Boolean = { _, _ -> false }
     internal var onDrop: (Any) -> Unit = {}
     internal var onHold: ((Any) -> Unit)? = null
+    internal var onStart: (Any) -> Float = { 0f }
     private var scroller: Job? = null
     private var travelled = 0f
     private var moved = false
@@ -64,7 +81,7 @@ class ReorderState internal constructor(
     internal fun start(key: Any) {
         haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
         dragging = key
-        offset = 0f
+        offset = onStart(key)
         travelled = 0f
         moved = false
         scroller?.cancel()
@@ -140,12 +157,68 @@ class ReorderState internal constructor(
 
 private const val CLICK_AFTER_RELEASE_NS = 300_000_000L
 
+/**
+ * The rows carried along with a held one, peeking out under it as a little stack: up to two
+ * cards, each a little narrower and lower. [side] and [top] are the held card's inset in the
+ * row, [corner] its corner radius.
+ */
+fun DrawScope.stackUnder(carried: Int, color: Color, side: Float, top: Float, corner: Float) {
+    val n = minOf(carried, 2)
+    for (k in n downTo 1) {
+        val inset = side + 10.dp.toPx() * k
+        drawRoundRect(
+            color.copy(alpha = 0.10f + 0.06f * (n - k)),
+            topLeft = Offset(inset, top + 5.dp.toPx() * k),
+            size = Size(size.width - inset * 2, size.height - top * 2),
+            cornerRadius = CornerRadius(corner),
+        )
+    }
+}
+
+/** How many rows are moving together, on the corner of the one held. */
+@Composable
+fun CarryBadge(text: String, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = cs.onPrimary,
+        modifier = modifier
+            .shadow(4.dp, RoundedCornerShape(50))
+            .clip(RoundedCornerShape(50))
+            .background(cs.primary)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    )
+}
+
+/**
+ * How far [key]'s slot moves up when the rows keyed [gone] fold away ([foldedAway]): the heights
+ * of the ones above it on screen. What [rememberReorderState]'s onStart answers when it folds
+ * rows away to carry them.
+ */
+fun LazyListState.heightAbove(key: Any, gone: Collection<Any>): Float {
+    val info = layoutInfo
+    val me = info.visibleItemsInfo.firstOrNull { it.key == key } ?: return 0f
+    return info.visibleItemsInfo.filter { it.index < me.index && it.key in gone }.sumOf { it.size }.toFloat()
+}
+
+/**
+ * A row carried along by another: still in the list, so the gesture holding the other goes on
+ * (a list that loses a row mid-gesture cancels it), but of no height and not drawn.
+ */
+fun Modifier.foldedAway(): Modifier = layout { measurable, constraints ->
+    val p = measurable.measure(constraints)
+    layout(p.width, 0) {}
+}
+
 @Composable
 fun rememberReorderState(
     list: LazyListState,
     onMove: (from: Any, to: Any) -> Boolean,
     onDrop: (Any) -> Unit,
     onHold: ((Any) -> Unit)? = null,
+    onStart: (Any) -> Float = { 0f },
 ): ReorderState {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -156,9 +229,11 @@ fun rememberReorderState(
     val move by rememberUpdatedState(onMove)
     val drop by rememberUpdatedState(onDrop)
     val hold by rememberUpdatedState(onHold)
+    val start by rememberUpdatedState(onStart)
     state.onMove = { a, b -> move(a, b) }
     state.onDrop = { drop(it) }
     state.onHold = if (onHold == null) null else ({ hold?.invoke(it) })
+    state.onStart = { start(it) }
     return state
 }
 

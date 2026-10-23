@@ -57,9 +57,10 @@ This app is built for it. One stocktake walks every account, you change the thre
 ### Todo
 
 - **Things 3 structure**: inbox → today → upcoming → someday, plus lists with sections. Items carry deadlines, an important flag, notes and checklists; every checklist item sits on its own strip under the todo's card and ticks with one tap.
-- **Drag to sort**: long press a todo and drag it in Today, Upcoming, the inbox, someday and lists; overdue and flagged todos keep their groups.
+- **Drag to sort**: long press a todo and drag it in Today, Upcoming, the inbox, someday and lists; overdue and flagged todos keep their groups. A long press held still selects; dragging one of the selected carries the rest along.
+- **Tidy a selection**: reschedule, move or delete it, make it the checklist of a new todo (named in place, undoable), or add it to an existing todo's checklist; a todo with a checklist can be dissolved back into separate todos.
 - **A radial dial**: the home screen puts views on a wheel with live counts, one tap to switch; today's daily habits sit beside it.
-- **Daily habits**: supplements, workout, diet, water and early sleep to start with; tap 每日 to rename, restyle, reorder, add (up to seven) or remove them. Ticked on the todo page and shown read-only at the top of the diary, each day with the habits it had.
+- **Daily habits**: supplements, workout, diet, water and early sleep to start with; tap 每日 to rename, restyle, write a rubric (one condition a line), reorder, add (up to seven) or remove them. Tap to tick on the todo page, hold to float the rubric until you let go; shown read-only in the diary's day card, each day with the habits it had.
 - **Reminders that fire**: normal notifications, a strong reminder (full screen, ring, vibrate — still on time in deep doze), per-occurrence reminders for repeating todos, catch-up after reboot, and recovery after the permission is revoked.
 - **Quick capture**: tap `+` on the widget, type, save — target under 5 seconds.
 - **Swipe actions**: swipe left to delete (the card breaks into dust; a small capsule at the bottom offers undo), right for complete, reschedule and the important flag; checklist items swipe away on their own. A swipe on a row works the row; the tabs turn from anywhere off the rows, or by sliding along the bottom bar. Pull the list down for a new todo, the assets page for a new account.

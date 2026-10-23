@@ -346,9 +346,8 @@ class DataSafetyTest {
     @Test fun aQuietDayInTheMiddleDoesNotCutTheFatAverage() {
         fun m(date: String, fat: Int?) = BodyMeasurement("m-$date", date, 0, 92_000, fat, null, 0, 0)
         val points = listOf(m("2026-09-30", 2_600), m("2026-10-01", 2_500), m("2026-10-02", null), m("2026-10-03", 2_400))
-        val runs = HealthTrend.movingAverage(points) { it.bodyFatBp?.toLong() }
-        assertEquals(1, runs.size)
-        assertEquals(listOf("2026-10-01", "2026-10-03"), runs.single().map { it.first })
+        val line = HealthTrend.movingAverage(points) { it.bodyFatBp?.toLong() }
+        assertEquals(listOf("2026-09-30", "2026-10-01", "2026-10-03"), line.map { it.first })
     }
 
     @Test fun aBlockedReminderChannelCountsTheReminderAsMissed() = withContainer { c, _ ->

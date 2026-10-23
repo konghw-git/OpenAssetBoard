@@ -4,8 +4,14 @@ import com.assetboard.ui.components.GlassSheet
 import com.assetboard.ui.components.glass
 import com.assetboard.ui.components.LocalAmbient
 import com.assetboard.ui.components.ReorderState
+import com.assetboard.ui.components.CarryBadge
+import com.assetboard.ui.components.foldedAway
+import com.assetboard.ui.components.heightAbove
 import com.assetboard.ui.components.rememberReorderState
 import com.assetboard.ui.components.reorderable
+import com.assetboard.ui.components.stackUnder
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
+import androidx.compose.material.icons.outlined.CallSplit
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.text.style.LineBreak
 import android.content.Intent
@@ -254,6 +260,7 @@ fun TodoHomeScreen(
     LaunchedEffect(selection.isEmpty()) { if (selection.isNotEmpty()) editingId = null }
     var rescheduleFor by remember { mutableStateOf<List<String>?>(null) }
     var moveFor by remember { mutableStateOf<List<String>?>(null) }
+    var mergeFor by remember { mutableStateOf<List<String>?>(null) }
     var listDialog by remember { mutableStateOf<String?>(null) }
     var sectionDialog by remember { mutableStateOf<Pair<String, String>?>(null) } // (section id or "", name)
     val listState = rememberLazyListState()
@@ -301,6 +308,10 @@ fun TodoHomeScreen(
     val lines = remember(d, selected, today) { d?.let { buildLines(it, view, listId, today) }.orEmpty() }
     // The order on screen; a drag rearranges it here and saves its band on release.
     var order by remember(lines) { mutableStateOf(lines) }
+    // Picking up one of several selected rows carries the others of its band along: they fold
+    // away while it moves (taken out of the list, they would end the gesture) and land right
+    // after it, in their order, when it is let go.
+    var carried by remember(lines) { mutableStateOf(emptyList<Line>()) }
     val reorder = rememberReorderState(
         listState,
         onMove = { from, to ->
@@ -316,11 +327,28 @@ fun TodoHomeScreen(
             }
         },
         onDrop = { key ->
+            if (carried.isNotEmpty()) {
+                val rest = order - carried.toSet()
+                val at = rest.indexOfFirst { it.key == key }
+                if (at >= 0) order = rest.toMutableList().apply { addAll(at + 1, carried) }
+            }
+            carried = emptyList()
             val band = (order.firstOrNull { it.key == key } as? Line.Item)?.band ?: return@rememberReorderState
             vm.reorder(order.filter { it is Line.Item && it.band == band }.map { it.key })
         },
         // Held without moving: the long press selects, as on rows that cannot move.
-        onHold = { key -> if (order.any { it.key == key }) selection = selection.toggle(key as String) },
+        onHold = { key ->
+            carried = emptyList()
+            if (order.any { it.key == key }) selection = selection.toggle(key as String)
+        },
+        onStart = start@{ key ->
+            val me = order.firstOrNull { it.key == key } as? Line.Item
+            if (me == null || key !in selection || selection.size < 2) return@start 0f
+            val ride = order.filter { it is Line.Item && it.key != key && it.key in selection && it.band == me.band }
+            if (ride.isEmpty()) return@start 0f
+            carried = ride
+            listState.heightAbove(key, ride.map { it.key })
+        },
     )
     val todayRows = remember(d, today) { d?.let { TodoViews.today(it.todos, today) }.orEmpty() }
     val doneToday = todayRows.count { it.done }
@@ -333,6 +361,7 @@ fun TodoHomeScreen(
     }
     val pullTop = with(LocalDensity.current) { pull.pulled.toDp() }
     val checkedHabits by remember(today) { vm.habitsOn(today) }.collectAsStateWithLifecycle(emptySet())
+    // Rest days are no longer taken, but one taken today before that still shows as one.
     val restingHabits by remember(today) { vm.habitsSkippedOn(today) }.collectAsStateWithLifecycle(emptySet())
     val habits by vm.activeHabits.collectAsStateWithLifecycle(emptyList())
     var customizing by rememberSaveable { mutableStateOf(false) }
@@ -346,7 +375,6 @@ fun TodoHomeScreen(
             onCustomize = { customizing = true },
             modifier = m,
             skipped = restingHabits,
-            onSkipHabit = vm::toggleHabitRest,
         )
     }
     val composerField: @Composable () -> Unit = {
@@ -380,6 +408,15 @@ fun TodoHomeScreen(
                 editingId = id
             }
         },
+        onUngather = { id ->
+            // Ending the edit first: the rows below are movable again once the todo is gone.
+            editingId = null
+            gatheredId = null
+            vm.ungather(id)
+        },
+        onMerge = { mergeFor = it },
+        onDissolve = { ids -> vm.dissolve(ids); selection = emptySet() },
+        carried = carried.mapTo(mutableSetOf()) { it.key },
         onReschedule = { rescheduleFor = it },
         onMove = { moveFor = it },
         onListMenu = { listDialog = it },
@@ -425,7 +462,7 @@ fun TodoHomeScreen(
                                 }
                             }
                         }
-                        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), backdrop)
+                        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = 8.dp), backdrop)
                     }
                 }
             } else {
@@ -442,7 +479,8 @@ fun TodoHomeScreen(
                     }
                     }
                 }
-                GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), backdrop)
+                // Over the keyboard: an undo offered while a todo is edited in place stays in reach.
+                GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = 8.dp), backdrop)
             }
         }
     }
@@ -471,6 +509,26 @@ fun TodoHomeScreen(
             onPick = { vm.move(ids, it?.id); moveFor = null; selection = emptySet() },
             onDismiss = { moveFor = null },
         )
+    }
+    mergeFor?.let { ids ->
+        // The open todos of this view, as it orders them, that are not among the ones going in.
+        val targets = order.mapNotNull { (it as? Line.Item)?.takeIf { l -> !l.row.done && l.key !in ids }?.row?.todo }
+            .filter { it.kind != TodoKind.COMPLETION }
+        if (targets.isEmpty()) {
+            ConfirmDialog(
+                "没有可以并入的待办", "这个视图里除了选中的，没有别的未完成待办。可以先切到它所在的清单或视图再选。", "知道了",
+                onConfirm = { mergeFor = null }, onDismiss = { mergeFor = null },
+            )
+        } else {
+            ListPickerDialog(
+                title = "并入哪条待办的检查项",
+                items = targets,
+                label = { it.title },
+                subtitle = { t -> d?.checklistByTodo?.get(t.id)?.size?.takeIf { it > 0 }?.let { "已有 $it 个检查项" } },
+                onPick = { t -> vm.mergeInto(t, ids); mergeFor = null; selection = emptySet() },
+                onDismiss = { mergeFor = null },
+            )
+        }
     }
     confirm?.let {
         ConfirmDialog(
@@ -742,6 +800,14 @@ private class ViewContext(
     val gathered: String?,
     /** Makes the selected todos, in the order given, the checklist of a new todo and edits it in place. */
     val onGather: (List<String>) -> Unit,
+    /** Takes the todo just gathered apart again, from its editor. */
+    val onUngather: (String) -> Unit,
+    /** Asks which todo the selected ones, in the order given, should join as checklist items. */
+    val onMerge: (List<String>) -> Unit,
+    /** Lets the checklists of the selected todos go as todos of their own. */
+    val onDissolve: (List<String>) -> Unit,
+    /** The selected rows riding along with the one being dragged, folded away meanwhile. */
+    val carried: Set<String>,
     val onReschedule: (List<String>) -> Unit,
     val onMove: (List<String>) -> Unit,
     val onListMenu: (String) -> Unit,
@@ -777,11 +843,16 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                 val editing = c.editing == t.id
                 val movable = line.band != null && c.editing == null
                 val dragged = c.reorder.dragging == t.id
+                val stack = if (dragged) c.carried.size else 0
+                val stackColor = MaterialTheme.colorScheme.primary
                 Box(
                     Modifier
+                        .then(if (t.id in c.carried) Modifier.foldedAway() else Modifier)
                         .zIndex(if (dragged) 1f else 0f)
                         .graphicsLayer { translationY = if (dragged) c.reorder.offset else 0f }
                         .then(if (dragged) Modifier else Modifier.animateItem())
+                        // The rows carried along peek out under the one held, as a little stack.
+                        .then(if (stack > 0) Modifier.drawBehind { stackUnder(stack, stackColor, side = 16.dp.toPx(), top = 3.dp.toPx(), corner = 18.dp.toPx()) } else Modifier)
                         .padding(horizontal = 16.dp, vertical = 3.dp),
                 ) {
                     SwipeActionsBox(
@@ -799,6 +870,7 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                                 onCommit = { title, lines -> c.vm.saveInline(t.id, title, lines) },
                                 onDone = { if (c.editing == t.id) c.onEdit(null) },
                                 blankTitle = c.gathered == t.id,
+                                onUndo = if (c.gathered == t.id) ({ c.onUngather(t.id) }) else null,
                             )
                             return@SwipeActionsBox
                         }
@@ -845,6 +917,7 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             swipe = c.swipe,
                         )
                     }
+                    if (stack > 0) CarryBadge("${stack + 1} 条", Modifier.align(Alignment.TopEnd).padding(end = 6.dp))
                 }
             }
         }
@@ -883,14 +956,37 @@ private fun ViewHeader(c: ViewContext) {
                     Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(18.dp)).background(cs.primaryContainer).padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // The selection in the order the view shows it.
+                    val picked = c.lines.mapNotNull { (it as? Line.Item)?.key?.takeIf(c.selection::contains) }
+                    val withChecklist = picked.filter { c.data?.checklistByTodo?.get(it).orEmpty().isNotEmpty() }
+                    var more by remember { mutableStateOf(false) }
                     IconButton(onClick = { c.onSelection(emptySet()) }) { Icon(Icons.Default.Close, "取消选择") }
                     Text("已选 ${c.selection.size} 条", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { c.onGather(c.lines.mapNotNull { (it as? Line.Item)?.key?.takeIf(c.selection::contains) }) }) {
-                        Icon(Icons.Outlined.Checklist, "作为检查项创建新待办")
-                    }
                     IconButton(onClick = { c.onReschedule(c.selection.toList()) }) { Icon(Icons.Outlined.EventRepeat, "改期") }
                     IconButton(onClick = { c.onMove(c.selection.toList()) }) { Icon(Icons.Outlined.DriveFileMove, "移动") }
                     IconButton(onClick = { c.onDelete(c.selection.toList()); c.onSelection(emptySet()) }) { Icon(Icons.Outlined.Delete, "删除", tint = cs.error) }
+                    Box {
+                        IconButton(onClick = { more = true }) { Icon(Icons.Default.MoreVert, "更多操作") }
+                        DropdownMenu(more, { more = false }, shape = RoundedCornerShape(18.dp)) {
+                            DropdownMenuItem(
+                                text = { Text("作为检查项创建新待办") },
+                                leadingIcon = { Icon(Icons.Outlined.Checklist, null) },
+                                onClick = { more = false; c.onGather(picked) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("并入已有待办的检查项") },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Outlined.PlaylistAdd, null) },
+                                onClick = { more = false; c.onMerge(picked) },
+                            )
+                            if (withChecklist.isNotEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("解散检查项") },
+                                    leadingIcon = { Icon(Icons.Outlined.CallSplit, null) },
+                                    onClick = { more = false; c.onDissolve(withChecklist) },
+                                )
+                            }
+                        }
+                    }
                 }
             } else {
                 Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {

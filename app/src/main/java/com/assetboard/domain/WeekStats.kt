@@ -64,7 +64,7 @@ data class WeekStats(
                 t.deletedAt == null && (t.kind == TodoKind.ORDINARY || t.kind == TodoKind.COMPLETION) &&
                     t.completedAt?.let { inWeek(TodoViews.localDate(it, zone)) } == true
             }
-            val averages = HealthTrend.movingAverage(weights) { it.weightG }.flatten().map { LocalDate.parse(it.first) to it.second }
+            val averages = HealthTrend.movingAverage(weights) { it.weightG }.map { LocalDate.parse(it.first) to it.second }
             val thisWeek = averages.lastOrNull { inWeek(it.first) }?.second
             val lastWeek = averages.lastOrNull { !it.first.isBefore(start.minusDays(7)) && it.first.isBefore(start) }?.second
             val weekStartAt = start.atStartOfDay(zone).toInstant().toEpochMilli()

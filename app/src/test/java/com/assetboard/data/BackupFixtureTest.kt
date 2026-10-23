@@ -41,6 +41,17 @@ class BackupFixtureTest {
         return Uri.fromFile(File(f.context.cacheDir, name).apply { writeText(text) })
     }
 
+    @Test fun formatElevenRestoresTheRubrics() = f.run {
+        val uri = fixture("format-11.json")
+        assertEquals(11, f.backup.inspect(uri).formatVersion)
+        f.backup.restore(uri)
+        val habits = f.db.habitDao().habits().associateBy { it.key }
+        assertEquals(listOf("不少于 30 分钟", "出汗"), habits.getValue(Habit.WORKOUT.key).conditions)
+        assertEquals("", habits.getValue(Habit.WATER.key).rubric)
+        assertEquals(setOf("写引言", "跑步", "进回收站"), f.db.todoDao().allTodos().map { it.title }.toSet())
+        assertEquals(2, f.db.foodDao().all().size)
+    }
+
     @Test fun formatTenRestores() = f.run {
         val uri = fixture("format-10.json")
         val preview = f.backup.inspect(uri)
@@ -83,6 +94,7 @@ class BackupFixtureTest {
         f.todos.delete(f.todos.create(TodoDraft("进回收站")))
         f.habits.toggle(Habit.WORKOUT)
         f.habits.toggleSkip(Habit.WATER)
+        f.habits.update(Habit.WORKOUT.key, Habit.WORKOUT.label, Habit.WORKOUT.icon, Habit.WORKOUT.color, "不少于 30 分钟\n出汗")
         f.health.saveProfile(Sex.MALE, date("2001-08-02"), 1820, null)
         f.health.save(MeasurementDraft(null, date("2026-10-17"), 92_100, 2_580, "体脂秤"))
         f.health.save(MeasurementDraft(null, date("2026-10-20"), 91_800, null, null))

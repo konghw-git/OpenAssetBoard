@@ -469,7 +469,8 @@ class ScreenshotTest {
     @Test fun foodEdit() {
         val c = withFood(withHealth(demoContainer()))
         shot("16-food-edit", c, sheet = true) { FoodScreen(noop, startRecording = true) }
-        compose.onNode(hasText("希腊酸奶") and hasClickAction() and !hasText("kcal", substring = true)).performClick()
+        // A cell of the recent grid: the name over its kcal.
+        compose.onNode(hasText("希腊酸奶") and hasClickAction() and hasText("kcal", substring = true)).performClick()
         compose.mainClock.advanceTimeBy(1_000)
         compose.onNode(hasSetTextAction() and hasText("希腊酸奶")).assertExists()
         // The sheet is a window of its own; capture it rather than the page under it.

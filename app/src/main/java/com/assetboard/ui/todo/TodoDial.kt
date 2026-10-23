@@ -3,6 +3,18 @@ package com.assetboard.ui.todo
 import com.assetboard.ui.components.glass
 import com.assetboard.ui.components.LocalAmbient
 import com.assetboard.ui.components.rim
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -318,11 +330,12 @@ internal fun DialHub(done: Int, total: Int, open: Boolean, modifier: Modifier, o
 // ---------------------------------------------------------------- the habit battery
 
 /**
- * The daily habits as the cells of an upright battery. Each tap charges a cell; a long press
- * gives the habit the day off ([skipped]), which takes its cell out of the count rather than
- * leaving it empty. The charge color climbs from amber to green as more are done, and a full
- * battery lights its cap. The 每日 pill in the corner opens [onCustomize]. Fewer habits keep their
- * cells at a comfortable height instead of stretching them over the whole body.
+ * The daily habits as the cells of an upright battery. Each tap charges a cell; holding one floats
+ * its rubric beside the battery until the finger lifts. A rest day taken before rest days were
+ * retired ([skipped]) still takes its cell out of the count. The charge color climbs from amber to
+ * green as more are done, and a full battery lights its cap. The 每日 pill in the corner opens
+ * [onCustomize]. Fewer habits keep their cells at a comfortable height instead of stretching them
+ * over the whole body.
  */
 @Composable
 internal fun HabitBattery(
@@ -332,7 +345,6 @@ internal fun HabitBattery(
     onCustomize: () -> Unit,
     modifier: Modifier = Modifier,
     skipped: Set<String> = emptySet(),
-    onSkip: (Habit) -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val level = habits.count { it.key in checked }
@@ -375,7 +387,6 @@ internal fun HabitBattery(
                     val on = h.key in checked
                     HabitCell(
                         h, on, rest = !on && h.key in skipped, charge, shimmer, Modifier.weight(1f, fill = false).fillMaxWidth().height(MaxCell),
-                        onLongClick = { onSkip(h) },
                     ) { onToggle(h) }
                 }
             }
@@ -407,11 +418,16 @@ private fun CustomizePill(text: String, color: Color, onClick: () -> Unit) {
     }
 }
 
-/** One habit's cell: charged when done, hatched and marked 休 on a rest day ([rest]). */
+/**
+ * One habit's cell: charged when done, hatched and marked 休 on a rest day ([rest]). A tap checks
+ * it; held, its rubric floats beside it ([RubricPeek]) until the finger lifts or slides away.
+ */
 @Composable
-private fun HabitCell(h: Habit, on: Boolean, rest: Boolean, charge: Color, shimmer: Float, modifier: Modifier, onLongClick: () -> Unit, onClick: () -> Unit) {
+private fun HabitCell(h: Habit, on: Boolean, rest: Boolean, charge: Color, shimmer: Float, modifier: Modifier, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
+    var peek by remember { mutableStateOf(false) }
+    val tap by rememberUpdatedState(onClick)
     // The cell fills left to right when charged, and drains back when unchecked.
     val level by animateFloatAsState(if (on) 1f else 0f, tween(if (on) 520 else 260, easing = FastOutSlowInEasing), label = "cell")
     val source = remember { MutableInteractionSource() }
@@ -443,17 +459,24 @@ private fun HabitCell(h: Habit, on: Boolean, rest: Boolean, charge: Color, shimm
                     }
                 }
             }
-            .combinedClickable(
-                interactionSource = source,
-                indication = null,
-                onLongClickLabel = if (rest) "取消休息" else "今天休息",
-                onLongClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onLongClick()
-                },
-            ) {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
+            .pointerInput(h.key) {
+                detectTapGestures(
+                    onPress = { at ->
+                        val press = PressInteraction.Press(at)
+                        source.emit(press)
+                        val lifted = tryAwaitRelease()
+                        source.emit(if (lifted) PressInteraction.Release(press) else PressInteraction.Cancel(press))
+                        peek = false
+                    },
+                    onLongPress = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        peek = true
+                    },
+                    onTap = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        tap()
+                    },
+                )
             }
             .semantics(mergeDescendants = true) {
                 role = Role.Checkbox
@@ -462,6 +485,8 @@ private fun HabitCell(h: Habit, on: Boolean, rest: Boolean, charge: Color, shimm
                     rest -> "今天休息"
                     else -> "未完成"
                 }
+                h.conditions.takeIf { it.isNotEmpty() }?.let { contentDescription = h.label + "，打卡标准：" + it.joinToString("；") }
+                onClick { tap(); true }
             }
             .padding(start = 8.dp, end = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -485,6 +510,79 @@ private fun HabitCell(h: Habit, on: Boolean, rest: Boolean, charge: Color, shimm
             }
         }
     }
+    if (peek) RubricPeek(h, on)
+}
+
+/**
+ * A habit's rubric, floating to the left of its cell over the ring while the cell is held: a
+ * frosted, see-through card in the habit's colour, gone the moment the finger lifts. It only
+ * shows; nothing in it is ticked.
+ */
+@Composable
+private fun RubricPeek(h: Habit, done: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    val gap = with(LocalDensity.current) { 10.dp.roundToPx() }
+    val position = remember(gap) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+                val left = anchorBounds.left - popupContentSize.width - gap
+                val x = if (left >= 0) left else (windowSize.width - popupContentSize.width) / 2
+                val y = (anchorBounds.center.y - popupContentSize.height / 2).coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0))
+                return IntOffset(x, y)
+            }
+        }
+    }
+    val shown = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { shown.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 520f)) }
+    val conditions = h.conditions
+    val shape = RoundedCornerShape(20.dp)
+    Popup(popupPositionProvider = position, properties = PopupProperties(focusable = false, clippingEnabled = false)) {
+        // Room around the card for its shadow, which the popup's window would otherwise cut.
+        Box(Modifier.padding(12.dp)) {
+            Column(
+                Modifier
+                    .widthIn(min = 168.dp, max = 236.dp)
+                    .graphicsLayer {
+                        val k = 0.88f + 0.12f * shown.value
+                        scaleX = k; scaleY = k
+                        alpha = shown.value
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0.5f)
+                    }
+                    .shadow(18.dp, shape, ambientColor = h.tint.copy(alpha = 0.5f), spotColor = h.tint.copy(alpha = 0.6f))
+                    .clip(shape)
+                    // See-through at the edges of reading: dense enough that the ring under it never muddles the text.
+                    .background(Brush.linearGradient(listOf(cs.surfaceContainerHigh.copy(alpha = 0.94f), cs.surfaceContainer.copy(alpha = 0.88f))))
+                    .background(Brush.linearGradient(listOf(h.tint.copy(alpha = 0.16f), Color.Transparent)))
+                    .border(1.dp, Brush.linearGradient(listOf(h.tint.copy(alpha = 0.55f), Color.White.copy(alpha = 0.18f))), shape)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(28.dp).clip(CircleShape).background(h.tint.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                        Icon(h.iconVector, null, tint = h.tint, modifier = Modifier.size(16.dp))
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f, fill = false)) {
+                        Text(h.label, style = MaterialTheme.typography.titleSmall, color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (done) "今天已打卡" else "打卡标准", style = MaterialTheme.typography.labelSmall, color = if (done) h.tint else cs.onSurfaceVariant)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                if (conditions.isEmpty()) {
+                    Text("还没有设打卡标准，点「每日」可以添加", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        conditions.forEach { c ->
+                            Row {
+                                Box(Modifier.padding(top = 7.dp).size(5.dp).clip(CircleShape).background(h.tint))
+                                Spacer(Modifier.width(8.dp))
+                                Text(c, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** The ring and the battery side by side, the ring sized to leave the battery room for its labels. */
@@ -504,13 +602,12 @@ internal fun ViewsAndHabits(
     onCustomize: () -> Unit,
     modifier: Modifier = Modifier,
     skipped: Set<String> = emptySet(),
-    onSkipHabit: (Habit) -> Unit = {},
 ) {
     BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         val ring = (maxWidth * 0.58f).coerceAtMost(236.dp)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ViewRing(d, today, selected, doneToday, totalToday, composing, onSelect, onHub, ring)
-            HabitBattery(habits, checked, onHabit, onCustomize, Modifier.weight(1f).height(ring).padding(vertical = 2.dp), skipped, onSkipHabit)
+            HabitBattery(habits, checked, onHabit, onCustomize, Modifier.weight(1f).height(ring).padding(vertical = 2.dp), skipped)
         }
     }
 }

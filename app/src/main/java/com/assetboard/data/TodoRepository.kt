@@ -613,6 +613,81 @@ class TodoRepository(
         for (t in dao.todosInBatch(batch)) if (t.deletedAt != null) reviveTodo(t)
     }
 
+    /**
+     * [ids] join [targetId]'s checklist after its own items, in the order given, and go to the
+     * trash as one batch; the target stays as it was otherwise. Returns the items made and the
+     * batch, for [unmerge].
+     */
+    suspend fun mergeInto(targetId: String, ids: List<String>): Pair<List<String>, String> = tx {
+        val target = live(targetId)
+        ensure(target.kind != TodoKind.COMPLETION && TodoViews.isOpen(target)) { "只能并入还没完成的待办" }
+        val todos = ids.distinct().filter { it != targetId }.map { live(it) }
+        ensure(todos.isNotEmpty()) { "没有选中其他待办" }
+        ensure(todos.none { it.kind != TodoKind.ORDINARY || it.completedAt != null }) { "重复待办和已完成的待办不能变成检查项" }
+        var order = dao.maxChecklistOrder(targetId) + 1
+        val made = todos.map { x -> newId().also { dao.insertChecklistItem(ChecklistItem(it, targetId, x.title, sortOrder = order++)) } }
+        save(target.bump(seq = false))
+        val batch = newId()
+        todos.forEach { trashTodo(it, batch) }
+        made to batch
+    }
+
+    /** Undoes [mergeInto]: the items made go and the todos of [batch] come back. */
+    suspend fun unmerge(targetId: String, items: List<String>, batch: String) = tx {
+        for (id in items) dao.deleteChecklistItem(id)
+        dao.todo(targetId)?.takeIf { it.deletedAt == null }?.let { save(it.bump(seq = false)) }
+        for (t in dao.todosInBatch(batch)) if (t.deletedAt != null) reviveTodo(t)
+    }
+
+    /**
+     * Each of [ids] with a checklist lets it go, the opposite of [gather]: every item becomes a
+     * todo of its own in the todo's place (its list, section, plan day, 以后再说, deadline and flag),
+     * a ticked one already done, and the todo itself goes to the trash; all of them as one batch.
+     * Todos without a checklist are left alone. Returns the todos made and the batch, for
+     * [undissolve].
+     */
+    suspend fun dissolve(ids: List<String>): Pair<List<String>, String> = tx {
+        val groups = ids.distinct().map { live(it) }.map { it to dao.checklistOf(it.id).sortedBy { i -> i.sortOrder } }.filter { it.second.isNotEmpty() }
+        ensure(groups.isNotEmpty()) { "选中的待办都没有检查项" }
+        ensure(groups.none { (t, _) -> t.kind != TodoKind.ORDINARY || t.completedAt != null }) { "重复待办和已完成的待办不能解散" }
+        val batch = newId()
+        val made = mutableListOf<String>()
+        for ((t, items) in groups) {
+            // The items take the todo's place in the order all views share; what came after moves down to make room.
+            val room = items.size - 1
+            if (room > 0) {
+                for (o in dao.allTodos()) if (o.sortOrder > t.sortOrder) dao.updateTodo(o.copy(sortOrder = o.sortOrder + room, revision = o.revision + 1))
+            }
+            items.forEachIndexed { i, item ->
+                val n = Todo(
+                    id = newId(),
+                    title = item.text.trim().ifEmpty { "检查项" },
+                    listId = t.listId,
+                    sectionId = t.sectionId,
+                    planDate = t.planDate,
+                    someday = t.someday,
+                    deadline = t.deadline,
+                    important = t.important,
+                    sortOrder = t.sortOrder + i,
+                    createdAt = now,
+                    completedAt = if (item.done) now else null,
+                )
+                insert(ReminderState.afterManualEdit(n, now, zone()))
+                made += n.id
+            }
+            trashTodo(t, batch)
+        }
+        made to batch
+    }
+
+    /** Undoes [dissolve]: the todos made go for good and the ones in [batch] come back. */
+    suspend fun undissolve(made: List<String>, batch: String) = tx {
+        val gone = newId()
+        for (id in made) dao.todo(id)?.takeIf { it.deletedAt == null }?.let { trashTodo(it, gone) }
+        purge(gone)
+        for (t in dao.todosInBatch(batch)) if (t.deletedAt != null) reviveTodo(t)
+    }
+
     suspend fun addChecklistItem(todoId: String, text: String): String = tx {
         val t = live(todoId)
         ensure(t.kind != TodoKind.COMPLETION) { "完成记录不能修改" }

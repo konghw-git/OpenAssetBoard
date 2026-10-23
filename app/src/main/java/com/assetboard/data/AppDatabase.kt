@@ -158,7 +158,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun weekDao(): WeekDao
 
     companion object {
-        const val SCHEMA_VERSION = 9
+        const val SCHEMA_VERSION = 10
 
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "asset-board.db")

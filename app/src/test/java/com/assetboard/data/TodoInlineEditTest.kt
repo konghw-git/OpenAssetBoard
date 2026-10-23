@@ -85,6 +85,67 @@ class TodoInlineEditTest {
         assertEquals(listOf("乙", "甲"), items(id).map { it.text })
     }
 
+    @Test fun mergedTodosJoinTheChecklistAfterItsOwnAndComeBackOnUndo() = f.run {
+        val target = f.todos.create(TodoDraft("搬家"))
+        f.todos.addChecklistItem(target, "打包")
+        val a = f.todos.create(TodoDraft("退押金"))
+        val b = f.todos.create(TodoDraft("改地址"))
+        val (made, batch) = f.todos.mergeInto(target, listOf(b, a))
+        assertEquals(listOf("打包", "改地址", "退押金"), items(target).map { it.text })
+        assertEquals(batch, f.todos.todo(a)!!.deleteBatch)
+        assertEquals(batch, f.todos.todo(b)!!.deleteBatch)
+
+        f.todos.unmerge(target, made, batch)
+        assertEquals(listOf("打包"), items(target).map { it.text })
+        assertNull(f.todos.todo(a)!!.deletedAt)
+        assertNull(f.todos.todo(b)!!.deletedAt)
+    }
+
+    @Test fun mergingIntoOneOfTheSelectedLeavesItOut() = f.run {
+        val a = f.todos.create(TodoDraft("甲"))
+        val b = f.todos.create(TodoDraft("乙"))
+        f.todos.mergeInto(a, listOf(a, b))
+        assertNull(f.todos.todo(a)!!.deletedAt)
+        assertEquals(listOf("乙"), items(a).map { it.text })
+    }
+
+    @Test fun dissolvingLetsTheChecklistGoAsTodosInItsPlaceAndUndoPutsItBack() = f.run {
+        val list = f.todos.createList("周末")
+        val before = f.todos.create(TodoDraft("前面", listId = list))
+        val id = f.todos.create(TodoDraft("采购", listId = list, planDate = date("2026-10-24"), important = true))
+        val after = f.todos.create(TodoDraft("后面", listId = list))
+        val milk = f.todos.addChecklistItem(id, "牛奶")
+        f.todos.addChecklistItem(id, "面包")
+        f.todos.toggleChecklist(milk)
+        val (made, batch) = f.todos.dissolve(listOf(id))
+        val todos = made.map { f.todos.todo(it)!! }
+        assertEquals(listOf("牛奶", "面包"), todos.map { it.title })
+        // Where the todo was: its list, day and flag; the ticked one already done.
+        assertEquals(listOf(list, list), todos.map { it.listId })
+        assertEquals(listOf("2026-10-24", "2026-10-24"), todos.map { it.planDate })
+        assertEquals(true, todos.all { it.important })
+        assertEquals(listOf(true, false), todos.map { it.completedAt != null })
+        // In its place in the shared order: after the row before it, before the row after it.
+        val order = listOf(before, made[0], made[1], after).map { f.todos.todo(it)!!.sortOrder }
+        assertEquals(order.sorted(), order)
+        assertEquals(order.toSet().size, order.size)
+        assertEquals(batch, f.todos.todo(id)!!.deleteBatch)
+
+        f.todos.undissolve(made, batch)
+        assertNull(f.todos.todo(id)!!.deletedAt)
+        assertEquals(listOf("牛奶", "面包"), items(id).map { it.text })
+        made.forEach { assertNull(f.todos.todo(it)) }
+    }
+
+    @Test fun dissolvingLeavesTodosWithoutAChecklistAlone() = f.run {
+        val plain = f.todos.create(TodoDraft("单独"))
+        val id = f.todos.create(TodoDraft("一组"))
+        f.todos.addChecklistItem(id, "一项")
+        val (made, _) = f.todos.dissolve(listOf(plain, id))
+        assertEquals(1, made.size)
+        assertNull(f.todos.todo(plain)!!.deletedAt)
+    }
+
     @Test fun rescheduleSetsKeepsOrClearsTheTime() = f.run {
         val id = f.todos.create(TodoDraft("开会", planDate = date("2026-10-20"), remindTime = LocalTime.of(9, 0)))
         f.todos.reschedule(listOf(id), date("2026-10-21"), false)

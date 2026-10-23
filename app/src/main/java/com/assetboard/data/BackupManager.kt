@@ -26,8 +26,8 @@ import java.io.File
  * Format 2 adds the todo and diary tables, format 3 the daily habit checks, format 4 the health
  * profile and weigh-ins, format 5 the notes, format 6 the notes' order and the weekly reviews,
  * format 7 the net worth goal, format 8 the habits themselves (a file without them reads as the
- * five built in), format 9 what was eaten, format 10 the diary's mood and the habits' rest days;
- * older files read with the newer tables empty and the newer fields unset. Device-local
+ * five built in), format 9 what was eaten, format 10 the diary's mood and the habits' rest days,
+ * format 11 each habit's rubric; older files read with the newer tables empty and the newer fields unset. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -382,6 +382,7 @@ class BackupManager(
         for (h in habits) {
             ensure(h.key.isNotBlank()) { "备份里有每日打卡缺少标识" }
             ensure(h.label.isNotBlank() && h.label.length <= com.assetboard.domain.Habit.MAX_LABEL) { "备份里有名字无效的每日打卡" }
+            ensure(h.rubric.length <= com.assetboard.domain.Habit.MAX_RUBRIC) { "备份里有打卡标准过长的每日打卡" }
             val from = date(h.addedOn)
             val until = date(h.removedOn)
             // Removed on the day it was added is fine: it then belongs to no day but keeps its checks.
@@ -695,7 +696,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 10
+        const val FORMAT_VERSION = 11
 
         /**
          * [file] with each account's current balance as its only valuation at [now], and one

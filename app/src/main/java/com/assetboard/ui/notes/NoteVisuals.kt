@@ -1,6 +1,9 @@
 package com.assetboard.ui.notes
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.animation.core.Spring
@@ -126,7 +129,7 @@ val NoteCardShape = RoundedCornerShape(22.dp)
 
 /**
  * One note in a list, on glass: title, the lines after it, its topic and when it last changed.
- * [lifted] while it is being dragged.
+ * [lifted] while it is being dragged; [selected] tints it and rings it in the accent.
  */
 @Composable
 fun NoteCard(
@@ -138,18 +141,21 @@ fun NoteCard(
     preview: AnnotatedString? = null,
     lifted: Boolean = false,
     onLongClick: (() -> Unit)? = null,
+    selected: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val source = remember { MutableInteractionSource() }
     val topic = topics.firstOrNull { it.id == note.topicId }
     val body = preview ?: remember(note.body, cs.primary) { tagged(NoteText.preview(note.body), cs.primary) }
     val lift by animateFloatAsState(if (lifted) 1f else 0f, spring(stiffness = Spring.StiffnessMediumLow), label = "lift")
+    val ring by animateColorAsState(if (selected) cs.primary.copy(alpha = 0.7f) else Color.Transparent, tween(180), label = "noteRing")
     Column(
         modifier
             .fillMaxWidth()
             .pressScale(source, 0.98f)
             .graphicsLayer { scaleX = 1f + 0.03f * lift; scaleY = scaleX }
-            .glass(NoteCardShape, glass, elevation = 10.dp + 18.dp * lift)
+            .glass(NoteCardShape, glass, if (selected) cs.primary.copy(alpha = 0.12f) else Color.Unspecified, elevation = 10.dp + 18.dp * lift)
+            .border(1.5.dp, ring, NoteCardShape)
             .clip(NoteCardShape)
             .combinedClickable(interactionSource = source, indication = ripple(), onClick = onClick, onLongClick = onLongClick)
             .padding(start = 18.dp, end = 16.dp, top = 14.dp, bottom = 13.dp),

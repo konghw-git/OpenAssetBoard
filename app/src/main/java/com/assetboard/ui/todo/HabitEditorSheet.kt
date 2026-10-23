@@ -83,7 +83,7 @@ internal fun HabitEditorSheet(habits: List<Habit>, vm: TodoViewModel, onDismiss:
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).imePadding().navigationBarsPadding()) {
             Text("每日打卡", style = MaterialTheme.typography.titleLarge)
             Text(
-                "${habits.size}/${Habit.MAX_ACTIVE} 项 · 在待办页打勾，日记里留底",
+                "${habits.size}/${Habit.MAX_ACTIVE} 项 · 在待办页打勾，长按看打卡标准，日记里留底",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
             )
             Column(
@@ -106,7 +106,7 @@ internal fun HabitEditorSheet(habits: List<Habit>, vm: TodoViewModel, onDismiss:
                             HabitForm(
                                 initial = h,
                                 taken = habits.map { it.color },
-                                onSave = { label, icon, color -> vm.updateHabit(h.key, label, icon, color) { open = null } },
+                                onSave = { label, icon, color, rubric -> vm.updateHabit(h.key, label, icon, color, rubric) { open = null } },
                                 onCancel = { open = null },
                                 onRemove = if (habits.size > 1) ({ removing = h.key }) else null,
                             )
@@ -117,7 +117,7 @@ internal fun HabitEditorSheet(habits: List<Habit>, vm: TodoViewModel, onDismiss:
                     HabitForm(
                         initial = null,
                         taken = habits.map { it.color },
-                        onSave = { label, icon, color -> vm.addHabit(label, icon, color) { open = null } },
+                        onSave = { label, icon, color, rubric -> vm.addHabit(label, icon, color, rubric) { open = null } },
                         onCancel = { open = null },
                         onRemove = null,
                     )
@@ -178,18 +178,28 @@ private fun HabitRow(h: Habit, open: Boolean, canUp: Boolean, canDown: Boolean, 
             Icon(h.iconVector, null, tint = h.tint, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(12.dp))
-        Text(h.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(h.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val conditions = h.conditions
+            if (conditions.isNotEmpty()) {
+                Text(
+                    "${conditions.size} 条标准 · " + conditions.joinToString("；"),
+                    style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         IconButton(onClick = { onMove(-1) }, enabled = canUp) { Icon(Icons.Rounded.KeyboardArrowUp, "上移") }
         IconButton(onClick = { onMove(1) }, enabled = canDown) { Icon(Icons.Rounded.KeyboardArrowDown, "下移") }
     }
 }
 
-/** Name, icon and color for a habit; [initial] null for a new one. */
+/** Name, rubric, icon and color for a habit; [initial] null for a new one. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HabitForm(initial: Habit?, taken: List<Long>, onSave: (String, String, Long) -> Unit, onCancel: () -> Unit, onRemove: (() -> Unit)?) {
+private fun HabitForm(initial: Habit?, taken: List<Long>, onSave: (String, String, Long, String) -> Unit, onCancel: () -> Unit, onRemove: (() -> Unit)?) {
     val cs = MaterialTheme.colorScheme
     var label by rememberSaveable(initial?.key) { mutableStateOf(initial?.label.orEmpty()) }
+    var rubric by rememberSaveable(initial?.key) { mutableStateOf(initial?.rubric.orEmpty()) }
     var icon by rememberSaveable(initial?.key) { mutableStateOf(initial?.icon ?: "book") }
     var color by rememberSaveable(initial?.key) { mutableStateOf(initial?.color ?: (HabitColors.firstOrNull { it !in taken } ?: HabitColors.first())) }
     val tint = Color(color)
@@ -200,6 +210,19 @@ private fun HabitForm(initial: Habit?, taken: List<Long>, onSave: (String, Strin
             label = { Text(if (initial == null) "新的打卡" else "名字") },
             supportingText = { Text("${label.trim().length}/${Habit.MAX_LABEL}") },
             singleLine = true,
+            shape = FieldShape,
+            colors = glassFieldColors(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        val kept = Habit.cleanRubric(rubric)
+        OutlinedTextField(
+            rubric, { rubric = it },
+            label = { Text("打卡标准（可选）") },
+            placeholder = { Text("每行一条，做到才算打卡，比如：\n不少于 30 分钟\n心率进入有氧区间") },
+            supportingText = { Text("长按电池格时浮出来看，不用一条条勾 · ${kept.length}/${Habit.MAX_RUBRIC}") },
+            isError = kept.length > Habit.MAX_RUBRIC,
+            minLines = 2,
+            maxLines = 6,
             shape = FieldShape,
             colors = glassFieldColors(),
             modifier = Modifier.fillMaxWidth(),
@@ -242,7 +265,7 @@ private fun HabitForm(initial: Habit?, taken: List<Long>, onSave: (String, Strin
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onCancel) { Text("取消") }
             Spacer(Modifier.width(4.dp))
-            Button(onClick = { onSave(label, icon, color) }, enabled = label.isNotBlank()) { Text(if (initial == null) "添加" else "保存") }
+            Button(onClick = { onSave(label, icon, color, rubric) }, enabled = label.isNotBlank() && kept.length <= Habit.MAX_RUBRIC) { Text(if (initial == null) "添加" else "保存") }
         }
     }
 }

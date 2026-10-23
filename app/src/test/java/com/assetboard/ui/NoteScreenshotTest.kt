@@ -263,9 +263,10 @@ class NoteScreenshotTest {
         }
         show(c)
         compose.onNodeWithText("日记").performClick()
-        compose.waitUntil(8_000) { compose.onAllNodes(hasText("周复盘 ·", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        // The week's tile on the day card.
+        compose.waitUntil(8_000) { compose.onAllNodes(hasText("周复盘", substring = true)).fetchSemanticsNodes().isNotEmpty() }
         capture("64-diary-week-row")
-        compose.onAllNodes(hasText("周复盘 ·", substring = true))[0].performClick()
+        compose.onAllNodes(hasText("周复盘", substring = true))[0].performClick()
         waitFor("这一周的日记")
         capture("65-week")
         compose.onNodeWithContentDescription("上一周").performClick()
@@ -301,8 +302,9 @@ class NoteScreenshotTest {
     @Test fun diaryWithNotes() {
         show(demo())
         compose.onNodeWithText("日记").performClick()
-        waitFor("从这天提炼的笔记")
-        compose.onNodeWithText("从这天提炼的笔记").performClick()
+        // Unfolded inside the day card.
+        compose.waitUntil(8_000) { compose.onAllNodes(hasText("提炼的笔记", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodes(hasText("提炼的笔记", substring = true))[0].performClick()
         capture("60-diary-notes")
     }
 }

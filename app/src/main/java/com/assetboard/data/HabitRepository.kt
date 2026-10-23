@@ -129,24 +129,26 @@ class HabitRepository(
     }
 
     /** Adds a habit at the end, counted from today; returns its key. */
-    suspend fun add(label: String, icon: String, color: Long): String = gate.write {
+    suspend fun add(label: String, icon: String, color: Long, rubric: String = ""): String = gate.write {
         val name = checkLabel(label)
+        val what = checkRubric(rubric)
         db.withTransaction {
             val all = current()
             if (all.count { it.active } >= Habit.MAX_ACTIVE) throw LedgerException("每日打卡最多 ${Habit.MAX_ACTIVE} 项")
             val key = UUID.randomUUID().toString()
-            dao.putHabits(all + Habit(key, name, icon, color, (all.maxOfOrNull { it.position } ?: -1) + 1, addedOn = today().toString()))
+            dao.putHabits(all + Habit(key, name, icon, color, (all.maxOfOrNull { it.position } ?: -1) + 1, addedOn = today().toString(), rubric = what))
             key
         }
     }
 
-    /** Renames or restyles a habit; the days it was already part of show the change too. */
-    suspend fun update(key: String, label: String, icon: String, color: Long) = gate.write {
+    /** Renames, restyles or re-rubrics a habit; the days it was already part of show the change too. */
+    suspend fun update(key: String, label: String, icon: String, color: Long, rubric: String? = null) = gate.write {
         val name = checkLabel(label)
+        val what = rubric?.let(::checkRubric)
         db.withTransaction {
             val all = current()
             val h = all.firstOrNull { it.key == key && it.active } ?: throw LedgerException("这项打卡已经不在了")
-            dao.putHabits(all.map { if (it.key == key) h.copy(label = name, icon = icon, color = color) else it })
+            dao.putHabits(all.map { if (it.key == key) h.copy(label = name, icon = icon, color = color, rubric = what ?: h.rubric) else it })
         }
     }
 
@@ -188,5 +190,11 @@ class HabitRepository(
         if (name.isEmpty()) throw LedgerException("给这项打卡起个名字")
         if (name.length > Habit.MAX_LABEL) throw LedgerException("名字最多 ${Habit.MAX_LABEL} 个字")
         return name
+    }
+
+    private fun checkRubric(rubric: String): String {
+        val clean = Habit.cleanRubric(rubric)
+        if (clean.length > Habit.MAX_RUBRIC) throw LedgerException("打卡标准最多 ${Habit.MAX_RUBRIC} 个字")
+        return clean
     }
 }

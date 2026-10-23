@@ -187,6 +187,17 @@ class NoteRepository(
         batch
     }
 
+    /** Moves the live notes of [ids] to the trash as one batch, for one undo; returns it. */
+    suspend fun deleteMany(ids: List<String>): String = serial {
+        val batch = newId()
+        val now = clock()
+        for (id in ids.distinct()) {
+            val n = dao.note(id)?.takeIf { it.deletedAt == null } ?: continue
+            dao.update(n.copy(deletedAt = now, deleteBatch = batch, bodyRev = n.bodyRev + 1))
+        }
+        batch
+    }
+
     /** Restores the notes of [batch]; notes never collide, so there is nothing to ask. */
     suspend fun restore(batch: String): Boolean = serial {
         val deleted = dao.inBatch(batch).filter { it.deletedAt != null }

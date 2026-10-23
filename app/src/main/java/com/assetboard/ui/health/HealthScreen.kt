@@ -1,6 +1,17 @@
 package com.assetboard.ui.health
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import com.assetboard.ui.components.PullToCreateBox
+import com.assetboard.ui.components.rememberPullToCreate
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -178,6 +189,8 @@ fun HealthScreen(onBack: () -> Unit, startRecording: Boolean = false) {
     var askedProfile by rememberSaveable { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<BodyMeasurement?>(null) }
     val cs = MaterialTheme.colorScheme
+    // Pulling the page down past its top is the hero's 称重.
+    val pull = rememberPullToCreate(enabled = editing == null && !profileOpen) { editing = NEW }
 
     // The first visit without a profile asks for it once; cancelling leaves a weight-only page.
     LaunchedEffect(state) {
@@ -205,14 +218,16 @@ fun HealthScreen(onBack: () -> Unit, startRecording: Boolean = false) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@GlassScaffold
         }
-        HealthContent(
-            s,
-            Modifier.padding(padding),
-            onRecord = { editing = NEW },
-            onOpen = { editing = it.id },
-            onDelete = { deleting = it },
-            onProfile = { profileOpen = true },
-        )
+        PullToCreateBox(pull, "下拉称重", "松手称重", Modifier.fillMaxSize().padding(padding), icon = Icons.Outlined.MonitorWeight) {
+            HealthContent(
+                s,
+                with(LocalDensity.current) { pull.pulled.toDp() },
+                onRecord = { editing = NEW },
+                onOpen = { editing = it.id },
+                onDelete = { deleting = it },
+                onProfile = { profileOpen = true },
+            )
+        }
     }
 
     val s = state
@@ -252,7 +267,8 @@ private const val NEW = "new"
 @Composable
 private fun HealthContent(
     s: HealthState,
-    modifier: Modifier,
+    /** The space a pull opens above the page. */
+    top: Dp,
     onRecord: () -> Unit,
     onOpen: (BodyMeasurement) -> Unit,
     onDelete: (BodyMeasurement) -> Unit,
@@ -263,9 +279,9 @@ private fun HealthContent(
     val latest = s.latest
     val barState = rememberLazyListState()
     LazyColumn(
-        modifier.fillMaxSize().scrollIndicator(barState), state = barState,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        Modifier.fillMaxSize().scrollIndicator(barState), state = barState,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (latest == null) {
             item { Box(Modifier.appear(0)) { EmptyHealth(onRecord) } }
@@ -438,9 +454,9 @@ internal fun HeroFigure(label: String, value: String, grade: String?, modifier: 
 private fun TrendCard(s: HealthState, metric: HealthMetric, range: HealthRange) {
     val cs = MaterialTheme.colorScheme
     val period = remember(s.records, range) { HealthTrend.period(s.records, range.days, System.currentTimeMillis()) } ?: return
-    val chart = remember(period, metric, s.profile, cs.primary) { healthChart(metric, period.points, s.profile, cs.primary, cs.tertiary) }
+    val chart = remember(period, metric, s.profile, cs.primary) { healthChart(metric, period.points, s.profile, cs.primary, cs.tertiary, s.records) }
     var selected by remember(chart) { mutableStateOf<Int?>(null) }
-    SectionCard(contentPadding = PaddingValues(20.dp)) {
+    SectionCard(contentPadding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 SwapText("${metric.label}变化", style = MaterialTheme.typography.titleMedium)
@@ -536,23 +552,24 @@ private fun LegendBand(label: String) {
     }
 }
 
-/** BMI, body fat, fat mass and lean mass for the latest day; "—" where that day lacks the input. */
+/**
+ * BMI, body fat, fat mass and lean mass for the latest day, side by side in one row; "—" where
+ * that day lacks the input.
+ */
 @Composable
 private fun FiguresCard(r: Reading, hasProfile: Boolean) {
-    SectionCard(contentPadding = PaddingValues(16.dp)) {
-        Text("身体成分", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    SectionCard(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)) {
+        Text("身体成分", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            val cell = Modifier.weight(1f).fillMaxHeight()
             FigureCell(
                 "BMI", r.bmi?.let(Health::bmiText) ?: "—", "",
-                r.bmiGrade?.let { it.label to gradeColor(it) }, Modifier.weight(1f),
+                r.bmiGrade?.let { it.label to gradeColor(it) }, cell,
                 hint = if (!hasProfile) "需要身高" else null,
             )
-            FigureCell("体脂率", r.m.bodyFatBp?.let(Health::percent) ?: "—", "%", r.fatGrade?.let { it.label to fatGradeColor(it) }, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FigureCell("脂肪量", r.fatMass?.let(Health::kg) ?: "—", "kg", null, Modifier.weight(1f))
-            FigureCell("去脂体重", r.leanMass?.let(Health::kg) ?: "—", "kg", null, Modifier.weight(1f))
+            FigureCell("体脂率", r.m.bodyFatBp?.let(Health::percent) ?: "—", "%", r.fatGrade?.let { it.label to fatGradeColor(it) }, cell)
+            FigureCell("脂肪量", r.fatMass?.let(Health::kg) ?: "—", "kg", null, cell)
+            FigureCell("去脂体重", r.leanMass?.let(Health::kg) ?: "—", "kg", null, cell)
         }
     }
 }
@@ -560,19 +577,19 @@ private fun FiguresCard(r: Reading, hasProfile: Boolean) {
 @Composable
 private fun FigureCell(label: String, value: String, unit: String, grade: Pair<String, Color>?, modifier: Modifier, hint: String? = null) {
     val cs = MaterialTheme.colorScheme
-    Column(modifier.clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainerHigh).padding(horizontal = 14.dp, vertical = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-            grade?.let { (text, color) ->
-                Text(text, color = color, style = MaterialTheme.typography.labelSmall, modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.12f)).padding(horizontal = 7.dp, vertical = 1.dp))
-            }
+    Column(modifier.clip(RoundedCornerShape(12.dp)).background(cs.surfaceContainerHigh).padding(horizontal = 8.dp, vertical = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 2.dp)) {
+            Text(value, style = MaterialTheme.typography.titleMedium.merge(NumberStyle), maxLines = 1)
+            if (value != "—" && unit.isNotEmpty()) Text(unit, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp))
         }
-        Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, style = MaterialTheme.typography.titleLarge.merge(NumberStyle))
-            if (value != "—" && unit.isNotEmpty()) Text(unit, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 3.dp, bottom = 3.dp))
+        grade?.let { (text, color) ->
+            Text(
+                text, color = color, style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                modifier = Modifier.padding(top = 3.dp).clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.12f)).padding(horizontal = 6.dp),
+            )
         }
-        hint?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = cs.outline) }
+        hint?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = cs.outline, maxLines = 1, modifier = Modifier.padding(top = 3.dp)) }
     }
 }
 
@@ -589,23 +606,24 @@ private fun TargetCard(s: HealthState, profile: HealthProfile, range: HealthRang
     val period = remember(s.records, range) { HealthTrend.period(s.records, range.days, System.currentTimeMillis()) }
     val start = period?.start
     val progress = if (start != null && start !== latest) HealthTrend.targetProgress(start.weightG, latest.weightG, target) else null
-    SectionCard(contentPadding = PaddingValues(20.dp)) {
+    SectionCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+        val gap = latest.weightG - target
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("目标体重", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    if (profile.targetWeightG == null) "按 BMI 22 计算，可在档案里修改" else "自定目标",
-                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                    if (profile.targetWeightG == null) "按 BMI 22 计算，可在档案里改" else "自定目标",
+                    style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
                 )
             }
-            Text("${Health.kg(target)} kg", style = MaterialTheme.typography.titleLarge.merge(NumberStyle))
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${Health.kg(target)} kg", style = MaterialTheme.typography.titleMedium.merge(NumberStyle))
+                Text(
+                    if (gap == 0L) "已经到达" else "还差 ${Health.kg(kotlin.math.abs(gap))} kg",
+                    style = MaterialTheme.typography.labelSmall.merge(NumberStyle), color = cs.onSurfaceVariant,
+                )
+            }
         }
-        Spacer(Modifier.height(14.dp))
-        val gap = latest.weightG - target
-        Text(
-            if (gap == 0L) "已经到达目标" else "距目标 ${Health.kgDelta(gap)} kg",
-            style = MaterialTheme.typography.bodyMedium,
-        )
         if (progress != null && start != null) {
             val shown = remember { Animatable(0f) }
             // A slow fill on first show; a switch of range just moves it.
@@ -613,20 +631,20 @@ private fun TargetCard(s: HealthState, profile: HealthProfile, range: HealthRang
                 val first = shown.value == 0f
                 shown.animateTo(progress.toFloat(), tween(if (first) 1_000 else 520, delayMillis = if (first) 200 else 0, easing = FastOutSlowInEasing))
             }
-            Spacer(Modifier.height(8.dp))
-            Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)).background(cs.primary.copy(alpha = 0.12f))) {
-                Box(Modifier.fillMaxWidth(shown.value).height(8.dp).clip(RoundedCornerShape(50)).background(Brush.horizontalGradient(listOf(cs.primary.copy(alpha = 0.6f), cs.primary))))
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(50)).background(cs.primary.copy(alpha = 0.12f))) {
+                Box(Modifier.fillMaxWidth(shown.value).height(6.dp).clip(RoundedCornerShape(50)).background(Brush.horizontalGradient(listOf(cs.primary.copy(alpha = 0.6f), cs.primary))))
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             SwapText(
                 "自 ${dayLabel(start.date)}（${Health.kg(start.weightG)} kg）走完 ${(progress * 100).roundToLong()}%",
-                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
             )
         }
-        Spacer(Modifier.height(10.dp))
         Text(
             "健康区间 ${Health.kg(healthy.first)}–${Health.kg(healthy.last + 1)} kg（BMI 18.5–24）",
-            style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall, color = cs.outline,
+            modifier = Modifier.padding(top = 6.dp),
         )
     }
 }
@@ -644,8 +662,8 @@ private fun BodyTypeCard(r: Reading) {
         "18.5–24" to listOf(Health.BodyType.MUSCULAR, Health.BodyType.HEALTHY, Health.BodyType.HIDDEN_FAT),
         "< 18.5" to listOf(Health.BodyType.THIN, Health.BodyType.SLIM, Health.BodyType.UNDERWEIGHT),
     )
-    SectionCard(contentPadding = PaddingValues(16.dp)) {
-        Row(Modifier.padding(start = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    SectionCard(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)) {
+        Row(Modifier.padding(start = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("身体类型", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             AnimatedContent(type?.label, label = "type") { t ->
                 Text(t ?: "", style = MaterialTheme.typography.titleMedium, color = cs.primary)
@@ -655,20 +673,20 @@ private fun BodyTypeCard(r: Reading) {
             Text("记录体脂率后显示身体类型", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
             return@SectionCard
         }
-        Row(Modifier.padding(start = 56.dp, bottom = 4.dp)) {
+        Row(Modifier.padding(start = 56.dp, bottom = 2.dp)) {
             listOf("体脂 < 10%", "10–20%", "≥ 20%").forEach {
                 Text(it, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             }
         }
         rows.forEachIndexed { ri, (label, cells) ->
-            Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.width(56.dp))
                 cells.forEachIndexed { ci, cell ->
                     val on = cell == type
                     val bg by animateColorAsState(if (on) cs.primaryContainer else cs.surfaceContainerHigh, tween(300), label = "cell")
                     val pop by animateFloatAsState(if (on) 1f else 0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "dot")
                     Box(
-                        Modifier.weight(1f).padding(horizontal = 3.dp).height(46.dp).clip(RoundedCornerShape(12.dp)).background(bg),
+                        Modifier.weight(1f).padding(horizontal = 3.dp).height(36.dp).clip(RoundedCornerShape(10.dp)).background(bg),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -694,27 +712,38 @@ private fun BodyTypeCard(r: Reading) {
 }
 
 /**
- * Every record, newest first, each against the record before it. A day without a weigh-in has
- * no row. Long press deletes; tap edits.
+ * Every record, newest first, each against the record before it, folded under its head until
+ * opened (the chart already shows them); a tap on the head opens and folds it. A day without a
+ * weigh-in has no row. Long press deletes; tap edits.
  */
 @Composable
 private fun RecordsCard(s: HealthState, onOpen: (BodyMeasurement) -> Unit, onDelete: (BodyMeasurement) -> Unit) {
     val cs = MaterialTheme.colorScheme
+    var open by rememberSaveable { mutableStateOf(false) }
     var all by rememberSaveable { mutableStateOf(false) }
+    val turn by animateFloatAsState(if (open) 180f else 0f, tween(220), label = "recordsFold")
     val desc = s.records.asReversed()
     val shown = if (all) desc else desc.take(20)
     SectionCard {
-        Row(Modifier.padding(start = 20.dp, end = 12.dp, top = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("全部记录", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-            Text("${s.records.size} 条 · 长按删除", style = MaterialTheme.typography.labelSmall, color = cs.outline)
+        Row(
+            Modifier.fillMaxWidth().clickable(onClickLabel = if (open) "收起" else "展开") { open = !open }.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("全部记录", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(if (open) "${s.records.size} 条 · 长按删除" else "${s.records.size} 条", style = MaterialTheme.typography.labelSmall, color = cs.outline)
+            Icon(Icons.Default.ExpandMore, null, tint = cs.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp).size(22.dp).rotate(turn))
         }
-        shown.forEachIndexed { i, m ->
-            val prev = s.records.getOrNull(s.records.size - 2 - i)
-            if (i > 0) androidx.compose.material3.HorizontalDivider(Modifier.padding(start = 72.dp), color = cs.outlineVariant)
-            RecordRow(m, prev, s.profile, onClick = { onOpen(m) }, onLongClick = { onDelete(m) })
-        }
-        if (!all && desc.size > shown.size) {
-            TextButton(onClick = { all = true }, modifier = Modifier.fillMaxWidth()) { Text("显示全部 ${desc.size} 条") }
+        AnimatedVisibility(open, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Column {
+                shown.forEachIndexed { i, m ->
+                    val prev = s.records.getOrNull(s.records.size - 2 - i)
+                    if (i > 0) androidx.compose.material3.HorizontalDivider(Modifier.padding(start = 72.dp), color = cs.outlineVariant)
+                    RecordRow(m, prev, s.profile, onClick = { onOpen(m) }, onLongClick = { onDelete(m) })
+                }
+                if (!all && desc.size > shown.size) {
+                    TextButton(onClick = { all = true }, modifier = Modifier.fillMaxWidth()) { Text("显示全部 ${desc.size} 条") }
+                }
+            }
         }
     }
 }

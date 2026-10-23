@@ -89,6 +89,29 @@ class FoodRepository(
         }
     }
 
+    /**
+     * One more portion of an entry counted in portions (not from a label): 2 份 becomes 3 份, and a
+     * portion never counted becomes 2. Returns the entry as it was, for [putBack].
+     */
+    suspend fun oneMore(id: String): FoodEntry = gate.write {
+        db.withTransaction {
+            val e = dao.entry(id) ?: throw LedgerException("这条记录已不存在")
+            ensure(e.unit !in FoodUnit.labelUnits) { "按包装记的不能按份加" }
+            val halves = Energy.servingHalves(e) + Energy.SERVING_PER
+            ensure(halves <= Energy.SERVINGS_MAX_HALVES) { "最多 ${Energy.SERVINGS_MAX_HALVES / Energy.SERVING_PER} 份" }
+            val next = e.copy(per = Energy.SERVING_PER, amount = halves, unit = FoodUnit.SERVING, updatedAt = clock())
+            check(next)
+            dao.update(next)
+            e
+        }
+    }
+
+    /** Undoes [oneMore]: the entry as it was, if it is still there. */
+    suspend fun putBack(e: FoodEntry) = gate.write {
+        check(e)
+        db.withTransaction { if (dao.entry(e.id) != null) dao.update(e) }
+    }
+
     /** Removes the entry and hands it back, so an undo can put it back as it was. */
     suspend fun delete(id: String): FoodEntry? = gate.write {
         db.withTransaction { dao.entry(id)?.also { dao.delete(id) } }

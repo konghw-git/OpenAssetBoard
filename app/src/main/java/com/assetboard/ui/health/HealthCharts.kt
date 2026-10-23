@@ -54,7 +54,7 @@ enum class HealthRange(val label: String, val days: Long?) {
 
 /** What [com.assetboard.ui.components.LineChart] is handed for one metric and one period. */
 class HealthChart(
-    /** The original line first, then each run of the moving average as its own dashed series. */
+    /** The original line first, then the moving average as a dashed series when there is one. */
     val series: List<ChartSeries>,
     /** The records behind the first series, in its order, so a selected index maps back to a day. */
     val records: List<BodyMeasurement>,
@@ -66,17 +66,26 @@ class HealthChart(
 fun dateX(date: String): Long = HealthTrend.measurementAt(BodyMeasurement("", date, 0, 0, null, null, 0, 0))
 
 /**
- * The series for [metric] over [points]. The moving average comes back from the domain as
- * contiguous runs; each run becomes one dashed series so a gap stays a gap. Target and band are
- * plain values for the chart's background, never series: a series would be scrubbed and would
- * stretch the y range.
+ * The series for [metric] over [points]. The moving average is one dashed line over the same
+ * days, its windows reaching back into [history] before the period. Target and band are plain
+ * values for the chart's background, never series: a series would be scrubbed and would stretch
+ * the y range.
  */
-fun healthChart(metric: HealthMetric, points: List<BodyMeasurement>, profile: HealthProfile?, line: Color, average: Color): HealthChart {
+fun healthChart(
+    metric: HealthMetric,
+    points: List<BodyMeasurement>,
+    profile: HealthProfile?,
+    line: Color,
+    average: Color,
+    history: List<BodyMeasurement> = points,
+): HealthChart {
     val height = profile?.heightMm
     val records = points.filter { metric.value(it, height) != null }
     val main = ChartSeries(records.map { ChartPoint(dateX(it.date), metric.value(it, height)!!) }, line, fill = true)
-    val runs = HealthTrend.movingAverage(points) { metric.value(it, height) }
-        .map { run -> ChartSeries(run.map { (d, v) -> ChartPoint(dateX(d), v) }, average, dashed = true) }
+    val runs = HealthTrend.movingAverage(points, history) { metric.value(it, height) }
+        .takeIf { it.isNotEmpty() }
+        ?.let { avg -> listOf(ChartSeries(avg.map { (d, v) -> ChartPoint(dateX(d), v) }, average, dashed = true)) }
+        .orEmpty()
     val (target, label, band) = when (metric) {
         HealthMetric.WEIGHT -> if (profile == null) Triple(null, null, null) else {
             val t = Health.targetWeightG(profile.heightMm, profile.targetWeightG)

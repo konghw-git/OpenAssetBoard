@@ -118,6 +118,12 @@ import com.assetboard.ui.components.rememberBackdrop
 import com.assetboard.ui.components.rememberReorderState
 import com.assetboard.ui.components.rememberSwipeGroup
 import com.assetboard.ui.components.reorderable
+import com.assetboard.ui.components.CarryBadge
+import com.assetboard.ui.components.foldedAway
+import com.assetboard.ui.components.heightAbove
+import com.assetboard.ui.components.stackUnder
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.outlined.Delete
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -131,7 +137,7 @@ import com.assetboard.ui.components.scrollIndicator
 
 /** How the list is ordered. Only the hand-set order can be changed by dragging. */
 enum class NoteSort(val label: String, val note: String) {
-    CUSTOM("自定义顺序", "长按笔记拖动排序，新笔记排在最上面"),
+    CUSTOM("自定义顺序", "长按拖动排序，按住不动是多选；新笔记排在最上面"),
     UPDATED("最近更新", "改过的笔记排到前面"),
     CREATED("最近创建", "新写的排到前面"),
 }
@@ -183,9 +189,11 @@ class NotesViewModel(private val container: AppContainer) : ActionViewModel(cont
         sort.value = s
     }
 
-    /** Dragging needs the hand-set order; offers to switch to it. */
-    fun explainDrag() {
-        _events.tryEmit(UndoEvent("按「${sort.value.label}」排列时不能拖动", action = "改为自定义") { setSort(NoteSort.CUSTOM) })
+    /** The selected notes to the trash together, with one undo. */
+    fun deleteMany(ids: List<String>) = action {
+        if (ids.isEmpty()) return@action
+        val batch = notes.deleteMany(ids)
+        _events.tryEmit(UndoEvent("${ids.size} 篇笔记已移到回收站") { notes.restore(batch) })
     }
 
     fun draftToNote(d: NoteDraft, onDone: (String) -> Unit) = action { onDone(notes.draftToNote(d.id)) }
@@ -220,8 +228,10 @@ private fun noteKey(id: String) = "note:$id"
 /**
  * The notes tab: only a list. Writing happens on its own page and searching on another, so
  * nothing here takes the keyboard and swiping between tabs never fights with typing. Cards are
- * glass over the page's ambient colour; swipe left deletes, right pins or files; in the
- * hand-set order a long press picks a card up to move it.
+ * glass over the page's ambient colour; swipe left deletes, right pins or files. A long press
+ * held still selects (then taps add to the selection, and the header deletes them together); in
+ * the hand-set order a long press that moves picks the card up, and with it the other selected
+ * cards of its section, to drop them together.
  */
 @Composable
 fun NotesScreen(
@@ -257,9 +267,12 @@ fun NotesScreen(
 
     // A topic deleted meanwhile falls back to everything.
     val filter = if (filterRaw == NotesViewModel.ALL || filterRaw == NotesViewModel.UNSORTED || topics.any { it.id == filterRaw }) filterRaw else NotesViewModel.ALL
-    // Pull the list down to start a note, in the topic being looked at.
-    val pull = rememberPullToCreate { onNew(filter.takeIf { it != NotesViewModel.ALL && it != NotesViewModel.UNSORTED }) }
+    // The selected notes' ids; a note gone meanwhile (deleted elsewhere, an undo) drops out.
+    var selection by remember { mutableStateOf(setOf<String>()) }
+    BackHandler(selection.isNotEmpty()) { selection = emptySet() }
     val notes = all.orEmpty()
+    LaunchedEffect(notes) { if (selection.isNotEmpty()) selection = selection.filterTo(mutableSetOf()) { id -> notes.any { it.id == id } } }
+    LaunchedEffect(filter) { selection = emptySet() }
     val counts = remember(notes) { notes.groupingBy { it.topicId }.eachCount() }
     val shown = remember(notes, filter, sort) {
         val picked = when (filter) {
@@ -275,6 +288,9 @@ fun NotesScreen(
     }
     // The order on screen; a drag rearranges it here and saves it on release.
     var order by remember(shown) { mutableStateOf(shown) }
+    // Picking up one of several selected notes carries the others of its section (pinned or not)
+    // along: they fold away while it moves and land right after it, in their order.
+    var carried by remember(shown) { mutableStateOf(emptyList<Note>()) }
     val custom = sort == NoteSort.CUSTOM
     val reorder = rememberReorderState(
         listState,
@@ -289,10 +305,33 @@ fun NotesScreen(
             }
         },
         onDrop = { key ->
+            if (carried.isNotEmpty()) {
+                val rest = order - carried.toSet()
+                val at = rest.indexOfFirst { noteKey(it.id) == key }
+                if (at >= 0) order = rest.toMutableList().apply { addAll(at + 1, carried) }
+            }
+            carried = emptyList()
             val moved = order.firstOrNull { noteKey(it.id) == key } ?: return@rememberReorderState
             vm.reorder(order.filter { it.pinned == moved.pinned }.map { it.id })
         },
+        // Held without moving: the long press selects.
+        onHold = { key ->
+            carried = emptyList()
+            order.firstOrNull { noteKey(it.id) == key }?.let { n -> selection = if (n.id in selection) selection - n.id else selection + n.id }
+        },
+        onStart = start@{ key ->
+            val me = order.firstOrNull { noteKey(it.id) == key }
+            if (me == null || me.id !in selection || selection.size < 2) return@start 0f
+            val ride = order.filter { it.id != me.id && it.id in selection && it.pinned == me.pinned }
+            if (ride.isEmpty()) return@start 0f
+            carried = ride
+            listState.heightAbove(key, ride.map { noteKey(it.id) })
+        },
     )
+    // Pull the list down to start a note, in the topic being looked at; not while selecting or dragging.
+    val pull = rememberPullToCreate(enabled = selection.isEmpty() && reorder.dragging == null) {
+        onNew(filter.takeIf { it != NotesViewModel.ALL && it != NotesViewModel.UNSORTED })
+    }
 
     Box(Modifier.fillMaxSize().ambient(ambient)) {
         CompositionLocalProvider(LocalAmbient provides ambient) {
@@ -300,10 +339,21 @@ fun NotesScreen(
             Scaffold(
                 containerColor = Color.Transparent,
                 topBar = {
-                    TabHeader("笔记", subtitle(notes.size, topics.size)) {
-                        HeaderAction(Icons.Outlined.Search, "搜索笔记", onSearch)
-                        SortAction(sort, vm::setSort)
-                        SettingsAction(onSettings)
+                    if (selection.isNotEmpty()) {
+                        TabHeader("已选 ${selection.size} 篇", if (custom) "拖动选中的一篇，其余跟着一起走" else "按住不动可以继续多选") {
+                            HeaderAction(Icons.Outlined.Delete, "删除选中的笔记", {
+                                // In the order they show, so an undo brings them back as they were.
+                                vm.deleteMany(order.filter { it.id in selection }.map { it.id })
+                                selection = emptySet()
+                            }, tint = cs.error)
+                            HeaderAction(Icons.Default.Close, "取消选择", { selection = emptySet() })
+                        }
+                    } else {
+                        TabHeader("笔记", subtitle(notes.size, topics.size)) {
+                            HeaderAction(Icons.Outlined.Search, "搜索笔记", onSearch)
+                            SortAction(sort, vm::setSort)
+                            SettingsAction(onSettings)
+                        }
                     }
                 },
             ) { padding ->
@@ -351,31 +401,52 @@ fun NotesScreen(
                             val pinned = order.filter { it.pinned }
                             val rest = order.filterNot { it.pinned }
                             val showTopic = filter == NotesViewModel.ALL
+                            val selecting = selection.isNotEmpty()
+                            val stackColor = cs.primary
                             val card: @Composable LazyItemScope.(Note) -> Unit = { n ->
                                 val key = noteKey(n.id)
                                 val dragged = reorder.dragging == key
-                                SwipeActionsBox(
-                                    key = key,
-                                    group = swipe,
-                                    shape = NoteCardShape,
-                                    modifier = Modifier
+                                val stack = if (dragged) carried.size else 0
+                                fun toggle() { selection = if (n.id in selection) selection - n.id else selection + n.id }
+                                Box(
+                                    Modifier
+                                        .then(if (n in carried) Modifier.foldedAway() else Modifier)
                                         .zIndex(if (dragged) 1f else 0f)
                                         .graphicsLayer { translationY = if (dragged) reorder.offset else 0f }
-                                        .then(if (dragged) Modifier else Modifier.animateItem()),
-                                    actions = listOf(
-                                        SwipeAction(if (n.pinned) "取消置顶" else "置顶", if (n.pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, cs.secondary) { vm.togglePin(n) },
-                                        SwipeAction("主题", Icons.AutoMirrored.Outlined.Label, cs.tertiary) { filingId = n.id },
-                                    ),
-                                    onDelete = { vm.delete(n) },
-                                    enabled = reorder.dragging == null,
+                                        .then(if (dragged) Modifier else Modifier.animateItem())
+                                        // The notes carried along peek out under the one held.
+                                        .then(if (stack > 0) Modifier.drawBehind { stackUnder(stack, stackColor, side = 0f, top = 0f, corner = 22.dp.toPx()) } else Modifier),
                                 ) {
-                                    NoteCard(
-                                        n, topics, { onOpen(n.id) },
-                                        Modifier.reorderable(reorder, key, enabled = custom),
-                                        showTopic = showTopic,
-                                        lifted = dragged,
-                                        onLongClick = if (custom) null else vm::explainDrag,
-                                    )
+                                    SwipeActionsBox(
+                                        key = key,
+                                        group = swipe,
+                                        shape = NoteCardShape,
+                                        actions = listOf(
+                                            SwipeAction(if (n.pinned) "取消置顶" else "置顶", if (n.pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, cs.secondary) { vm.togglePin(n) },
+                                            SwipeAction("主题", Icons.AutoMirrored.Outlined.Label, cs.tertiary) { filingId = n.id },
+                                        ),
+                                        onDelete = { vm.delete(n) },
+                                        enabled = reorder.dragging == null && !selecting,
+                                    ) {
+                                        NoteCard(
+                                            n, topics,
+                                            onClick = {
+                                                when {
+                                                    // The lift after a long press that picked the card up (and selected it, held still).
+                                                    reorder.ownsClick(key) -> {}
+                                                    selecting -> toggle()
+                                                    else -> onOpen(n.id)
+                                                }
+                                            },
+                                            modifier = Modifier.reorderable(reorder, key, enabled = custom),
+                                            showTopic = showTopic,
+                                            lifted = dragged,
+                                            // Where a long press cannot pick the card up, it only selects.
+                                            onLongClick = if (custom) null else ({ toggle() }),
+                                            selected = n.id in selection,
+                                        )
+                                    }
+                                    if (stack > 0) CarryBadge("${stack + 1} 篇", Modifier.align(Alignment.TopEnd).padding(end = 10.dp).graphicsLayer { translationY = -6.dp.toPx() })
                                 }
                             }
                             if (pinned.isNotEmpty()) {

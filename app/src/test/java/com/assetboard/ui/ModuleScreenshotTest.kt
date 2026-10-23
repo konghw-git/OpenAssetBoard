@@ -30,6 +30,7 @@ import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import com.assetboard.ui.components.DustHost
@@ -201,12 +202,16 @@ class ModuleScreenshotTest {
         compose.onRoot().captureRoboImage("screenshots/20d-habit-editor.png", roborazziOptions = SHOT_OPTIONS)
         compose.onNodeWithText("添加打卡").performClick()
         compose.mainClock.advanceTimeBy(1_000)
-        compose.onNode(hasSetTextAction()).performTextReplacement("读书")
+        // The name, then the rubric under it.
+        compose.onAllNodes(hasSetTextAction())[0].performTextReplacement("读书")
+        compose.onAllNodes(hasSetTextAction())[1].performTextReplacement("每天 20 页\n做笔记")
         compose.mainClock.advanceTimeBy(1_000)
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("screenshots/20e-habit-new.png", roborazziOptions = SHOT_OPTIONS)
-        compose.onNodeWithText("添加").performClick()
+        // The form is taller with the rubric: bring the button into view first.
+        compose.onNodeWithText("添加").performScrollTo().performClick()
         compose.waitUntil(5_000) { runBlocking { d.c.habits.observeActive().first().size } == 6 }
+        assert(runBlocking { d.c.habits.observeActive().first().last().conditions } == listOf("每天 20 页", "做笔记")) { "the rubric is saved" }
     }
 
     /** Seven habits fill the battery; the diary shows today's seven, past days their five. */

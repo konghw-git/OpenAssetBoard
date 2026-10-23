@@ -187,7 +187,9 @@ class RoundTwoShotTest {
         compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithText("已选 2 条").assertExists()
         shot("61-todo-selected")
-        compose.onNodeWithContentDescription("作为检查项创建新待办").performClick()
+        compose.onNodeWithContentDescription("更多操作").performClick()
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("作为检查项创建新待办").performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("给新待办起个标题")).fetchSemanticsNodes().isNotEmpty() }
         compose.mainClock.advanceTimeBy(500)
         shot("62-todo-gathered")
@@ -239,14 +241,21 @@ class RoundTwoShotTest {
             c.food.save(FoodDraft(null, today, "鸡胸肉沙拉", null, null, null, 420_000, false, null, null, null, null))
         }
         set(c) { FoodScreen({}) }
+        // Folded to a line of names until its head is tapped.
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("吃了什么")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("吃了什么").performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("鸡胸肉沙拉")).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithText("鸡胸肉沙拉").performTouchInput { down(center); repeat(8) { moveBy(Offset(10f, 0f)) }; moveBy(Offset(120f, 0f)) }
         compose.mainClock.advanceTimeBy(500)
         compose.onRoot().captureRoboImage("screenshots/58-food-again.png", roborazziOptions = SHOT_OPTIONS)
         compose.onNodeWithText("鸡胸肉沙拉").performTouchInput { up() }
         compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithText("再来一份").performClick()
-        compose.waitUntil(5_000) { runBlocking { c.food.entries.first().size } == 3 }
+        // Today's portion takes one more in place, and its row says so.
+        compose.waitUntil(5_000) { runBlocking { c.food.entries.first().singleOrNull { it.name == "鸡胸肉沙拉" }?.amount } == 4 }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("2 份 · 每份 420 kcal")).fetchSemanticsNodes().isNotEmpty() }
+        assert(runBlocking { c.food.entries.first().size } == 2) { "no second row" }
     }
 
     @Test fun foodAgainstRestingRate() {

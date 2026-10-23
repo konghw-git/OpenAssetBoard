@@ -1,5 +1,17 @@
 package com.assetboard.ui.health
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import com.assetboard.ui.components.PullToCreateBox
+import com.assetboard.ui.components.rememberPullToCreate
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -110,7 +122,7 @@ import java.time.LocalDate
 /** Every entry, oldest first, with what the burn needs: the profile and the weigh-ins. */
 data class FoodState(val entries: List<FoodEntry>, val profile: HealthProfile?, val records: List<BodyMeasurement>) {
     fun day(date: LocalDate): Energy.Day = Energy.day(date, entries, profile, records)
-    val recent: List<FoodEntry> by lazy { Energy.recent(entries) }
+    val recent: List<FoodEntry> by lazy { Energy.recent(entries, RECENT_MAX) }
 }
 
 class FoodViewModel(private val container: AppContainer) : ActionViewModel(container) {
@@ -129,9 +141,19 @@ class FoodViewModel(private val container: AppContainer) : ActionViewModel(conta
         _events.tryEmit(UndoEvent("已删除「${foodName(gone).take(12)}」") { repo.restore(gone) })
     }
 
-    /** Eaten again: the same entry, today, with an undo. A right swipe on any day's entry. */
+    /**
+     * Eaten again, from a right swipe, with an undo. Today's entry counted in portions takes one
+     * more portion in place, so its row says how many; a label entry, or one from another day, is
+     * recorded again today as an entry of its own.
+     */
     fun eatAgain(e: FoodEntry) = action {
         val today = repo.today()
+        if (e.date == today.toString() && e.unit !in FoodUnit.labelUnits) {
+            val before = repo.oneMore(e.id)
+            val now = Energy.servings(Energy.servingHalves(before) + Energy.SERVING_PER)
+            _events.tryEmit(UndoEvent("「${foodName(e).take(12)}」再来一份，共 $now 份") { repo.putBack(before) })
+            return@action
+        }
         val id = repo.save(FoodDraft(null, today, e.name, e.per, e.amount, e.unit, e.energyCal, e.inKj, e.proteinMg, e.fatMg, e.carbMg, e.sodiumMg))
         val where = if (e.date == today.toString()) "又记了一份" else "已记到今天"
         _events.tryEmit(UndoEvent("$where「${foodName(e).take(12)}」") { repo.delete(id) })
@@ -148,11 +170,21 @@ class FoodViewModel(private val container: AppContainer) : ActionViewModel(conta
 
 fun foodName(e: FoodEntry): String = e.name ?: "未命名"
 
-/** "500 ml · 每 100 ml 40.9 kcal", "2 份 · 每份 70 kcal", or what a portion typed in whole is. */
+/**
+ * How much and at what rate, the same shape however the energy went in: "500 ml · 每 100 ml
+ * 40.9 kcal" from a label, "2 份 · 每份 70 kcal" from a guess, a single portion as "1 份".
+ */
 fun foodPortion(e: FoodEntry): String = when {
-    e.unit == FoodUnit.SERVING -> "${Energy.servings(Energy.servingHalves(e))} 份 · 每份 ${Energy.energyInput(e.energyCal, false)} kcal"
-    e.per == null || e.amount == null || e.unit == null -> "直接填的热量"
-    else -> "${e.amount} ${e.unit.label} · 每 ${e.per} ${e.unit.label} ${Energy.energyInput(e.energyCal, false)} kcal"
+    e.unit in FoodUnit.labelUnits && e.per != null && e.amount != null ->
+        "${e.amount} ${e.unit!!.label} · 每 ${e.per} ${e.unit.label} ${Energy.energyInput(e.energyCal, false)} kcal"
+    else -> "${Energy.servings(Energy.servingHalves(e))} 份 · 每份 ${Energy.energyInput(e.energyCal, false)} kcal"
+}
+
+/** "水煮蛋×2", "燕麦奶": an entry in the folded list's one line. */
+private fun foodShort(e: FoodEntry): String {
+    val halves = Energy.servingHalves(e)
+    val many = e.unit !in FoodUnit.labelUnits && halves != Energy.SERVING_PER
+    return foodName(e) + if (many) "×" + Energy.servings(halves) else ""
 }
 
 /**
@@ -175,6 +207,8 @@ fun FoodScreen(onBack: () -> Unit, startRecording: Boolean = false, onWeigh: () 
     var picking by rememberSaveable { mutableStateOf(false) }
     var profileOpen by rememberSaveable { mutableStateOf(false) }
     val day = LocalDate.parse(selected)
+    // Pulling the page down past its top is the hero's 记一笔.
+    val pull = rememberPullToCreate(enabled = editing == null && !profileOpen) { editing = NEW }
 
     GlassScaffold(
         topBar = {
@@ -194,16 +228,18 @@ fun FoodScreen(onBack: () -> Unit, startRecording: Boolean = false, onWeigh: () 
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@GlassScaffold
         }
-        FoodContent(
-            s, day, today, Modifier.padding(padding),
-            onSelect = { selected = it.toString() },
-            onRecord = { editing = NEW },
-            onOpen = { editing = it.id },
-            onDelete = { vm.delete(it.id) },
-            onAgain = vm::eatAgain,
-            onProfile = { profileOpen = true },
-            onWeigh = onWeigh,
-        )
+        PullToCreateBox(pull, "下拉记一笔", "松手记一笔", Modifier.fillMaxSize().padding(padding), icon = Icons.Outlined.Restaurant) {
+            FoodContent(
+                s, day, today, with(LocalDensity.current) { pull.pulled.toDp() },
+                onSelect = { selected = it.toString() },
+                onRecord = { editing = NEW },
+                onOpen = { editing = it.id },
+                onDelete = { vm.delete(it.id) },
+                onAgain = vm::eatAgain,
+                onProfile = { profileOpen = true },
+                onWeigh = onWeigh,
+            )
+        }
     }
 
     val s = state
@@ -243,12 +279,16 @@ fun FoodScreen(onBack: () -> Unit, startRecording: Boolean = false, onWeigh: () 
 
 private const val NEW = "new"
 
+/** How many things eaten before the sheet offers. */
+private const val RECENT_MAX = 30
+
 @Composable
 private fun FoodContent(
     s: FoodState,
     date: LocalDate,
     today: LocalDate,
-    modifier: Modifier,
+    /** The space a pull opens above the page. */
+    top: Dp,
     onSelect: (LocalDate) -> Unit,
     onRecord: () -> Unit,
     onOpen: (FoodEntry) -> Unit,
@@ -260,9 +300,9 @@ private fun FoodContent(
     val day = remember(s, date) { s.day(date) }
     val barState = rememberLazyListState()
     LazyColumn(
-        modifier.fillMaxSize().scrollIndicator(barState), state = barState,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        Modifier.fillMaxSize().scrollIndicator(barState), state = barState,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { Box(Modifier.appear(0)) { DayHero(s, day, today, onRecord, onToday = { onSelect(today) }, onProfile, onWeigh) } }
         item { Box(Modifier.appear(1)) { EntriesCard(day, today, onOpen, onDelete, onAgain) } }
@@ -456,34 +496,59 @@ private fun pane(): Color {
 private val PaneShape = RoundedCornerShape(14.dp)
 
 /**
- * The day's entries in the order they were eaten. Tap edits; a left swipe deletes, a right swipe
- * records it again today (再来一份, or 记到今天 from another day); both with an undo.
+ * The day's entries in the order they were eaten, folded to one line of names until opened (the
+ * hero already has the sum); it opens and folds on a tap of its head. Tap an entry to edit it; a
+ * left swipe deletes, a right swipe records it again today (再来一份, or 记到今天 from another
+ * day); both with an undo.
  */
 @Composable
 private fun EntriesCard(day: Energy.Day, today: LocalDate, onOpen: (FoodEntry) -> Unit, onDelete: (FoodEntry) -> Unit, onAgain: (FoodEntry) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val swipe = rememberSwipeGroup()
     val again = if (day.date == today) "再来一份" else "记到今天"
-    SectionCard(contentPadding = PaddingValues(10.dp)) {
-        Row(Modifier.padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("吃了什么", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (day.entries.isNotEmpty()) Text("${day.entries.size} 笔 · 右滑$again · 左滑删除", style = MaterialTheme.typography.labelSmall, color = cs.outline)
+    var open by rememberSaveable { mutableStateOf(false) }
+    val turn by animateFloatAsState(if (open) 180f else 0f, tween(220), label = "entriesFold")
+    val any = day.entries.isNotEmpty()
+    SectionCard(contentPadding = PaddingValues(8.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .then(if (any) Modifier.clickable(onClickLabel = if (open) "收起" else "展开") { open = !open } else Modifier)
+                .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("吃了什么", style = MaterialTheme.typography.titleMedium)
+                    if (any) Text("  ${day.entries.size} 笔", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                }
+                if (any) {
+                    Text(
+                        if (open) "右滑$again · 左滑删除 · 点一下修改" else day.entries.joinToString("、", transform = ::foodShort),
+                        style = MaterialTheme.typography.labelMedium, color = cs.outline, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (any) Icon(Icons.Default.ExpandMore, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(22.dp).rotate(turn))
         }
-        if (day.entries.isEmpty()) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (!any) {
+            Column(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("这一天还没有记录", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                Text("点上方「记一笔」，估个大概的热量就能记", style = MaterialTheme.typography.bodySmall, color = cs.outline, modifier = Modifier.padding(top = 2.dp))
+                Text("点上方「记一笔」或往下拉，估个大概的热量就能记", style = MaterialTheme.typography.bodySmall, color = cs.outline, modifier = Modifier.padding(top = 2.dp))
             }
             return@SectionCard
         }
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            day.entries.forEach { e ->
-                key(e.id) {
-                    SwipeActionsBox(
-                        key = "food:${e.id}", group = swipe, shape = PaneShape, onDelete = { onDelete(e) },
-                        actions = listOf(SwipeAction(again, Icons.Outlined.ContentCopy, cs.secondary) { onAgain(e) }),
-                    ) {
-                        Box(Modifier.fillMaxWidth().clip(PaneShape).background(pane())) { EntryRow(e) { onOpen(e) } }
+        AnimatedVisibility(open, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                day.entries.forEach { e ->
+                    key(e.id) {
+                        SwipeActionsBox(
+                            key = "food:${e.id}", group = swipe, shape = PaneShape, onDelete = { onDelete(e) },
+                            actions = listOf(SwipeAction(again, Icons.Outlined.ContentCopy, cs.secondary) { onAgain(e) }),
+                        ) {
+                            Box(Modifier.fillMaxWidth().clip(PaneShape).background(pane())) { EntryRow(e) { onOpen(e) } }
+                        }
                     }
                 }
             }
@@ -533,33 +598,31 @@ private fun NutrientsCard(day: Energy.Day) {
     val energy = parts.sumOf { it.first.third }.coerceAtLeast(1)
     val reveal = remember { Animatable(0f) }
     LaunchedEffect(Unit) { reveal.animateTo(1f, tween(900, delayMillis = 200, easing = FastOutSlowInEasing)) }
-    SectionCard(contentPadding = PaddingValues(16.dp)) {
-        Row(Modifier.padding(start = 4.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("营养素", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (t.sodiumMg > 0) Text("钠 ${Energy.milligrams(t.sodiumMg)} mg", style = MaterialTheme.typography.labelLarge.merge(NumberStyle), color = cs.onSurfaceVariant)
+    SectionCard(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)) {
+        Row(Modifier.padding(start = 2.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("营养素", style = MaterialTheme.typography.titleMedium)
+            Text("  % 为供能占比", style = MaterialTheme.typography.labelSmall, color = cs.outline, modifier = Modifier.weight(1f))
+            if (t.sodiumMg > 0) Text("钠 ${Energy.milligrams(t.sodiumMg)} mg", style = MaterialTheme.typography.labelMedium.merge(NumberStyle), color = cs.onSurfaceVariant)
         }
-        Row(Modifier.fillMaxWidth(reveal.value).height(8.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth(reveal.value).height(6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             parts.filter { it.first.third > 0 }.forEach { (p, color) ->
                 Box(Modifier.weight(p.third.toFloat()).fillMaxHeight().clip(RoundedCornerShape(50)).background(color))
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             parts.forEach { (p, color) ->
-                Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainerHigh).padding(horizontal = 12.dp, vertical = 10.dp)) {
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(cs.surfaceContainerHigh).padding(horizontal = 10.dp, vertical = 7.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Dot(color, 7.dp)
-                        Spacer(Modifier.width(6.dp))
-                        Text(p.first, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                        Dot(color, 6.dp)
+                        Spacer(Modifier.width(5.dp))
+                        Text(p.first, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        Text("${(p.third * 100 + energy / 2) / energy}%", style = MaterialTheme.typography.labelSmall.merge(NumberStyle), color = cs.outline)
                     }
-                    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 4.dp)) {
-                        Text(Energy.grams(p.second), style = MaterialTheme.typography.titleLarge.merge(NumberStyle))
-                        Text("g", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 3.dp, bottom = 3.dp))
+                    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 2.dp)) {
+                        Text(Energy.grams(p.second), style = MaterialTheme.typography.titleMedium.merge(NumberStyle))
+                        Text("g", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp))
                     }
-                    Text(
-                        "供能 ${(p.third * 100 + energy / 2) / energy}%",
-                        style = MaterialTheme.typography.labelSmall.merge(NumberStyle), color = cs.outline,
-                    )
                 }
             }
         }
@@ -567,7 +630,7 @@ private fun NutrientsCard(day: Energy.Day) {
             Text(
                 "有几笔没填全营养素，这里只算填了的",
                 style = MaterialTheme.typography.labelSmall, color = cs.outline,
-                modifier = Modifier.padding(start = 4.dp, top = 10.dp),
+                modifier = Modifier.padding(start = 2.dp, top = 8.dp),
             )
         }
     }
@@ -588,7 +651,7 @@ private fun WeekCard(s: FoodState, today: LocalDate, selected: LocalDate, onSele
     LaunchedEffect(Unit) { reveal.animateTo(1f, tween(900, delayMillis = 150, easing = FastOutSlowInEasing)) }
     val bar = cs.secondary
     val level = cs.onSurfaceVariant
-    SectionCard(contentPadding = PaddingValues(20.dp)) {
+    SectionCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
         Text("近 7 天", style = MaterialTheme.typography.titleMedium)
         Text(
             when {
@@ -598,7 +661,7 @@ private fun WeekCard(s: FoodState, today: LocalDate, selected: LocalDate, onSele
             },
             style = MaterialTheme.typography.bodySmall.merge(NumberStyle), color = cs.onSurfaceVariant,
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth()) {
             days.forEach { d ->
                 val on = d.date == selected
@@ -614,7 +677,7 @@ private fun WeekCard(s: FoodState, today: LocalDate, selected: LocalDate, onSele
                         style = MaterialTheme.typography.labelSmall.merge(NumberStyle),
                         color = if (on) cs.onSurface else cs.onSurfaceVariant, maxLines = 1,
                     )
-                    Canvas(Modifier.fillMaxWidth().height(96.dp).padding(top = 4.dp)) {
+                    Canvas(Modifier.fillMaxWidth().height(76.dp).padding(top = 4.dp)) {
                         val w = 14.dp.toPx()
                         val x = (size.width - w) / 2
                         if (d.entries.isEmpty()) {
@@ -639,12 +702,12 @@ private fun WeekCard(s: FoodState, today: LocalDate, selected: LocalDate, onSele
                         style = MaterialTheme.typography.labelSmall,
                         color = if (on) bar else cs.onSurfaceVariant,
                         fontWeight = if (on) FontWeight.SemiBold else null,
-                        modifier = Modifier.padding(top = 6.dp),
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(width = 10.dp, height = 12.dp).clip(RoundedCornerShape(50)).background(bar))

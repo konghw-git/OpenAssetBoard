@@ -1,6 +1,13 @@
 package com.assetboard.ui.diary
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalDensity
+import com.assetboard.ui.components.PullToCreateBox
+import com.assetboard.ui.components.rememberPullToCreate
 import com.assetboard.ui.components.LocalAmbient
 import com.assetboard.ui.components.ambient
 import com.assetboard.ui.components.glass
@@ -270,6 +277,12 @@ fun DiaryScreen(
     BackHandler(editing) { done() }
     LaunchedEffect(active) { if (!active && editing) done() }
     LaunchedEffect(editing) { onEditingChange(editing) }
+    // Pulling the page down past its top starts writing, as a tap on the text does.
+    val editorFocus = remember { FocusRequester() }
+    val pull = rememberPullToCreate(enabled = !editing && session != null && sessionStatus != DiarySession.Status.UNSAVED) {
+        runCatching { editorFocus.requestFocus() }
+        keyboard?.show()
+    }
 
     val extractSelection: (String) -> Unit = { picked ->
         focusManager.clearFocus()
@@ -352,6 +365,7 @@ fun DiaryScreen(
             val shift = remember(date) { Animatable(lastDate[0].compareTo(date).coerceIn(-1, 1).toFloat() * -1f) }
             SideEffect { lastDate[0] = date }
             LaunchedEffect(shift) { shift.animateTo(0f, tween(320, easing = FastOutSlowInEasing)) }
+            PullToCreateBox(pull, "下拉开始写", "松手开始写", Modifier.fillMaxSize()) {
             Column(
                 Modifier
                     .fillMaxSize()
@@ -359,14 +373,20 @@ fun DiaryScreen(
                         translationX = shift.value * 32.dp.toPx()
                         alpha = 1f - abs(shift.value) * 0.85f
                     }
-                    .verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 48.dp),
+                    .verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 16.dp)
+                    .padding(top = 12.dp + with(LocalDensity.current) { pull.pulled.toDp() }, bottom = 48.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // Part of the page, above the text, so it scrolls away with it.
-                if (!editing && !date.isAfter(today)) {
-                    MoodRow(Mood.of(entry?.mood), today = date == today) { vm.setMood(it) }
+                // Part of the page, above the text, so it scrolls away with it; put away while writing.
+                if (!editing) {
+                    DayCard(
+                        vm, date, today, entry,
+                        habits = habits?.takeIf { showHabits && it.shown.isNotEmpty() },
+                        onStocktake = onStocktake,
+                        onOpenWeek = { onOpenWeek(date) },
+                        onOpenNote = onOpenNote,
+                    )
                 }
-                StocktakeStrip(vm, date, today, onStocktake)
                 drafts.forEach { d ->
                     Box(Modifier.fillMaxWidth().glass(MaterialTheme.shapes.large, glass, cs.tertiary.copy(alpha = 0.12f))) {
                         Column(Modifier.padding(start = 18.dp, end = 8.dp, top = 12.dp)) {
@@ -384,14 +404,10 @@ fun DiaryScreen(
                         it, onInput = vm::onInput, onFocus = { f -> editing = f },
                         onExtract = extractSelection,
                         onSelection = { selected = it },
-                    ) {
-                        habits?.takeIf { showHabits && it.shown.isNotEmpty() }?.let { HabitRecord(it, live = date == today) }
-                    }
+                        focus = editorFocus,
+                    )
                 }
-                if (!editing) {
-                    WeekRow(vm, date) { onOpenWeek(date) }
-                    DayExtras(vm, onOpenNote)
-                }
+            }
             }
         }
     }
@@ -432,16 +448,215 @@ fun DiaryScreen(
     }
 }
 
+/** Which list the day card has unfolded under its tiles. */
+private enum class DayFold { DONE, NOTES, YEARS }
+
 /**
- * The day's habits at the head of the page, read from the todo tab's battery: set in a different
- * face, not part of the text, not editable here, and never counted as writing. A day shows the
- * habits it had (see [Habit.shownOn]), so changing them later leaves past days as they were.
+ * Everything the day gathered besides the writing, on one card above it instead of around it: the
+ * mood; the daily habits as the battery left them; three tiles for the stocktake, the week's
+ * review and what got done; and, when there are any, the notes taken from the day and the same
+ * day in earlier years. Lists unfold inside the card, one at a time. Read-only but for the mood.
  */
 @Composable
-private fun HabitRecord(day: HabitDay, live: Boolean) {
+private fun DayCard(
+    vm: DiaryViewModel,
+    date: LocalDate,
+    today: LocalDate,
+    entry: DiaryEntry?,
+    habits: HabitDay?,
+    onStocktake: () -> Unit,
+    onOpenWeek: () -> Unit,
+    onOpenNote: (String) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val stocktakes by vm.stocktakes.collectAsStateWithLifecycle()
+    val review by vm.weekReview.collectAsStateWithLifecycle()
+    val completed by vm.completed.collectAsStateWithLifecycle()
+    val onThisDay by vm.onThisDay.collectAsStateWithLifecycle()
+    val fromDay by vm.fromDay.collectAsStateWithLifecycle()
+    var open by rememberSaveable(date) { mutableStateOf<DayFold?>(null) }
+    fun toggle(f: DayFold) { open = if (open == f) null else f }
+    val shape = RoundedCornerShape(26.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .glass(shape, glass, cs.surface.copy(alpha = 0.10f))
+            .clip(shape)
+            .animateContentSize()
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        if (!date.isAfter(today)) MoodLine(Mood.of(entry?.mood), today = date == today) { vm.setMood(it) }
+        habits?.let {
+            CardRule()
+            HabitGrid(it, live = date == today)
+        }
+        CardRule()
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val tile = Modifier.weight(1f).fillMaxHeight()
+            val last = stocktakes.lastOrNull()
+            DayTile(
+                Icons.Outlined.Checklist,
+                if (last != null && stocktakes.size > 1) "盘点 ${stocktakes.size} 次" else "当天盘点",
+                last?.let { "¥" + Money.short(it.point.netWorth) } ?: if (date == today) "去盘点" else "没有盘点",
+                note = last?.let { s -> s.change?.takeIf { it != 0L }?.let { Money.format(it, signed = true) } ?: Dates.time(s.point.snapshot.at) },
+                tint = cs.primary,
+                muted = last == null,
+                modifier = tile,
+                onClick = if (last != null || date == today) onStocktake else null,
+            )
+            val first = review?.body?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
+            DayTile(
+                Icons.Outlined.ViewWeek,
+                Weeks.shortTitle(Weeks.start(date)) + "复盘",
+                if (first != null) "已写" else "去写",
+                note = first ?: Weeks.range(Weeks.start(date)),
+                tint = cs.secondary,
+                muted = first == null,
+                modifier = tile,
+                onClick = onOpenWeek,
+            )
+            DayTile(
+                Icons.Outlined.TaskAlt,
+                "完成待办",
+                "${completed.size} 项",
+                note = completed.firstOrNull()?.title,
+                tint = cs.tertiary,
+                muted = completed.isEmpty(),
+                active = open == DayFold.DONE,
+                modifier = tile,
+                onClick = if (completed.isNotEmpty()) ({ toggle(DayFold.DONE) }) else null,
+            )
+        }
+        if (fromDay.isNotEmpty() || onThisDay.isNotEmpty()) {
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (fromDay.isNotEmpty()) FoldChip(Icons.Outlined.AutoStories, "提炼的笔记 ${fromDay.size}", open == DayFold.NOTES) { toggle(DayFold.NOTES) }
+                if (onThisDay.isNotEmpty()) FoldChip(Icons.Outlined.History, "那年今日 ${onThisDay.size}", open == DayFold.YEARS) { toggle(DayFold.YEARS) }
+            }
+        }
+        when (open) {
+            DayFold.DONE -> FoldList {
+                completed.forEach { t ->
+                    Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(18.dp).clip(CircleShape).background(cs.tertiary), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Check, null, tint = cs.onTertiary, modifier = Modifier.size(12.dp))
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(t.title, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    }
+                }
+            }
+            DayFold.NOTES -> FoldList {
+                fromDay.forEach { n ->
+                    Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { onOpenNote(n.id) }.padding(vertical = 6.dp)) {
+                        Text(n.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        NoteText.preview(n.body).takeIf { it.isNotEmpty() }?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+            DayFold.YEARS -> FoldList {
+                onThisDay.forEach { e ->
+                    Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { vm.open(LocalDate.parse(e.date)) }.padding(vertical = 6.dp)) {
+                        Text(e.date.take(4), style = MaterialTheme.typography.labelLarge, color = cs.primary, modifier = Modifier.width(48.dp))
+                        Text(e.body.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty(), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            null -> Unit
+        }
+    }
+}
+
+/** A faint dashed line between the day card's parts. */
+@Composable
+private fun CardRule() {
+    val color = MaterialTheme.colorScheme.outlineVariant
+    Box(
+        Modifier.padding(vertical = 10.dp).fillMaxWidth().height(1.dp).drawBehind {
+            drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
+        },
+    )
+}
+
+/** One of the day card's three tiles: what it is, its figure, and a quiet line under it. */
+@Composable
+private fun DayTile(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    note: String?,
+    tint: Color,
+    modifier: Modifier,
+    muted: Boolean = false,
+    active: Boolean = false,
+    onClick: (() -> Unit)?,
+) {
+    val cs = MaterialTheme.colorScheme
+    val bg by animateColorAsState(tint.copy(alpha = if (active) 0.20f else 0.09f), tween(200), label = "tile")
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(bg)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(
+            value,
+            style = MaterialTheme.typography.titleSmall.merge(com.assetboard.ui.theme.NumberStyle),
+            fontWeight = FontWeight.SemiBold,
+            color = if (muted) tint else cs.onSurface,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = cs.outline, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    }
+}
+
+/** Unfolds one of the day card's lists; picked, it fills. */
+@Composable
+private fun FoldChip(icon: ImageVector, text: String, open: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val turn by animateFloatAsState(if (open) 180f else 0f, tween(220), label = "foldChip")
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(cs.primary.copy(alpha = if (open) 0.16f else 0.07f))
+            .clickable(onClick = onClick)
+            .padding(start = 10.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = cs.primary, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(5.dp))
+        Text(text, style = MaterialTheme.typography.labelMedium, color = cs.primary)
+        Icon(Icons.Default.ExpandMore, null, tint = cs.primary, modifier = Modifier.size(16.dp).rotate(turn))
+    }
+}
+
+@Composable
+private fun FoldList(content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 10.dp, start = 2.dp)) { content() }
+}
+
+/** Habits to a row in the day card: as many as fit a label of [Habit.MAX_LABEL] characters. */
+private const val HABIT_COLUMNS = 3
+
+/**
+ * The day's habits, read from the todo tab's battery: set in a different face, not editable here,
+ * and never counted as writing. Laid out in rows of equal cells, so the names line up in columns
+ * however long each is. A day shows the habits it had (see [Habit.shownOn]), so changing them
+ * later leaves past days as they were.
+ */
+@Composable
+private fun HabitGrid(day: HabitDay, live: Boolean) {
     val cs = MaterialTheme.colorScheme
     val face = TextStyle(fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, letterSpacing = 0.5.sp)
-    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+    Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Lock, null, tint = cs.outline, modifier = Modifier.size(12.dp))
             Spacer(Modifier.width(4.dp))
@@ -450,49 +665,50 @@ private fun HabitRecord(day: HabitDay, live: Boolean) {
                 style = face.copy(fontSize = 12.sp, color = cs.onSurfaceVariant),
             )
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
-            day.shown.forEach { h ->
-                val on = h.key in day.checked
-                val rest = !on && h.key in day.skipped
-                Row(
-                    Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(if (on) h.tint.copy(alpha = 0.14f) else Color.Transparent)
-                        .border(1.dp, if (on) Color.Transparent else cs.outlineVariant, RoundedCornerShape(50))
-                        .padding(start = 5.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (rest) {
-                        Text("休", style = face.copy(fontSize = 11.sp, color = cs.outline), modifier = Modifier.padding(horizontal = 1.dp))
-                    } else {
-                        Icon(if (on) Icons.Default.Check else Icons.Default.Remove, null, tint = if (on) h.tint else cs.outline, modifier = Modifier.size(12.dp))
+        Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            day.shown.chunked(HABIT_COLUMNS).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    row.forEach { h ->
+                        val on = h.key in day.checked
+                        val rest = !on && h.key in day.skipped
+                        Row(
+                            Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(50))
+                                .background(if (on) h.tint.copy(alpha = 0.14f) else Color.Transparent)
+                                .border(1.dp, if (on) Color.Transparent else cs.outlineVariant, RoundedCornerShape(50))
+                                .padding(start = 7.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (rest) {
+                                Text("休", style = face.copy(fontSize = 11.sp, color = cs.outline), modifier = Modifier.width(12.dp))
+                            } else {
+                                Icon(if (on) Icons.Default.Check else Icons.Default.Remove, null, tint = if (on) h.tint else cs.outline, modifier = Modifier.size(12.dp))
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                h.label,
+                                style = face.copy(fontSize = 12.sp, color = if (on) h.tint else cs.outline, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
-                    Spacer(Modifier.width(2.dp))
-                    Text(h.label, style = face.copy(fontSize = 12.sp, color = if (on) h.tint else cs.outline, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal))
+                    repeat(HABIT_COLUMNS - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
-        Box(
-            Modifier.padding(top = 12.dp).fillMaxWidth().height(1.dp).drawBehind {
-                drawLine(cs.outlineVariant, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
-            },
-        )
     }
 }
 
 /**
- * The day's mood as five faces on a strip of glass; tapping the chosen one again clears it. Only
- * shown here, in the calendar and on the week's page: nothing adds it up.
+ * The day's mood as five faces on the day card's first line; tapping the chosen one again clears
+ * it. Only shown here, in the calendar and on the week's page: nothing adds it up.
  */
 @Composable
-private fun MoodRow(mood: Mood?, today: Boolean, onPick: (Mood?) -> Unit) {
+private fun MoodLine(mood: Mood?, today: Boolean, onPick: (Mood?) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
-    val shape = RoundedCornerShape(22.dp)
-    Row(
-        Modifier.fillMaxWidth().glass(shape, glass).clip(shape).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Row(Modifier.fillMaxWidth().padding(start = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(if (today) "今天心情" else "这天心情", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             AnimatedContent(mood, transitionSpec = { (fadeIn() + slideInVertically { it / 2 }) togetherWith fadeOut() }, label = "moodLabel") { m ->
@@ -566,7 +782,8 @@ private fun Editor(
     onExtract: (String) -> Unit = {},
     /** The text selected now, or null when nothing (or only spaces) is. */
     onSelection: (String?) -> Unit = {},
-    header: @Composable () -> Unit = {},
+    /** Lets the page start the writing (a pull) as a tap on the text does. */
+    focus: FocusRequester? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val text by session.text.collectAsStateWithLifecycle()
@@ -581,7 +798,7 @@ private fun Editor(
     val picked = if (selection.collapsed) null else value.text.substring(selection.min, selection.max).trim().takeIf { it.isNotEmpty() }
     LaunchedEffect(picked) { onSelection(picked) }
     DisposableEffect(session) { onDispose { onSelection(null) } }
-    // Every day opens for reading, an empty one too: the keyboard comes up only on a tap.
+    // Every day opens for reading, an empty one too: the keyboard comes up only on a tap or a pull.
 
     if (status == DiarySession.Status.UNSAVED) {
         Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
@@ -600,7 +817,6 @@ private fun Editor(
     // The page's glass, a shade denser so the ruled lines and the text stay calm over the colour.
     Box(Modifier.fillMaxWidth().glass(shape, glass, cs.surface.copy(alpha = 0.18f)).border(1.dp, border, shape)) {
         Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 12.dp)) {
-            header()
             val style = MaterialTheme.typography.bodyLarge.copy(
                 color = cs.onSurface,
                 lineHeight = lineHeight,
@@ -629,6 +845,7 @@ private fun Editor(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 270.dp)
+                        .then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
                         .onFocusChanged {
                             focused = it.isFocused
                             onFocus(it.isFocused)
@@ -783,63 +1000,6 @@ private fun Chip(icon: ImageVector, text: String, color: Color, onClick: (() -> 
     }
 }
 
-/**
- * The day's stocktake at the head of the page: net worth and the change since the one before.
- * Today without one offers to start it.
- */
-@Composable
-private fun StocktakeStrip(vm: DiaryViewModel, date: LocalDate, today: LocalDate, onStocktake: () -> Unit) {
-    val stocktakes by vm.stocktakes.collectAsStateWithLifecycle()
-    val extra = AppTheme.extra
-    val cs = MaterialTheme.colorScheme
-    val last = stocktakes.lastOrNull()
-    if (last == null && date != today) return
-    val shape = RoundedCornerShape(20.dp)
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .then(if (last != null) Modifier.shadow(10.dp, shape, ambientColor = extra.heroStart, spotColor = extra.heroStart) else Modifier.glass(shape, glass))
-            .clip(shape)
-            .then(if (last != null) Modifier.background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd))) else Modifier)
-            .clickable(onClick = onStocktake)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val fg = if (last != null) extra.onHero else cs.onSurface
-        val muted = if (last != null) extra.onHeroMuted else cs.onSurfaceVariant
-        Box(Modifier.size(34.dp).clip(CircleShape).background(if (last != null) fg.copy(alpha = 0.14f) else cs.primary.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Checklist, null, tint = if (last != null) fg else cs.primary, modifier = Modifier.size(18.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        if (last == null) {
-            Column(Modifier.weight(1f)) {
-                Text("今天还没盘点", style = MaterialTheme.typography.titleSmall, color = fg)
-                Text("盘点后这里显示当天的净资产", style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Text("去盘点", style = MaterialTheme.typography.labelLarge, color = cs.primary)
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = cs.primary)
-        } else {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    (if (stocktakes.size > 1) "当天盘点 ${stocktakes.size} 次 · 最后 " else "当天盘点 · ") + Dates.time(last.point.snapshot.at),
-                    style = MaterialTheme.typography.labelMedium, color = muted,
-                )
-                Text("¥" + Money.format(last.point.netWorth), style = MaterialTheme.typography.titleMedium.merge(com.assetboard.ui.theme.NumberStyle), color = fg)
-            }
-            last.change?.takeIf { it != 0L }?.let { c ->
-                Row(
-                    Modifier.clip(RoundedCornerShape(50)).background(fg.copy(alpha = 0.14f)).padding(horizontal = 8.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(if (c > 0) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, null, tint = fg, modifier = Modifier.size(12.dp))
-                    Spacer(Modifier.width(2.dp))
-                    Text(Money.format(c, signed = true), style = MaterialTheme.typography.labelMedium.merge(com.assetboard.ui.theme.NumberStyle), color = fg)
-                }
-            }
-        }
-    }
-}
-
 @Composable
 private fun Tag(text: String, color: Color) {
     Text(
@@ -877,28 +1037,6 @@ private fun CityDialog(vm: DiaryViewModel, onDismiss: () -> Unit, onPick: (Place
     )
 }
 
-/** The week this day belongs to, and whether its review is written; opens the week's page. */
-@Composable
-private fun WeekRow(vm: DiaryViewModel, date: LocalDate, onClick: () -> Unit) {
-    val review by vm.weekReview.collectAsStateWithLifecycle()
-    val cs = MaterialTheme.colorScheme
-    val start = Weeks.start(date)
-    val first = review?.body?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
-    SectionCard(contentPadding = PaddingValues(start = 16.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)) {
-        Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(30.dp).clip(CircleShape).background(cs.secondary.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.ViewWeek, null, tint = cs.secondary, modifier = Modifier.size(16.dp))
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("${Weeks.shortTitle(start)}复盘 · ${Weeks.range(start)}", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(first ?: "还没写，回顾这一周", style = MaterialTheme.typography.bodySmall, color = if (first != null) cs.onSurfaceVariant else cs.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = cs.outline)
-        }
-    }
-}
-
 /** Monday for last week, Sunday evening for this one: a nudge while the review is empty. */
 @Composable
 private fun DuePrompt(week: LocalDate, today: LocalDate, onClick: () -> Unit) {
@@ -913,68 +1051,5 @@ private fun DuePrompt(week: LocalDate, today: LocalDate, onClick: () -> Unit) {
             )
             TextButton(onClick = onClick) { Text("去写") }
         }
-    }
-}
-
-/** Read-only: what got done that day, the notes taken from it and the same day in earlier years. */
-@Composable
-private fun DayExtras(vm: DiaryViewModel, onOpenNote: (String) -> Unit) {
-    val completed by vm.completed.collectAsStateWithLifecycle()
-    val onThisDay by vm.onThisDay.collectAsStateWithLifecycle()
-    val fromDay by vm.fromDay.collectAsStateWithLifecycle()
-    val cs = MaterialTheme.colorScheme
-    if (completed.isNotEmpty()) {
-        Fold(Icons.Outlined.TaskAlt, "完成的待办", completed.size) {
-            completed.forEach { t ->
-                Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(18.dp).clip(CircleShape).background(cs.primary), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Check, null, tint = cs.onPrimary, modifier = Modifier.size(12.dp))
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Text(t.title, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                }
-            }
-        }
-    }
-    if (fromDay.isNotEmpty()) {
-        Fold(Icons.Outlined.AutoStories, "从这天提炼的笔记", fromDay.size) {
-            fromDay.forEach { n ->
-                Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { onOpenNote(n.id) }.padding(vertical = 8.dp)) {
-                    Text(n.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    NoteText.preview(n.body).takeIf { it.isNotEmpty() }?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
-        }
-    }
-    if (onThisDay.isNotEmpty()) {
-        Fold(Icons.Outlined.History, "那年今日", onThisDay.size) {
-            onThisDay.forEach { e ->
-                Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { vm.open(LocalDate.parse(e.date)) }.padding(vertical = 8.dp)) {
-                    Text(e.date.take(4), style = MaterialTheme.typography.labelLarge, color = cs.primary, modifier = Modifier.width(48.dp))
-                    Text(e.body.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty(), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Fold(icon: ImageVector, title: String, count: Int, content: @Composable () -> Unit) {
-    var open by rememberSaveable(title) { mutableStateOf(false) }
-    val cs = MaterialTheme.colorScheme
-    val turn by animateFloatAsState(if (open) 180f else 0f, tween(220), label = "fold")
-    SectionCard(contentPadding = PaddingValues(start = 16.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)) {
-        Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { open = !open }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(30.dp).clip(CircleShape).background(cs.primary.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = cs.primary, modifier = Modifier.size(16.dp))
-            }
-            Spacer(Modifier.width(10.dp))
-            Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-            Text(count.toString(), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-            Icon(Icons.Default.ExpandMore, null, tint = cs.outline, modifier = Modifier.padding(start = 4.dp).size(20.dp).rotate(turn))
-        }
-        AnimatedVisibility(open) { Column(Modifier.padding(start = 4.dp, bottom = 8.dp)) { content() } }
     }
 }

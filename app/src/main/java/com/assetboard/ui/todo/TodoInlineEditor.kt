@@ -71,7 +71,8 @@ import java.util.UUID
  * once, when the editor leaves the screen (完成, Back, another row, the app going to the
  * background), so a save never comes back to move the cursor. With [blankTitle] the title starts
  * empty under the stored one as a hint (a todo just made, still to be named); left empty, it keeps
- * the stored one.
+ * the stored one. [onUndo], for a todo just made from others, offers to take it apart again for as
+ * long as the edit lasts, where the snackbar's undo may be under the keyboard.
  */
 @Composable
 fun TodoInlineEditor(
@@ -81,6 +82,7 @@ fun TodoInlineEditor(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
     blankTitle: Boolean = false,
+    onUndo: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     var title by remember(todo.id) { mutableStateOf(if (blankTitle) TextFieldValue("") else TextFieldValue(todo.title, TextRange(todo.title.length))) }
@@ -213,6 +215,12 @@ fun TodoInlineEditor(
                 if (lines.isEmpty()) "回车添加检查项" else "回车添加 · 空项回车结束 · 行首退格删除",
                 style = MaterialTheme.typography.labelSmall, color = cs.outline, modifier = Modifier.weight(1f),
             )
+            if (onUndo != null) {
+                Text(
+                    "撤销", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClickLabel = "撤销，拆回原来的待办", onClick = onUndo).padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            }
             Text(
                 "完成", style = MaterialTheme.typography.labelLarge, color = cs.primary,
                 modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onDone).padding(horizontal = 12.dp, vertical = 6.dp),

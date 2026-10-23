@@ -113,6 +113,21 @@ class HabitTest {
         expectRule { f.habits.remove(last.key) }
     }
 
+    @Test fun aRubricIsKeptLineByLineAndAnEditWithoutOneLeavesIt() = f.run {
+        val key = f.habits.add("读书", "book", 0xFF2A9D8F, "  每天 20 页 \n\n 做笔记 ")
+        val read = f.habits.observeActive().first().single { it.key == key }
+        assertEquals("每天 20 页\n做笔记", read.rubric)
+        assertEquals(listOf("每天 20 页", "做笔记"), read.conditions)
+        f.habits.update(key, "读书 30 分钟", "book", 0xFF2A9D8F)
+        assertEquals("每天 20 页\n做笔记", f.habits.observeActive().first().single { it.key == key }.rubric)
+        f.habits.update(key, "读书 30 分钟", "book", 0xFF2A9D8F, "")
+        assertEquals(emptyList<String>(), f.habits.observeActive().first().single { it.key == key }.conditions)
+        // A built-in one gets a rubric too, which writes the five out.
+        f.habits.update(Habit.WORKOUT.key, "健身", "fitness", 0xFFD0533F, "不少于 30 分钟")
+        assertEquals("不少于 30 分钟", f.habits.observeActive().first().single { it.key == Habit.WORKOUT.key }.rubric)
+        expectRule { f.habits.update(key, "读书", "book", 0xFF2A9D8F, "字".repeat(Habit.MAX_RUBRIC + 1)) }
+    }
+
     @Test fun renameAndReorder() = f.run {
         f.habits.update(Habit.WATER.key, "喝水 2L", "water", 0xFF2A9D8F)
         f.habits.reorder(listOf(Habit.SLEEP, Habit.WATER, Habit.SUPPLEMENTS, Habit.WORKOUT, Habit.DIET).map { it.key })

@@ -53,33 +53,40 @@ class HealthTrendTest {
 
     @Test fun movingAverageIsARollingCalendarWindow() {
         val pts = listOf(m("2026-10-01", 90_000), m("2026-10-02", 92_000), m("2026-10-04", 94_000))
-        val runs = HealthTrend.movingAverage(pts) { it.weightG }
-        assertEquals(1, runs.size)
-        // 10-01 alone has no average; 10-02 averages two days; 10-04 averages all three.
-        assertEquals(listOf("2026-10-02" to 91_000L, "2026-10-04" to 92_000L), runs[0])
+        // 10-01 is alone in its window, so it is its own value; 10-02 averages two days; 10-04 all three.
+        assertEquals(
+            listOf("2026-10-01" to 90_000L, "2026-10-02" to 91_000L, "2026-10-04" to 92_000L),
+            HealthTrend.movingAverage(pts) { it.weightG },
+        )
     }
 
-    @Test fun aGapLongerThanTheWindowSplitsTheAverage() {
+    @Test fun aSparseStretchDoesNotBreakTheAverage() {
         val pts = listOf(
             m("2026-09-01", 90_000), m("2026-09-02", 90_200), m("2026-09-03", 90_400),
-            m("2026-09-20", 89_000), // alone in its window: no point, and the line must not bridge to it
+            m("2026-09-20", 89_000), // alone in its window: the line goes through it rather than stopping
             m("2026-10-01", 88_000), m("2026-10-02", 88_200), m("2026-10-04", 88_400),
         )
-        val runs = HealthTrend.movingAverage(pts) { it.weightG }
-        assertEquals(2, runs.size)
-        assertEquals(listOf("2026-09-02", "2026-09-03"), runs[0].map { it.first })
-        assertEquals(listOf("2026-10-02", "2026-10-04"), runs[1].map { it.first })
+        val line = HealthTrend.movingAverage(pts) { it.weightG }
+        assertEquals(pts.map { it.date }, line.map { it.first })
+        assertEquals(89_000L, line[3].second)
     }
 
-    @Test fun aSinglePointRunIsDropped() {
-        val pts = listOf(m("2026-09-01", 90_000), m("2026-09-02", 90_200), m("2026-09-30", 89_000))
+    @Test fun thePeriodsFirstDaysAverageTheWeekBeforeIt() {
+        val history = listOf(m("2026-10-01", 90_000), m("2026-10-03", 91_000), m("2026-10-06", 92_000), m("2026-10-08", 93_000))
+        // A period from 10-06: its first day still averages 10-01 and 10-03 before it.
+        val line = HealthTrend.movingAverage(history.drop(2), history) { it.weightG }
+        assertEquals(listOf("2026-10-06" to 91_000L, "2026-10-08" to 92_000L), line)
+    }
+
+    @Test fun noWindowWithTwoReadingsDrawsNothing() {
+        val pts = listOf(m("2026-09-01", 90_000), m("2026-09-10", 90_200), m("2026-09-30", 89_000))
         assertTrue(HealthTrend.movingAverage(pts) { it.weightG }.isEmpty())
     }
 
     @Test fun bodyFatAverageSkipsDaysWithoutIt() {
         val pts = listOf(m("2026-10-01", 90_000, 2_600), m("2026-10-02", 90_000), m("2026-10-03", 90_000, 2_500), m("2026-10-04", 90_000, 2_400))
-        val runs = HealthTrend.movingAverage(pts) { it.bodyFatBp?.toLong() }
-        assertEquals(listOf(listOf("2026-10-03" to 2_550L, "2026-10-04" to 2_500L)), runs)
+        val line = HealthTrend.movingAverage(pts) { it.bodyFatBp?.toLong() }
+        assertEquals(listOf("2026-10-01" to 2_600L, "2026-10-03" to 2_550L, "2026-10-04" to 2_500L), line)
     }
 
     @Test fun targetProgress() {

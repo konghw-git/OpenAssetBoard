@@ -254,6 +254,19 @@ class MigrationTest {
         }
     }
 
+    @Test fun migrationNineToTenGivesHabitsAnEmptyRubric() {
+        helper.createDatabase(name, 9).use { db ->
+            db.put("habits", "key" to "read", "label" to "读书", "icon" to "book", "color" to 0xFF2A9D8F, "position" to 0L, "added_on" to "2026-10-01", "removed_on" to null)
+        }
+        helper.runMigrationsAndValidate(name, 10, true, Migrations.MIGRATION_9_10).use { db ->
+            fun List<Any?>.col(name: String) = this[indexOf(name) - size / 2]
+            val h = db.dump("habits").single()
+            assertEquals("", h.col("rubric"))
+            assertEquals("读书", h.col("label"))
+            assertEquals("2026-10-01", h.col("added_on"))
+        }
+    }
+
     @Test fun migrationEightToNineAddsMoodAndRestDaysAndKeepsWhatWasThere() {
         helper.createDatabase(name, 8).use { db ->
             db.put(

@@ -95,6 +95,30 @@ class FoodRepositoryTest {
         expectRule { f.food.save(eggs.copy(unit = null)) }
     }
 
+    @Test fun oneMoreCountsAnotherPortionInPlaceAndPutBackUndoesIt() = f.run {
+        // A portion never counted becomes two of it.
+        val lunch = f.food.save(portion("2026-10-20", energyCal = 650_000))
+        val before = f.food.oneMore(lunch)
+        val two = f.db.foodDao().entry(lunch)!!
+        assertEquals(FoodUnit.SERVING, two.unit)
+        assertEquals(2 * Energy.SERVING_PER, Energy.servingHalves(two))
+        assertEquals(1_300_000L, Energy.energyOf(two))
+        // A counted one takes one more, and its nutrients scale with it.
+        val eggs = f.food.save(portion("2026-10-20", energyCal = 70_000).copy(name = "水煮蛋", per = Energy.SERVING_PER, amount = 4, unit = FoodUnit.SERVING, proteinMg = 6_000))
+        f.food.oneMore(eggs)
+        val three = f.db.foodDao().entry(eggs)!!
+        assertEquals("3", Energy.servings(Energy.servingHalves(three)))
+        assertEquals(210_000L, Energy.energyOf(three))
+        assertEquals(18_000L, Energy.proteinOf(three))
+        assertEquals(2, f.food.onDate(date("2026-10-20")).size)
+
+        f.food.putBack(before)
+        assertEquals(before, f.db.foodDao().entry(lunch))
+        // A label's portion is its amount, not a count: it is recorded again instead.
+        val milk = f.food.save(label("2026-10-20"))
+        expectRule { f.food.oneMore(milk) }
+    }
+
     @Test fun deleteHandsBackWhatAnUndoPutsBack() = f.run {
         val id = f.food.save(label("2026-10-20"))
         val before = f.db.foodDao().entry(id)!!

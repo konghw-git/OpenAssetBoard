@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -61,8 +62,8 @@ import com.assetboard.ui.components.verticalScrollWithIndicator
 private const val SEARCH_FROM = 8
 
 /**
- * Every topic in one place, however many there are: a grid of chips with their counts, a search
- * once the grid gets long, and a new topic made on the spot. Used to filter the list and to file
+ * Every topic in one place, however many there are: a grid of equal cells with their counts, a
+ * search once the grid gets long, and a new topic made on the spot. Used to filter the list and to file
  * a note. Keys are [NotesViewModel.ALL], [NotesViewModel.UNSORTED] or a topic id.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,16 +110,24 @@ fun TopicSheet(
                 )
             }
             Column(Modifier.weight(1f, fill = false).verticalScrollWithIndicator(rememberScrollState()).padding(top = 14.dp, bottom = 12.dp)) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (showAll && q.isEmpty()) {
-                        FilterPill("全部", counts?.values?.sum(), cs.primary, selected == NotesViewModel.ALL, null) { onPick(NotesViewModel.ALL) }
-                    }
+                val cells = buildList {
+                    if (showAll && q.isEmpty()) add(TopicCellData(NotesViewModel.ALL, "全部", counts?.values?.sum(), cs.primary, null))
                     matches.forEach { t ->
                         val c = AppTheme.extra.group(topics.indexOf(t))
-                        FilterPill(t.name, counts?.let { it[t.id] ?: 0 }, c, selected == t.id, c) { onPick(t.id) }
+                        add(TopicCellData(t.id, t.name, counts?.let { it[t.id] ?: 0 }, c, c))
                     }
-                    if (q.isEmpty()) {
-                        FilterPill("未归类", counts?.let { it[null] ?: 0 }, cs.onSurfaceVariant, selected == NotesViewModel.UNSORTED, cs.outline) { onPick(NotesViewModel.UNSORTED) }
+                    if (q.isEmpty()) add(TopicCellData(NotesViewModel.UNSORTED, "未归类", counts?.let { it[null] ?: 0 }, cs.onSurfaceVariant, cs.outline))
+                }
+                // Rows of equal cells, like a table: a long name is cut short rather than widening its cell.
+                BoxWithConstraints {
+                    val columns = if (maxWidth >= 520.dp) 4 else 3
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        cells.chunked(columns).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                row.forEach { c -> TopicCell(c, selected == c.key, Modifier.weight(1f)) { onPick(c.key) } }
+                                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
                     }
                 }
                 if (q.isNotEmpty() && matches.none { it.name.equals(q, ignoreCase = true) }) {
@@ -144,6 +153,44 @@ fun TopicSheet(
         TopicNameDialog("新建主题", initial, onDismiss = { naming = null }) { name ->
             naming = null
             onCreate(name)
+        }
+    }
+}
+
+/** One cell of the topic grid: what it picks, its name, count and colours. */
+private class TopicCellData(val key: String, val name: String, val count: Int?, val color: Color, val dot: Color?)
+
+/**
+ * A topic in the sheet's grid: its colour dot and name on the left, the count at the right edge,
+ * so every count lines up down the column; picked, it fills with the colour.
+ */
+@Composable
+private fun TopicCell(c: TopicCellData, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val bg by animateColorAsState(if (selected) c.color else c.color.copy(alpha = 0.08f), tween(220), label = "topicCell")
+    val onColor = if (c.color.luminance() > 0.5f) Color(0xFF12201C) else Color.White
+    val source = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier
+            .height(44.dp)
+            .pressScale(source)
+            .then(if (selected) Modifier.shadow(4.dp, shape, spotColor = c.color) else Modifier)
+            .clip(shape)
+            .background(bg)
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(start = 10.dp, end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(if (selected) onColor else c.dot ?: c.color))
+        Spacer(Modifier.width(7.dp))
+        Text(
+            c.name, style = MaterialTheme.typography.labelLarge, color = if (selected) onColor else cs.onSurface,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        if (c.count != null) {
+            Spacer(Modifier.width(4.dp))
+            Text(c.count.toString(), style = MaterialTheme.typography.labelMedium, color = if (selected) onColor.copy(alpha = 0.8f) else cs.onSurfaceVariant)
         }
     }
 }

@@ -14,6 +14,9 @@ import java.time.LocalDate
  * A habit belongs to the days from [addedOn] (null: from the start) up to the day before
  * [removedOn]: removing one keeps the days it was part of as they were, while a new one does not
  * show as missed on days before it existed.
+ *
+ * [rubric] is what counts as done, one condition a line, set by the user and only shown (a long
+ * press on the battery cell): nothing checks it, the tap still decides.
  */
 @Serializable
 @Entity(tableName = "habits")
@@ -25,8 +28,12 @@ data class Habit(
     val position: Int,
     @ColumnInfo(name = "added_on") val addedOn: String? = null,
     @ColumnInfo(name = "removed_on") val removedOn: String? = null,
+    @ColumnInfo(defaultValue = "''") val rubric: String = "",
 ) {
     val active: Boolean get() = removedOn == null
+
+    /** The rubric's conditions, one per line, blank lines left out. */
+    val conditions: List<String> get() = rubric.lines().map { it.trim() }.filter { it.isNotEmpty() }
 
     /** Whether [date] is one of this habit's days. */
     fun on(date: LocalDate): Boolean =
@@ -44,6 +51,10 @@ data class Habit(
         /** The battery has room for this many. */
         const val MAX_ACTIVE = 7
         const val MAX_LABEL = 8
+        const val MAX_RUBRIC = 200
+
+        /** [text] as a rubric is kept: each line trimmed, blank ones dropped. */
+        fun cleanRubric(text: String): String = text.lines().map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
 
         /**
          * The habits a day shows, in order: the ones it belonged to, and any checked that day

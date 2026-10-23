@@ -51,18 +51,14 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
 
     fun toggleHabit(h: Habit) = action { container.habits.toggle(h) }
 
-    /** The keys of the habits that have [date] off. */
+    /** The keys of the habits that have [date] off (rest days taken before they were retired). */
     fun habitsSkippedOn(date: LocalDate): Flow<Set<String>> = container.habits.observeSkipped(date)
 
-    /** A long press on a battery cell: today off for [h], or back on. */
-    fun toggleHabitRest(h: Habit) = action {
-        val rest = container.habits.toggleSkip(h)
-        _events.tryEmit(TodoEvent(if (rest) "「${h.label}」今天休息，不算断签" else "「${h.label}」取消休息"))
-    }
+    fun addHabit(label: String, icon: String, color: Long, rubric: String, onDone: () -> Unit = {}) =
+        action(onDone) { container.habits.add(label, icon, color, rubric) }
 
-    fun addHabit(label: String, icon: String, color: Long, onDone: () -> Unit = {}) = action(onDone) { container.habits.add(label, icon, color) }
-
-    fun updateHabit(key: String, label: String, icon: String, color: Long, onDone: () -> Unit = {}) = action(onDone) { container.habits.update(key, label, icon, color) }
+    fun updateHabit(key: String, label: String, icon: String, color: Long, rubric: String, onDone: () -> Unit = {}) =
+        action(onDone) { container.habits.update(key, label, icon, color, rubric) }
 
     fun reorderHabits(keys: List<String>) = action { container.habits.reorder(keys) }
 
@@ -116,12 +112,39 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
     /** An edit in place has ended: its title and checklist in one write. */
     fun saveInline(id: String, title: String, items: List<InlineItem>) = action { repo.editInline(id, title, items) }
 
-    /** [ids] as the checklist of one new todo; [onMade] gets it, to edit in place. Undo brings them back. */
+    /** The batches of todos just gathered, by the todo made from them, while it can still be undone. */
+    private val gathered = mutableMapOf<String, String>()
+
+    /**
+     * [ids] as the checklist of one new todo; [onMade] gets it, to edit in place. Undo (the
+     * snackbar's, or [ungather] from the editor while it is open) brings them back.
+     */
     fun gather(ids: List<String>, onMade: (String) -> Unit) = action {
         if (ids.isEmpty()) return@action
         val (id, batch) = repo.gather(ids, GATHERED_TITLE)
+        gathered[id] = batch
         onMade(id)
-        _events.tryEmit(TodoEvent("${ids.size} 条已变成新待办的检查项") { repo.ungather(id, batch) })
+        _events.tryEmit(TodoEvent("${ids.size} 条已变成新待办的检查项") { ungatherNow(id) })
+    }
+
+    /** Takes back the gathering that made [id]: it goes, and the todos it was made of come back. */
+    fun ungather(id: String) = action { ungatherNow(id) }
+
+    private suspend fun ungatherNow(id: String) {
+        val batch = gathered.remove(id) ?: return
+        repo.ungather(id, batch)
+    }
+
+    /** [ids] join [target]'s checklist; undo brings them back as todos. */
+    fun mergeInto(target: Todo, ids: List<String>) = action {
+        val (items, batch) = repo.mergeInto(target.id, ids)
+        _events.tryEmit(TodoEvent("${items.size} 条已并入${short(target)}的检查项") { repo.unmerge(target.id, items, batch) })
+    }
+
+    /** The checklists of [ids] become todos of their own; undo puts them back. */
+    fun dissolve(ids: List<String>) = action {
+        val (made, batch) = repo.dissolve(ids)
+        _events.tryEmit(TodoEvent("已解散成 ${made.size} 条待办") { repo.undissolve(made, batch) })
     }
 
     fun move(ids: List<String>, listId: String?) = action { repo.moveMany(ids, listId) }

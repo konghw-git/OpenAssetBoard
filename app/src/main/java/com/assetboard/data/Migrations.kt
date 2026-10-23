@@ -71,8 +71,15 @@ object Migrations {
         }
     }
 
+    /** A habit can say what counts as done; every habit starts without. Nothing else changes. */
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `habits` ADD COLUMN `rubric` TEXT NOT NULL DEFAULT ''")
+        }
+    }
+
     /** Every step, in order, for [AppDatabase.build] and the tests that open an old file. */
-    val ALL = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+    val ALL = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
 
     private val V8_TABLES = listOf(
         "CREATE TABLE IF NOT EXISTS `food_entries` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `eaten_at` INTEGER NOT NULL, `name` TEXT, `per` INTEGER, `amount` INTEGER, `unit` TEXT, `energy_cal` INTEGER NOT NULL, `in_kj` INTEGER NOT NULL, `protein_mg` INTEGER, `fat_mg` INTEGER, `carb_mg` INTEGER, `sodium_mg` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",

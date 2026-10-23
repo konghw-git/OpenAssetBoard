@@ -68,39 +68,28 @@ object HealthTrend {
     fun measurementAt(m: BodyMeasurement): Long = LocalDate.parse(m.date).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
 
     /**
-     * The rolling average over the seven calendar days ending on each measured day (inclusive).
-     * A window holds the weigh-ins of its days, so it is the calendar that defines it, not the
-     * order of the points. Windows with fewer than two weigh-ins make no point at all: one reading
-     * is not an average, and drawing it would only add noise.
+     * The rolling average over the seven calendar days ending on each day of [points] that has
+     * the figure (inclusive), one point per such day, as one line. A window holds the readings of
+     * its days in [history] (every record, so the first days of a period still count the week
+     * before it), so it is the calendar that defines it, not the order of the points. A window
+     * with a single reading is that reading: the line follows the record through sparse weeks
+     * instead of breaking off there.
      *
-     * Returned as contiguous runs: the chart series are polylines, so two runs separated by a gap
-     * must stay separate series, or the line would bridge days that were never measured. Two
-     * averaged days belong to one run when their windows overlap (less than a window apart);
-     * a run of a single point is dropped.
+     * Empty when there would be nothing to see: fewer than two points, or no window with two
+     * readings, where the average would only retrace the line itself.
      */
-    fun movingAverage(points: List<BodyMeasurement>, of: (BodyMeasurement) -> Long?): List<List<Pair<String, Long>>> {
-        val sorted = points.sortedBy { it.date }
-        if (sorted.size < 2) return emptyList()
-        val runs = mutableListOf<MutableList<Pair<String, Long>>>()
-        var open: MutableList<Pair<String, Long>>? = null
-        var lastDate: LocalDate? = null
-        for (m in sorted) {
+    fun movingAverage(points: List<BodyMeasurement>, history: List<BodyMeasurement> = points, of: (BodyMeasurement) -> Long?): List<Pair<String, Long>> {
+        val readings = history.mapNotNull { m -> of(m)?.let { LocalDate.parse(m.date) to it } }
+        var averaged = false
+        val line = points.sortedBy { it.date }.mapNotNull { m ->
+            if (of(m) == null) return@mapNotNull null
             val date = LocalDate.parse(m.date)
             val from = date.minusDays(WINDOW_DAYS - 1L)
-            val values = sorted.filter { val d = LocalDate.parse(it.date); !d.isBefore(from) && !d.isAfter(date) }.mapNotNull(of)
-            // A day without its own reading, or a window with fewer than two readings, has no point.
-            // Only a gap of a whole window ends a run; a day without the figure does not.
-            if (of(m) == null || values.size < 2) continue
-            val avg = values.sum() / values.size
-            val run = open
-            if (run != null && lastDate != null && ChronoUnit.DAYS.between(lastDate, date) < WINDOW_DAYS) {
-                run.add(m.date to avg)
-            } else {
-                open = mutableListOf(m.date to avg).also { runs += it }
-            }
-            lastDate = date
+            val values = readings.filter { (d, _) -> !d.isBefore(from) && !d.isAfter(date) }.map { it.second }
+            if (values.size > 1) averaged = true
+            m.date to values.sum() / values.size
         }
-        return runs.filter { it.size >= 2 }
+        return if (averaged && line.size >= 2) line else emptyList()
     }
 
     /**

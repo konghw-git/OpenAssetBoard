@@ -553,6 +553,17 @@ class NoteTest {
         assertEquals(a.id, repo.reviewPick(today.plusDays(1))!!.id)
     }
 
+    @Test fun severalNotesGoToTheTrashAsOneBatchAndComeBackTogether() = f.run {
+        val a = note("甲")
+        val b = note("乙")
+        val c = note("丙")
+        val batch = repo.deleteMany(listOf(a.id, b.id, a.id))
+        assertEquals(setOf(batch), listOf(a, b).map { dao.note(it.id)!!.deleteBatch }.toSet())
+        assertNull(dao.note(c.id)!!.deletedAt)
+        assertTrue(repo.restore(batch))
+        assertEquals(listOf(null, null), listOf(a, b).map { dao.note(it.id)!!.deletedAt })
+    }
+
     @Test fun textRules() {
         assertEquals("标题", NoteText.title("\n  标题  \n正文"))
         assertEquals(NoteText.UNTITLED, NoteText.title(" \n "))

@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Selected todos move as one.** Long-pressing one of several selected todos and dragging it
+  carries the others of its group along, folded under it with a count; they land right after it.
+  Selected notes drag together the same way, and can be deleted together from the header.
+- **Todos join an existing todo's checklist.** The selection's overflow menu adds 并入已有待办的
+  检查项 (pick the todo from the view) and 解散检查项, which lets a checklist go as todos of their
+  own in the todo's place, ticked items already done. Both can be undone.
+- **Undo for a gathering, in the editor.** A todo just made from the selection shows 撤销 in its
+  editor for as long as the edit lasts; the snackbar now sits above the keyboard too.
+- **Habit rubrics.** Each daily habit can say what counts as done, one condition a line. Holding
+  its battery cell floats the rubric beside it, gone when the finger lifts. Backup format 11
+  carries the rubrics; database version 10 adds the column.
+- **Pull to record** on the food page (记一笔), the health page (称重) and the diary (starts writing).
+
+### Changed
+
+- **Food:** every entry reads "how much · per what", a typed-in guess as "1 份 · 每份 650 kcal"
+  like a label's "250 ml · 每 100 ml 40.9 kcal". A right swipe on today's portion takes one more
+  portion in place (2 份 → 3 份) instead of adding a second row. 吃了什么 is folded to a line of
+  names until opened. Recent foods are a grid of equal cells, two rows until 全部, narrowed by the
+  name as it is typed.
+- **Health:** the 7-day average is one continuous line, its windows reaching back before the chosen
+  period, a lone reading standing for itself; 全部记录 is folded by default; 身体成分, 目标体重 and
+  身体类型 take less room, the four body figures in one row.
+- **Diary:** mood, daily habits, the stocktake, the week's review and the day's done todos sit on one
+  card above the text, with the notes taken from the day and 那年今日 unfolding inside it; the
+  habits line up in equal columns.
+- **Notes:** 按主题看 is a grid of equal cells, counts aligned down each column.
+- **Habits:** a long press no longer gives the day off; rest days already taken still show.
+- The selection bar keeps 改期, 移动 and 删除 in view and the rest under ⋮.
+
 ## [0.9.7] - 2026-10-23
 
 ### Added

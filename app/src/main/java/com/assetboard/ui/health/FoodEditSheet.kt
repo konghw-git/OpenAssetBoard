@@ -116,6 +116,8 @@ fun FoodEditSheet(
     // The optional nutrients, folded away until asked for or already filled in; they fold up again.
     var nutrients by rememberSaveable { mutableStateOf(existing?.let { hasNutrients(it) } ?: false) }
     var picking by rememberSaveable { mutableStateOf(false) }
+    // The recent foods past the first two rows, unfolded.
+    var recentOpen by rememberSaveable { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
     val amountFocus = remember { FocusRequester() }
     // Bumped by picking something eaten before: the amount takes the focus, ready to change.
@@ -186,10 +188,27 @@ fun FoodEditSheet(
                 if (existing != null) TextButton(onClick = { onDelete(existing) }) { Text("删除", color = cs.error) }
             }
             if (existing == null && recent.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("最近吃过 · 点一下填好", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = side)
-                    LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(recent, key = { it.id }) { e -> RecentChip(e) { fill(e) } }
+                // Typing a name narrows them to the ones that match, so a long list never needs scrolling through.
+                val q = name.trim()
+                val matches = if (q.isEmpty()) recent else recent.filter { it.name.orEmpty().contains(q, ignoreCase = true) }
+                if (matches.isNotEmpty()) {
+                    val folded = q.isEmpty() && !recentOpen && matches.size > RECENT_FOLDED
+                    Column(side, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                if (q.isEmpty()) "最近吃过 · 点一下填好" else "最近吃过里有 ${matches.size} 项「$q」",
+                                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                            if (q.isEmpty() && matches.size > RECENT_FOLDED) {
+                                Text(
+                                    if (recentOpen) "收起" else "全部 ${matches.size}",
+                                    style = MaterialTheme.typography.labelMedium, color = cs.secondary,
+                                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable { recentOpen = !recentOpen }.padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                        RecentGrid(if (folded) matches.take(RECENT_FOLDED) else matches) { fill(it) }
                     }
                 }
             }
@@ -362,22 +381,39 @@ private fun NumberField(
     )
 }
 
-/** Something eaten before: its name and what it came to, on a tinted pill. */
+private const val RECENT_COLUMNS = 3
+/** The recent foods shown before 全部: two rows. */
+private const val RECENT_FOLDED = RECENT_COLUMNS * 2
+
+/**
+ * Things eaten before in rows of equal cells, however long their names: a name cut short rather
+ * than a cell grown, so the columns line up like a table.
+ */
 @Composable
-private fun RecentChip(e: FoodEntry, onClick: () -> Unit) {
+private fun RecentGrid(items: List<FoodEntry>, onPick: (FoodEntry) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.chunked(RECENT_COLUMNS).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { e -> RecentCell(e, Modifier.weight(1f)) { onPick(e) } }
+                repeat(RECENT_COLUMNS - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** Something eaten before: its name over what it came to, on a tinted tile. */
+@Composable
+private fun RecentCell(e: FoodEntry, modifier: Modifier, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier
-            .clip(RoundedCornerShape(50))
-            .background(cs.secondary.copy(alpha = 0.12f))
+    Column(
+        modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(cs.secondary.copy(alpha = 0.10f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 10.dp, vertical = 7.dp),
     ) {
-        // A lazy row gives no width to share out, so the name is capped rather than weighted.
-        Text(e.name.orEmpty(), style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(Energy.kcal(Energy.energyOf(e)), style = MaterialTheme.typography.labelMedium.merge(NumberStyle), color = cs.secondary)
+        Text(e.name.orEmpty(), style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(Energy.kcal(Energy.energyOf(e)) + " kcal", style = MaterialTheme.typography.labelSmall.merge(NumberStyle), color = cs.secondary, maxLines = 1)
     }
 }
 
