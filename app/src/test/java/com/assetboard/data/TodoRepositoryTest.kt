@@ -518,6 +518,42 @@ class TodoRepositoryTest {
         assertEquals(ReminderPlan.None, plan(id))
     }
 
+    /** A reminder set ahead goes off that long before its time; one set so far ahead that it is past counts as reminded. */
+    @Test fun n13_aReminderAheadGoesOffEarly() = f.run {
+        f.setNow("2026-10-20", "09:00")
+        val id = repo.create(TodoDraft("组会", planDate = date("2026-10-20"), remindTime = LocalTime.of(14, 0)))
+        repo.setRemindBefore(id, 15)
+        assertEquals(ReminderPlan.At(f.at("2026-10-20", "13:45"), snooze = false), plan(id))
+        repo.setRemindBefore(id, 24 * 60)
+        assertEquals(ReminderPlan.None, plan(id))
+        // A repeating todo reminds ahead in every period.
+        val src = repeating(daily, "2026-10-21", remind = "08:00")
+        repo.setRemindBefore(src, 30)
+        assertEquals(ReminderPlan.At(f.at("2026-10-21", "07:30"), snooze = false), plan(src))
+        assertEquals(listOf("准时", "提前 5 分钟", "提前 15 分钟", "提前 30 分钟", "提前 1 小时", "提前 2 小时", "提前 1 天"), ReminderState.ADVANCE_CHOICES.map(ReminderState::advanceLabel))
+        assertEquals("提前15分", ReminderState.advanceShort(15))
+        assertNull(ReminderState.advanceShort(0))
+    }
+
+    /** Without a reminder time there is nothing to remind ahead of: it cannot be set, and goes when the time does. */
+    @Test fun n14_noTimeNoAdvance() = f.run {
+        val id = repo.create(TodoDraft("x", planDate = date("2026-10-21")))
+        expectRule { repo.setRemindBefore(id, 15) }
+        repo.setPlan(id, date("2026-10-21"), LocalTime.of(14, 0))
+        repo.setRemindBefore(id, 15)
+        repo.setPlan(id, date("2026-10-21"), null)
+        assertEquals(0, get(id).remindBefore)
+        repo.setPlan(id, date("2026-10-21"), LocalTime.of(14, 0))
+        repo.setRemindBefore(id, 60)
+        repo.reschedule(listOf(id), date("2026-10-22"), someday = false, TimeChange.Clear)
+        assertEquals(0, get(id).remindBefore)
+        repo.setPlan(id, date("2026-10-22"), LocalTime.of(14, 0))
+        repo.setRemindBefore(id, 60)
+        repo.setSomeday(id, true)
+        assertEquals(0, get(id).remindBefore)
+        expectRule { repo.setRemindBefore(repo.create(TodoDraft("y", planDate = date("2026-10-21"), remindTime = LocalTime.of(9, 0))), ReminderState.MAX_ADVANCE_MINUTES + 1) }
+    }
+
     @Test fun n13_deleteAndRestoreDoesNotRemindAgain() = f.run {
         f.setNow("2026-10-20", "09:00")
         val id = repo.create(TodoDraft("x", planDate = date("2026-10-20"), remindTime = LocalTime.of(9, 0)))

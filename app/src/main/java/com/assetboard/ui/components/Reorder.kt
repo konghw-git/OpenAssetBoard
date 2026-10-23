@@ -47,6 +47,11 @@ import kotlinx.coroutines.launch
  * there is one: the long press keeps its other meaning, such as selecting. [onStart] hears the
  * pick-up, before anything moves, and may fold other rows away to carry them along; it answers
  * how far that moved the row's slot up, so the row stays under the finger.
+ *
+ * Where [onNest] is set, the row can also go into the one above it: slid to the right past
+ * [nestArm] while held, it shows [nestInto] (the row above, when [canNest] allows it), and let go
+ * there it calls [onNest] instead of [onDrop]. The sideways slide never moves rows up or down, so
+ * a reorder stays a reorder however long the finger rests.
  */
 @Stable
 class ReorderState internal constructor(
@@ -55,16 +60,26 @@ class ReorderState internal constructor(
     private val edge: Float,
     private val slop: Float,
     private val haptic: HapticFeedback,
+    private val nestArm: Float,
+    private val nestMax: Float,
 ) {
     var dragging by mutableStateOf<Any?>(null)
         private set
     /** How far the dragged row sits from its slot in the layout. */
     var offset by mutableFloatStateOf(0f)
         private set
+    /** How far the dragged row has slid right, toward going into the row above; 0 without [onNest]. */
+    var nestOffset by mutableFloatStateOf(0f)
+        private set
+    /** The row the dragged one goes into if let go now. */
+    var nestInto by mutableStateOf<Any?>(null)
+        private set
     internal var onMove: (from: Any, to: Any) -> Boolean = { _, _ -> false }
     internal var onDrop: (Any) -> Unit = {}
     internal var onHold: ((Any) -> Unit)? = null
     internal var onStart: (Any) -> Float = { 0f }
+    internal var canNest: (row: Any, into: Any) -> Boolean = { _, _ -> false }
+    internal var onNest: ((row: Any, into: Any) -> Unit)? = null
     private var scroller: Job? = null
     private var travelled = 0f
     private var moved = false
@@ -82,28 +97,68 @@ class ReorderState internal constructor(
         haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
         dragging = key
         offset = onStart(key)
+        nestOffset = 0f
+        nestInto = null
         travelled = 0f
         moved = false
         scroller?.cancel()
         scroller = scope.launch { autoScroll() }
     }
 
-    internal fun drag(dy: Float) {
+    internal fun drag(dx: Float, dy: Float) {
         offset += dy
         travelled += kotlin.math.abs(dy)
+        if (onNest != null) {
+            nestOffset = (nestOffset + dx).coerceIn(0f, nestMax)
+            travelled += kotlin.math.abs(dx)
+        }
         swapIfCrossed()
+        updateNest()
     }
 
-    internal fun end() {
+    internal fun end(cancelled: Boolean = false) {
         val key = dragging ?: return
         scroller?.cancel()
+        // A cancelled drag releases the row; it must never turn into a merge.
+        val into = nestInto.takeUnless { cancelled }
         dragging = null
         offset = 0f
+        nestOffset = 0f
+        nestInto = null
         released = key
         releasedAt = System.nanoTime()
-        haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+        haptic.performHapticFeedback(if (into != null) HapticFeedbackType.Confirm else HapticFeedbackType.GestureEnd)
         val hold = onHold
-        if (hold != null && !moved && travelled < slop) hold(key) else onDrop(key)
+        val nest = onNest
+        when {
+            hold != null && !moved && travelled < slop -> hold(key)
+            into != null && nest != null -> nest(key, into)
+            else -> onDrop(key)
+        }
+    }
+
+    /**
+     * Past [nestArm] the row goes into the row right above its slot, if it may; back under two
+     * thirds of that it stays a row, so a finger resting on the edge does not flicker between.
+     */
+    private fun updateNest() {
+        val key = dragging ?: return
+        if (onNest == null) return
+        val before = nestInto
+        nestInto = when {
+            nestOffset >= nestArm -> above(key)?.takeIf { canNest(key, it) }
+            nestOffset < nestArm * 2 / 3 -> null
+            else -> before?.takeIf { it == above(key) }
+        }
+        if (nestInto != before) haptic.performHapticFeedback(if (nestInto != null) HapticFeedbackType.GestureThresholdActivate else HapticFeedbackType.SegmentTick)
+    }
+
+    /** The key of the row right above [key]'s slot, if it is on screen. */
+    private fun above(key: Any): Any? {
+        val visible = list.layoutInfo.visibleItemsInfo
+        val me = visible.firstOrNull { it.key == key } ?: return null
+        // Selected companions remain in the lazy list with zero height to keep the gesture alive.
+        return visible.lastOrNull { it.index < me.index && it.size > 0 }?.key
     }
 
     /**
@@ -150,6 +205,7 @@ class ReorderState internal constructor(
                 val moved = list.scrollBy(speed)
                 offset += moved
                 swapIfCrossed()
+                updateNest()
             }
         }
     }
@@ -219,23 +275,35 @@ fun rememberReorderState(
     onDrop: (Any) -> Unit,
     onHold: ((Any) -> Unit)? = null,
     onStart: (Any) -> Float = { 0f },
+    canNest: (row: Any, into: Any) -> Boolean = { _, _ -> false },
+    onNest: ((row: Any, into: Any) -> Unit)? = null,
 ): ReorderState {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val edge = with(density) { 64.dp.toPx() }
     val slop = with(density) { 10.dp.toPx() }
+    val nestArm = with(density) { NestArm.toPx() }
+    val nestMax = with(density) { NestMax.toPx() }
     val haptic = LocalHapticFeedback.current
-    val state = remember(list) { ReorderState(list, scope, edge, slop, haptic) }
+    val state = remember(list) { ReorderState(list, scope, edge, slop, haptic, nestArm, nestMax) }
     val move by rememberUpdatedState(onMove)
     val drop by rememberUpdatedState(onDrop)
     val hold by rememberUpdatedState(onHold)
     val start by rememberUpdatedState(onStart)
+    val mayNest by rememberUpdatedState(canNest)
+    val nest by rememberUpdatedState(onNest)
     state.onMove = { a, b -> move(a, b) }
     state.onDrop = { drop(it) }
     state.onHold = if (onHold == null) null else ({ hold?.invoke(it) })
     state.onStart = { start(it) }
+    state.canNest = { a, b -> mayNest(a, b) }
+    state.onNest = if (onNest == null) null else ({ a, b -> nest?.invoke(a, b) })
     return state
 }
+
+/** How far right a held row slides before it goes into the row above, and the most it slides. */
+private val NestArm = 56.dp
+private val NestMax = 72.dp
 
 /** Long press [key]'s row to pick it up and drag it. */
 fun Modifier.reorderable(state: ReorderState, key: Any, enabled: Boolean = true): Modifier =
@@ -244,9 +312,9 @@ fun Modifier.reorderable(state: ReorderState, key: Any, enabled: Boolean = true)
             onDragStart = { state.start(key) },
             onDrag = { change, amount ->
                 change.consume()
-                state.drag(amount.y)
+                state.drag(amount.x, amount.y)
             },
             onDragEnd = { state.end() },
-            onDragCancel = { state.end() },
+            onDragCancel = { state.end(cancelled = true) },
         )
     }

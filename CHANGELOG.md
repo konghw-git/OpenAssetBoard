@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.9] - 2026-10-24
+
+### Added
+
+- **Drag a todo into another.** While a todo is held, sliding it right makes it go into the todo
+  above as a checklist item (the one above lights up, the held one says 并入检查项); the selected
+  todos riding along go in with it. It can be undone. Moving up and down still only reorders.
+- **Reminders ahead of time.** A todo with a time can remind 5, 15 or 30 minutes, 1 or 2 hours or
+  a day early, picked in its detail page; the row's chip and the notification say so. Backup
+  format 12 carries it; database version 11 adds the column.
+- **Lists as cards.** On the phone too the lists are cards, each with its deadline as a tag under
+  the name; a left swipe archives a list, a right swipe deletes it, both with an undo, and a held
+  card is dragged to another place.
+- `scripts/dev-test.sh`: runs only the tests named and prints one line per class, renders
+  screenshots without touching the baselines (`--shots`), skips the screenshot classes while
+  iterating (`--fast`); see 改动时怎么验证 in `CONTRIBUTING.md`.
+
+### Changed
+
+- A todo's date tag (planned day, overdue, deadline) sits on the line under the title, before
+  the reminder, instead of at the end of the row.
+
+### Fixed
+
+- **The screen shook when an account's amount was edited after a right swipe.** The amount field
+  took focus while the pane was still sliding back, off the side of the page, and the tabs moved
+  toward it; once focused, its end-aligned cursor sat a fraction of a pixel past the edge and kept
+  the tabs creeping on toward the next one.
+- **Weekly review numbers.** The net worth change counts amounts changed in place and flows, not
+  only stocktakes (an account opened in the week is not a gain); the weight change compares the
+  two weeks' own weigh-ins, so one weigh-in a week no longer reads 记录不足.
+- **Habit names sat off the middle of their cells** in the unfolded layout, where the cells are
+  short: the line box was taller than the cell and was cut off below.
+- Cancelling a held todo never merges it; selected companions do not obscure the visible
+  merge target. Date and early-reminder tags wrap on narrow screens instead of being clipped.
+- Choosing Tomorrow from a reminder delivered the day before no longer immediately rings again.
+
 ## [0.9.8] - 2026-10-23
 
 ### Added
@@ -461,7 +498,8 @@ between minor versions; backup format v3 reads v1 and v2.
 - Reminder punctuality depends on the phone's autostart and background permissions; the in-app
   checklist walks through them.
 
-[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.9.9...HEAD
+[0.9.9]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.9.8...v0.9.9
 [0.8.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.6.0...v0.7.0

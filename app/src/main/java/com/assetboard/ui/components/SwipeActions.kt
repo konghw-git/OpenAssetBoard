@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -33,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -71,6 +73,13 @@ class SwipeGroup {
 @Composable
 fun rememberSwipeGroup(): SwipeGroup = remember { SwipeGroup() }
 
+/**
+ * Whether the rows around are at rest, none sliding open or shut. A field in a row waits for it
+ * before it takes focus: focused while the row still slides, it asks the scrollers around to show
+ * it where it is for the moment, off the side of the page, and the tabs turn toward it and back.
+ */
+val LocalSwipeAtRest = staticCompositionLocalOf<() -> Boolean> { { true } }
+
 /** A button revealed by swiping right. */
 class SwipeAction(val label: String, val icon: ImageVector, val color: Color, val onClick: () -> Unit)
 
@@ -90,8 +99,9 @@ private const val FLING = 900f
  * An open row closes when another opens, when it is tapped, or when [group] closes all. A stroke
  * on a row is the row's; the tabs turn from anywhere else (see [rowDrag]). A row inside another (a checklist item in its todo) takes only the
  * directions it has something for; the rest go to the outer row. [compact] is for short rows:
- * the delete button shows its icon only. [deleteLabel] and [deleteIcon] name what a left swipe
- * does when it is not quite a delete (an account with history is disabled instead).
+ * the delete button shows its icon only. [deleteLabel], [deleteIcon] and [deleteColor] name what a
+ * left swipe does when it is not quite a delete (an account with history is disabled instead, a
+ * list archived).
  */
 @Composable
 fun SwipeActionsBox(
@@ -105,6 +115,7 @@ fun SwipeActionsBox(
     compact: Boolean = false,
     deleteLabel: String = "删除",
     deleteIcon: ImageVector = Icons.Outlined.Delete,
+    deleteColor: Color? = null,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -126,6 +137,8 @@ fun SwipeActionsBox(
     val armedStart = x > startFull && actions.isNotEmpty()
     val armedEnd = -x > endFull && onDelete != null
     val hidden = dust?.isHidden(key) == true
+    val outerAtRest = LocalSwipeAtRest.current
+    val atRest = remember(outerAtRest) { { outerAtRest() && !offset.isRunning && abs(offset.value) < 0.5f } }
 
     // A tick as a full swipe arms or disarms.
     LaunchedEffect(armedStart, armedEnd) { if (dragging && (armedStart || armedEnd)) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
@@ -188,7 +201,7 @@ fun SwipeActionsBox(
                 a.onClick()
             }
         } else if (x < -0.5f) {
-            DeleteAction(-x, endOpen, armedEnd, shape, compact, deleteLabel, deleteIcon, Modifier.matchParentSize()) { runDelete() }
+            DeleteAction(-x, endOpen, armedEnd, shape, compact, deleteLabel, deleteIcon, deleteColor ?: MaterialTheme.colorScheme.error, Modifier.matchParentSize()) { runDelete() }
         }
         Box(
             Modifier
@@ -206,7 +219,7 @@ fun SwipeActionsBox(
                 )
                 .dissolvable(key),
         ) {
-            content()
+            CompositionLocalProvider(LocalSwipeAtRest provides atRest) { content() }
             // While open, a tap on the card closes it instead of opening the item.
             if (abs(x) > 0.5f && !dragging) {
                 Box(Modifier.matchParentSize().pointerInput(Unit) { detectTapGestures { settle(0f) } })
@@ -243,9 +256,8 @@ private fun StartActions(actions: List<SwipeAction>, x: Float, open: Float, arme
 }
 
 @Composable
-private fun DeleteAction(x: Float, open: Float, armed: Boolean, shape: RoundedCornerShape, compact: Boolean, label: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
+private fun DeleteAction(x: Float, open: Float, armed: Boolean, shape: RoundedCornerShape, compact: Boolean, label: String, icon: ImageVector, color: Color, modifier: Modifier, onClick: () -> Unit) {
     val density = LocalDensity.current
-    val cs = MaterialTheme.colorScheme
     val progress = (x / open).coerceIn(0f, 1f)
     val gap = with(density) { Gap.toPx() }
     val base = with(density) { (if (compact) CompactDeleteWidth else DeleteWidth).toPx() }
@@ -254,7 +266,7 @@ private fun DeleteAction(x: Float, open: Float, armed: Boolean, shape: RoundedCo
     val w = (x - gap * 2).coerceAtLeast(base * progress).coerceAtLeast(1f)
     Box(modifier.padding(end = Gap), contentAlignment = Alignment.CenterEnd) {
         ActionButton(
-            label, icon, cs.error, shape,
+            label, icon, color, shape,
             Modifier
                 .width(with(density) { w.toDp() })
                 .fillMaxHeight()

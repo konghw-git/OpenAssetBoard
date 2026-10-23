@@ -27,7 +27,8 @@ import java.io.File
  * profile and weigh-ins, format 5 the notes, format 6 the notes' order and the weekly reviews,
  * format 7 the net worth goal, format 8 the habits themselves (a file without them reads as the
  * five built in), format 9 what was eaten, format 10 the diary's mood and the habits' rest days,
- * format 11 each habit's rubric; older files read with the newer tables empty and the newer fields unset. Device-local
+ * format 11 each habit's rubric, format 12 how far ahead a todo reminds; older files read with
+ * the newer tables empty and the newer fields unset. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -696,7 +697,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 11
+        const val FORMAT_VERSION = 12
 
         /**
          * [file] with each account's current balance as its only valuation at [now], and one

@@ -61,6 +61,7 @@ import androidx.compose.runtime.key
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -494,9 +495,13 @@ private fun HabitCell(h: Habit, on: Boolean, rest: Boolean, charge: Color, shimm
         val fg = lerp(if (rest) cs.outline else cs.onSurface, Color.White, level)
         Icon(h.iconVector, null, tint = lerp(if (rest) cs.outline else h.tint, Color.White, level), modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
-        Text(h.label, fontSize = 12.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, color = fg, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
+        // Lines as tall as the text, so the name sits in the middle of the cell however short the
+        // cell is: with the body's line height and font padding, a short cell (the unfolded
+        // layout's) trimmed it unevenly above and below.
+        val tight = LocalTextStyle.current.merge(TightLines)
+        Text(h.label, fontSize = 12.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, color = fg, maxLines = 1, overflow = TextOverflow.Clip, style = tight, modifier = Modifier.weight(1f))
         if (rest) {
-            Text("休", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = cs.outline, modifier = Modifier.width(17.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text("休", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = cs.outline, style = tight, modifier = Modifier.width(17.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             return@Row
         }
         Box(

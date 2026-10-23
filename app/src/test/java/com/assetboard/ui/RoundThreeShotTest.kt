@@ -142,6 +142,28 @@ class RoundThreeShotTest {
         compose.waitUntil(5_000) { titlesInOrder(c) == listOf("采购清单", "整理桌面", "回邮件", "订机票") }
     }
 
+    /** Held and slid right, a todo goes into the one above: the one above lights up, the held one says so. */
+    @Test fun aTodoSlidRightGoesIntoTheOneAbove() {
+        val c = container()
+        inbox(c)
+        set(c) { TodoHomeScreen({}, {}, initialView = "inbox") }
+        waitFor("整理桌面")
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("整理桌面").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(1_000)
+        repeat(8) {
+            compose.onNodeWithText("整理桌面").performTouchInput { moveBy(Offset(30f, 0f)) }
+            compose.mainClock.advanceTimeByFrame()
+        }
+        compose.mainClock.advanceTimeBy(300)
+        compose.onRoot().captureRoboImage("screenshots/78-todo-nest.png", roborazziOptions = SHOT_OPTIONS)
+        compose.onNodeWithText("并入检查项").assertExists()
+        compose.onNodeWithText("整理桌面").performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+        compose.waitUntil(5_000) { titlesInOrder(c) == listOf("回邮件", "订机票", "采购清单") }
+        shot("78b-todo-nested")
+    }
+
     @Test fun selectedTodosJoinAnotherOnesChecklist() {
         val c = container()
         val ids = inbox(c)

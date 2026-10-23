@@ -79,6 +79,7 @@ class ModuleScreenshotTest {
         runBlocking(c.gate.bound()) {
             c.repository.seedDefaultGroups()
             listId = t.createList("论文 XYTX")
+            t.updateList(listId, "论文 XYTX", "", today.plusDays(3))
             val s1 = t.createSection(listId, "实验")
             val s2 = t.createSection(listId, "写作")
             t.create(TodoDraft("整理数据集", listId = listId, sectionId = s1, planDate = today))

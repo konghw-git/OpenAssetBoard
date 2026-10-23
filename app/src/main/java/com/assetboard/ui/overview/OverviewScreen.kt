@@ -30,6 +30,9 @@ import com.assetboard.domain.LedgerException
 import com.assetboard.ui.components.GlassSnackbarHost
 import com.assetboard.ui.components.SwipeAction
 import com.assetboard.ui.components.SwipeActionsBox
+import com.assetboard.ui.components.LocalSwipeAtRest
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import com.assetboard.ui.components.SwipeGroup
 import com.assetboard.ui.components.UndoEvent
 import com.assetboard.ui.components.UndoMessages
@@ -1008,7 +1011,12 @@ private fun AccountRowEditor(r: AccountRowUi, noun: String, onSave: (String) -> 
     var text by rememberSaveable(r.account.id) { mutableStateOf(start) }
     var value by remember(r.account.id) { mutableStateOf(TextFieldValue(text, TextRange(0, text.length))) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(r.account.id) { runCatching { focus.requestFocus() } }
+    // Once the pane has slid back from the swipe (see LocalSwipeAtRest).
+    val atRest = LocalSwipeAtRest.current
+    LaunchedEffect(r.account.id) {
+        snapshotFlow { atRest() }.first { it }
+        runCatching { focus.requestFocus() }
+    }
     val valid = Money.parse(value.text) != null
     Row(
         Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
@@ -1021,24 +1029,32 @@ private fun AccountRowEditor(r: AccountRowUi, noun: String, onSave: (String) -> 
             Text("改$noun", style = MaterialTheme.typography.labelSmall, color = cs.primary, maxLines = 1)
         }
         Spacer(Modifier.width(8.dp))
-        BasicTextField(
-            value = value,
-            onValueChange = { v ->
-                value = v.copy(text = v.text.filter { it.isDigit() || it in ".,-+*/×÷()" })
-                text = value.text
-            },
-            singleLine = true,
-            textStyle = MaterialTheme.typography.titleMedium.merge(NumberStyle).copy(color = if (valid) cs.onSurface else cs.error, textAlign = TextAlign.End),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { if (valid) onSave(value.text) }),
-            cursorBrush = SolidColor(cs.primary),
-            modifier = Modifier
+        // The field as wide as its text, at the end of the box: aligned to the end inside a wider
+        // field instead, its cursor sat a fraction of a pixel past the edge, and the field kept
+        // scrolling to show it, a scroll that went on to the tabs and had them creep sideways.
+        Box(
+            Modifier
                 .width(120.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(cs.primary.copy(alpha = 0.08f))
-                .padding(horizontal = 10.dp, vertical = 6.dp)
-                .focusRequester(focus),
-        )
+                .clickable(interactionSource = null, indication = null) { runCatching { focus.requestFocus() } }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = { v ->
+                    value = v.copy(text = v.text.filter { it.isDigit() || it in ".,-+*/×÷()" })
+                    text = value.text
+                },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.titleMedium.merge(NumberStyle).copy(color = if (valid) cs.onSurface else cs.error),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (valid) onSave(value.text) }),
+                cursorBrush = SolidColor(cs.primary),
+                modifier = Modifier.width(IntrinsicSize.Max).focusRequester(focus),
+            )
+        }
         IconButton(onClick = { if (valid) onSave(value.text) }, enabled = valid, modifier = Modifier.size(40.dp)) {
             Box(Modifier.size(30.dp).clip(CircleShape).background(if (valid) cs.primary else cs.outlineVariant), contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.Check, "保存", tint = cs.onPrimary, modifier = Modifier.size(18.dp))

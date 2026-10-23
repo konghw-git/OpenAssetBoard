@@ -355,7 +355,7 @@ private fun WeekHero(start: LocalDate, stats: WeekStats?, onPrev: () -> Unit, on
             Spacer(Modifier.height(8.dp))
             Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (s.hasWeights) Tile("体重", s.weightChangeG?.let { Health.kgDelta(it) } ?: "记录不足", if (s.weightChangeG != null) "kg" else "")
-                if (s.netWorthNow != null) Tile("净资产", s.netWorthChange?.let { (if (it >= 0) "+" else "") + Money.short(it) } ?: "首次盘点", "")
+                if (s.netWorthNow != null) Tile("净资产", s.netWorthChange?.let { (if (it >= 0) "+" else "") + Money.short(it) } ?: "首次记录", "")
             }
         }
         if (s != null) {

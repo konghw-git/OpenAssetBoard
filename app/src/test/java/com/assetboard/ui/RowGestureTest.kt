@@ -29,6 +29,18 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.test.core.app.ApplicationProvider
+import com.assetboard.data.seedDemo
+import com.assetboard.ui.overview.OverviewScreen
+import kotlinx.coroutines.runBlocking
 import com.assetboard.data.ThemeMode
 import com.assetboard.ui.components.SwipeAction
 import com.assetboard.ui.components.SwipeActionsBox
@@ -186,5 +198,40 @@ class RowGestureTest {
         settle()
         assertTrue(completed.value)
         assertTrue("检查项" in items)
+    }
+
+    /**
+     * A full right swipe on an account turns its pane into the amount field while the pane is
+     * still sliding back from far right. The field once took focus out there, off the side of the
+     * page, and the tabs turned toward it; and once focused, its cursor, a fraction of a pixel
+     * past the edge, kept the tabs creeping on toward the next one: the whole screen shook.
+     */
+    @Test fun anAccountSwipedToItsAmountLeavesThePagesStill() {
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
+        runBlocking(c.gate.bound()) { c.repository.seedDemo() }
+        compose.setContent {
+            CompositionLocalProvider(LocalContainer provides c) {
+                AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) {
+                    pager = rememberPagerState { 2 }
+                    LaunchedEffect(pager) { snapshotFlow { pager.isScrollInProgress }.collect { if (it) pagerMoved = true } }
+                    HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+                        if (page == 0) OverviewScreen({}, {}, {}, {}, {}, {}) else Text("第 $page 页")
+                    }
+                }
+            }
+        }
+        compose.waitUntil(10_000) { c.repository.ledger.value != null }
+        settle()
+        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)).performScrollToIndex(2)
+        settle()
+        compose.onNodeWithText("全部展开").performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+        pagerMoved = false
+        compose.onNodeWithText("农行①").performTouchInput { down(center); repeat(6) { moveBy(Offset(30f, 0f)) }; repeat(4) { moveBy(Offset(220f, 0f)) }; up() }
+        settle()
+        compose.onNode(hasSetTextAction()).assertIsFocused()
+        assertFalse("the pages moved under the account", pagerMoved)
+        assertEquals(0, pager.currentPage)
+        assertEquals(0f, pager.currentPageOffsetFraction)
     }
 }

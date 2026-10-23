@@ -6,6 +6,7 @@ import com.assetboard.domain.Habit
 import kotlinx.coroutines.plus
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
@@ -39,6 +40,22 @@ class BackupFixtureTest {
     private fun fixture(name: String): Uri {
         val text = javaClass.getResourceAsStream("/backups/$name")!!.use { it.readBytes().decodeToString() }
         return Uri.fromFile(File(f.context.cacheDir, name).apply { writeText(text) })
+    }
+
+    @Test fun formatTwelveRestoresRemindersAhead() = f.run {
+        val uri = fixture("format-12.json")
+        assertEquals(12, f.backup.inspect(uri).formatVersion)
+        f.backup.restore(uri)
+        val todos = f.db.todoDao().allTodos().associateBy { it.title }
+        assertEquals(15, todos.getValue("写引言").remindBefore)
+        assertEquals("09:30", todos.getValue("写引言").remindTime)
+        assertEquals(0, todos.getValue("跑步").remindBefore)
+    }
+
+    /** A file from before reminders could go off ahead reads with every reminder at its time. */
+    @Test fun formatElevenRemindsAtTheTime() = f.run {
+        f.backup.restore(fixture("format-11.json"))
+        assertTrue(f.db.todoDao().allTodos().all { it.remindBefore == 0 })
     }
 
     @Test fun formatElevenRestoresTheRubrics() = f.run {
@@ -88,6 +105,7 @@ class BackupFixtureTest {
         val list = f.todos.createList("论文")
         val paper = f.todos.create(TodoDraft("写引言", listId = list, planDate = date("2026-10-21"), remindTime = java.time.LocalTime.of(9, 30)))
         f.todos.editInline(paper, "写引言", listOf(InlineItem(null, "查文献"), InlineItem(null, "列提纲")))
+        f.todos.setRemindBefore(paper, 15)
         val rep = f.todos.create(TodoDraft("跑步", planDate = date("2026-10-20")))
         f.todos.setRepeat(rep, com.assetboard.domain.todo.RepeatRule(com.assetboard.domain.todo.RepeatType.DAILY))
         f.todos.complete(rep, f.todos.todo(rep)!!.stateSeq)

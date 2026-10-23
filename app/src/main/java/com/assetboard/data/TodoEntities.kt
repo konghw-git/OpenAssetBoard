@@ -67,6 +67,8 @@ data class Todo(
     @ColumnInfo(name = "plan_date") val planDate: String? = null,
     @ColumnInfo(name = "remind_time") val remindTime: String? = null,
     @ColumnInfo(name = "strong_remind") val strongRemind: Boolean = false,
+    /** How many minutes before [remindTime] the reminder goes off; 0 is at the time itself. */
+    @ColumnInfo(name = "remind_before", defaultValue = "0") val remindBefore: Int = 0,
     val someday: Boolean = false,
     val deadline: String? = null,
     val important: Boolean = false,

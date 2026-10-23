@@ -125,9 +125,9 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
         val checks = container.db.habitDao().all()
         val todos = container.todos.loadOnce().todos
         val weights = container.db.healthDao().all()
-        val worth = container.repository.loadOnce().netWorthSeries().map { it.snapshot.at to it.netWorth }
+        val ledger = container.repository.loadOnce()
         val habits = container.habits.observeAll().first()
-        val s = WeekStats.of(start, today(), diaries, checks, todos, weights, worth, allHabits = habits)
+        val s = WeekStats.of(start, today(), diaries, checks, todos, weights, ledger, System.currentTimeMillis(), allHabits = habits)
         if (_start.value == start) stats.value = s
     }
 

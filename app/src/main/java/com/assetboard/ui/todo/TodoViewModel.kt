@@ -168,6 +168,13 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
     fun updateList(id: String, name: String, notes: String, deadline: LocalDate?) = action { repo.updateList(id, name, notes, deadline) }
     fun setArchived(id: String, archived: Boolean) = action { repo.setArchived(id, archived) }
     fun moveList(id: String, delta: Int) = action { repo.moveList(id, delta) }
+    fun reorderLists(ids: List<String>) = action { repo.reorderLists(ids) }
+
+    /** A left swipe on a list: archived, with an undo; it stays findable in 日志 as well. */
+    fun archiveList(id: String, name: String) = action {
+        repo.setArchived(id, true)
+        _events.tryEmit(TodoEvent("已归档「${name.take(14)}」，可在日志里找回") { repo.setArchived(id, false) })
+    }
 
     fun deleteList(id: String, onDone: () -> Unit) = action {
         val batch = repo.deleteList(id)

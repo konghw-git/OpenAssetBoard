@@ -2,9 +2,7 @@ package com.assetboard.data
 
 import android.app.Application
 import android.net.Uri
-import com.assetboard.domain.Habit
 import com.assetboard.domain.LedgerException
-import com.assetboard.domain.WeekStats
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.plus
@@ -16,7 +14,6 @@ import kotlinx.serialization.json.jsonObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -26,7 +23,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 
-/** Weekly reviews: the week's rules, its session, the trash, backup and restore, and its numbers. */
+/** Weekly reviews: the week's rules, its session, the trash, backup and restore (its numbers: WeekStatsTest). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class)
 class WeekTest {
@@ -170,32 +167,4 @@ class WeekTest {
         assertEquals(setOf("周三的", "复盘的"), f.notes.observeFromWeek(week).first().map { it.body }.toSet())
     }
 
-    @Test fun weekStats() {
-        val zone = f.zone
-        fun at(d: String) = f.at(d, "09:00")
-        val todos = listOf(
-            Todo(id = "a", kind = TodoKind.ORDINARY, title = "a", completedAt = at("2026-10-20"), createdAt = 0),
-            Todo(id = "b", kind = TodoKind.COMPLETION, title = "b", completedAt = at("2026-10-25"), createdAt = 0),
-            Todo(id = "c", kind = TodoKind.ORDINARY, title = "c", completedAt = at("2026-10-26"), createdAt = 0),
-            Todo(id = "d", kind = TodoKind.ORDINARY, title = "d", completedAt = at("2026-10-21"), deletedAt = 1, createdAt = 0),
-        )
-        fun weigh(d: String, g: Long) = BodyMeasurement("m$d", d, 0, g, null, null, 0, 0)
-        val weights = listOf(weigh("2026-10-13", 80_000), weigh("2026-10-15", 80_400), weigh("2026-10-20", 79_800), weigh("2026-10-22", 79_600))
-        val checks = listOf(HabitCheck("2026-10-19", Habit.WORKOUT.key, 0), HabitCheck("2026-10-21", Habit.WORKOUT.key, 0), HabitCheck("2026-10-18", Habit.WORKOUT.key, 0))
-        val worth = listOf(at("2026-10-10") to 100_000L, at("2026-10-21") to 130_000L, at("2026-10-23") to 125_000L)
-        val s = WeekStats.of(week, date("2026-10-22"), listOf(date("2026-10-19"), date("2026-10-22"), date("2026-10-23")), checks, todos, weights, worth, zone)
-        // Four days so far; a day after today is not counted.
-        assertEquals(2, s.diaryDays)
-        assertEquals(4, s.diaryOf)
-        assertEquals(2, s.habits[Habit.WORKOUT])
-        assertEquals(2, s.todosDone)
-        // This week's last 7-day average (10-16..10-22: 79.8, 79.6) minus last week's (10-09..10-15: 80.0, 80.4).
-        assertEquals(79_700L - 80_200L, s.weightChangeG)
-        assertEquals(125_000L, s.netWorthNow)
-        assertEquals(25_000L, s.netWorthChange)
-        val empty = WeekStats.of(week.plusWeeks(1), date("2026-10-22"), emptyList(), emptyList(), emptyList(), emptyList(), worth, zone)
-        assertEquals(0, empty.diaryOf)
-        assertFalse(empty.hasWeights)
-        assertNull(empty.netWorthNow)
-    }
 }

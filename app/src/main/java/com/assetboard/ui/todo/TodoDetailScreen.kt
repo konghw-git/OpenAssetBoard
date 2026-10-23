@@ -81,6 +81,8 @@ import com.assetboard.data.UndoOutcome
 import com.assetboard.domain.Dates
 import com.assetboard.domain.calendar.ChineseCalendar
 import com.assetboard.domain.todo.IntervalUnit
+import com.assetboard.domain.todo.ReminderState
+import androidx.compose.material.icons.outlined.NotificationsActive
 import com.assetboard.domain.todo.Recurrence
 import com.assetboard.domain.todo.RepeatRule
 import com.assetboard.domain.todo.RepeatType
@@ -173,6 +175,7 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
     fun setDeadline(d: LocalDate?) = action { repo.setDeadline(id, d) }
     fun setImportant(v: Boolean) = action { repo.setImportant(id, v) }
     fun setStrong(v: Boolean) = action { repo.setStrongRemind(id, v) }
+    fun setRemindBefore(minutes: Int) = action { repo.setRemindBefore(id, minutes) }
     fun setRepeat(rule: RepeatRule?, onDone: () -> Unit) = action(onSuccess = onDone) { repo.setRepeat(id, rule) }
     fun move(listId: String?, sectionId: String?) = action { repo.move(id, listId, sectionId) }
     fun addItem(text: String) = action { if (text.isNotBlank()) repo.addChecklistItem(id, text) }
@@ -390,6 +393,7 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
             },
             onClear = if (t.remindTime != null) ({ dialog = null; vm.setPlan(TodoViews.parse(t.planDate), null) }) else null,
         )
+        "advance" -> AdvanceDialog(t.remindBefore, onDismiss = { dialog = null }) { dialog = null; vm.setRemindBefore(it) }
         "deadline" -> DatePickDialog(
             initial = TodoViews.parse(t.deadline) ?: today, maxDate = null,
             onDismiss = { dialog = null }, onPick = { dialog = null; vm.setDeadline(it) },
@@ -438,12 +442,23 @@ private fun Schedule(t: Todo, today: LocalDate, editable: Boolean, onDialog: (St
         RowDivider(58.dp)
         ListRow(
             title = "时间",
-            subtitle = if (t.someday) "「以后再说」的待办不定时" else "到点提醒",
+            subtitle = when {
+                t.someday -> "「以后再说」的待办不定时"
+                t.remindTime != null && t.remindBefore > 0 -> ReminderState.advanceLabel(t.remindBefore) + "提醒"
+                else -> "到点提醒"
+            },
             leading = { Icon(Icons.Outlined.Schedule, null, tint = cs.primary) },
             trailing = { Text(t.remindTime ?: "不定时", color = cs.onSurfaceVariant) },
             onClick = if (editable && !t.someday) ({ onDialog("remind") }) else null,
         )
         if (t.remindTime != null) {
+            RowDivider(58.dp)
+            ListRow(
+                title = "提前提醒",
+                leading = { Icon(Icons.Outlined.NotificationsActive, null, tint = cs.primary) },
+                trailing = { Text(ReminderState.advanceLabel(t.remindBefore), color = cs.onSurfaceVariant) },
+                onClick = if (editable) ({ onDialog("advance") }) else null,
+            )
             RowDivider(58.dp)
             ListRow(
                 title = "强提醒",
@@ -490,6 +505,23 @@ private fun Schedule(t: Todo, today: LocalDate, editable: Boolean, onDialog: (St
             )
         }
     }
+}
+
+/** How far ahead of its time the reminder goes off: one tap on a preset, the current one marked. */
+@Composable
+private fun AdvanceDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("提前提醒") },
+        text = {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                ReminderState.ADVANCE_CHOICES.forEach { m ->
+                    FilterChip(selected = m == current, onClick = { onPick(m) }, label = { Text(ReminderState.advanceLabel(m)) })
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 @Composable

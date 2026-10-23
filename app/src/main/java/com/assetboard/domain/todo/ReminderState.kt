@@ -26,10 +26,33 @@ sealed interface ReminderPlan {
 object ReminderState {
     const val CATCH_UP_WINDOW_MS = 24L * 3600 * 1000
 
+    /** How far ahead a reminder can go off, in minutes: the choices offered, at the time itself first. */
+    val ADVANCE_CHOICES = listOf(0, 5, 15, 30, 60, 120, 24 * 60)
+
+    /** The furthest ahead a reminder may be set, a week. */
+    const val MAX_ADVANCE_MINUTES = 7 * 24 * 60
+
+    /** "准时", "提前 15 分钟", "提前 2 小时", "提前 1 天". */
+    fun advanceLabel(minutes: Int): String = when {
+        minutes <= 0 -> "准时"
+        minutes % (24 * 60) == 0 -> "提前 ${minutes / (24 * 60)} 天"
+        minutes % 60 == 0 -> "提前 ${minutes / 60} 小时"
+        else -> "提前 $minutes 分钟"
+    }
+
+    /** The same, short enough for a row's reminder chip: "提前15分", "提前2小时", "提前1天"; null at the time itself. */
+    fun advanceShort(minutes: Int): String? = when {
+        minutes <= 0 -> null
+        minutes % (24 * 60) == 0 -> "提前${minutes / (24 * 60)}天"
+        minutes % 60 == 0 -> "提前${minutes / 60}小时"
+        else -> "提前${minutes}分"
+    }
+
+    /** When the planned reminder goes off: the plan date at the reminder time, [Todo.remindBefore] minutes early. */
     fun plannedAt(t: Todo, zone: ZoneId = ZoneId.systemDefault()): Long? {
         val date = TodoViews.parse(t.planDate) ?: return null
         val time = t.remindTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: return null
-        return date.atTime(time).atZone(zone).toInstant().toEpochMilli()
+        return date.atTime(time).atZone(zone).toInstant().toEpochMilli() - t.remindBefore * 60_000L
     }
 
     /** The reminder currently due, if any: a pending snooze first, else the planned one if not yet delivered. */
@@ -62,13 +85,17 @@ object ReminderState {
     }
 
     /** "Tomorrow" on a notification. */
-    fun tomorrow(t: Todo, today: LocalDate, now: Long, zone: ZoneId = ZoneId.systemDefault()): Todo =
-        if (t.kind == com.assetboard.data.TodoKind.REPEAT_SOURCE) {
+    fun tomorrow(t: Todo, today: LocalDate, now: Long, zone: ZoneId = ZoneId.systemDefault()): Todo {
+        val time = t.remindTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+        val at = time?.let { today.plusDays(1).atTime(it).atZone(zone).toInstant().toEpochMilli() } ?: (now + 24L * 3600 * 1000)
+        return if (t.kind == com.assetboard.data.TodoKind.REPEAT_SOURCE) {
             // Keep the series' rhythm: only the reminder moves, to the same time tomorrow.
-            val time = t.remindTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
-            val at = time?.let { today.plusDays(1).atTime(it).atZone(zone).toInstant().toEpochMilli() } ?: (now + 24L * 3600 * 1000)
             t.copy(snoozeAt = at)
         } else {
-            t.copy(planDate = today.plusDays(1).toString(), snoozeAt = null, remindedPeriod = null)
+            val next = t.copy(planDate = today.plusDays(1).toString(), snoozeAt = null, remindedPeriod = null)
+            // An early reminder may already be for tomorrow's event. Applying the advance again
+            // would fire immediately; in that case remind once at tomorrow's event time instead.
+            if (plannedAt(next, zone)?.let { it <= now } == true) next.copy(snoozeAt = at) else next
         }
+    }
 }

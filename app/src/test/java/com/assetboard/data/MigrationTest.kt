@@ -254,6 +254,26 @@ class MigrationTest {
         }
     }
 
+    @Test fun migrationTenToElevenRemindsAtTheTimeAndKeepsTheTodo() {
+        helper.createDatabase(name, 10).use { db ->
+            db.put(
+                "todos", "id" to "t1", "kind" to "ORDINARY", "title" to "组会", "notes" to "", "list_id" to null, "section_id" to null,
+                "plan_date" to "2026-10-21", "remind_time" to "14:00", "strong_remind" to true, "someday" to false, "deadline" to null,
+                "important" to false, "snooze_at" to null, "reminded_period" to null, "repeat_rule" to null, "repeat_ended_at" to null,
+                "occurrence_count" to 0, "repeat_source_id" to null, "undo_before" to null, "undo_revision" to null, "state_seq" to 3L,
+                "revision" to 2, "sort_order" to 5, "created_at" to 1L, "completed_at" to null, "deleted_at" to null, "delete_batch" to null,
+            )
+        }
+        helper.runMigrationsAndValidate(name, 11, true, Migrations.MIGRATION_10_11).use { db ->
+            fun List<Any?>.col(name: String) = this[indexOf(name) - size / 2]
+            val t = db.dump("todos").single()
+            assertEquals(0L, t.col("remind_before"))
+            assertEquals("14:00", t.col("remind_time"))
+            assertEquals(1L, t.col("strong_remind"))
+            assertEquals(3L, t.col("state_seq"))
+        }
+    }
+
     @Test fun migrationNineToTenGivesHabitsAnEmptyRubric() {
         helper.createDatabase(name, 9).use { db ->
             db.put("habits", "key" to "read", "label" to "读书", "icon" to "book", "color" to 0xFF2A9D8F, "position" to 0L, "added_on" to "2026-10-01", "removed_on" to null)

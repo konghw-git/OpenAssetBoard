@@ -66,7 +66,7 @@ class HabitRestTest {
             HabitCheck("2026-10-20", Habit.WORKOUT.key, 1, skipped = true),
             HabitCheck("2026-10-21", Habit.WORKOUT.key, 1, skipped = true),
         )
-        val s = WeekStats.of(start, start.plusDays(6), emptyList(), checks, emptyList(), emptyList(), emptyList())
+        val s = WeekStats.of(start, start.plusDays(6), emptyList(), checks, emptyList(), emptyList(), null, 0L)
         assertEquals(1, s.habits.getValue(Habit.WORKOUT))
         assertEquals(2, s.habitRestDays.getValue(Habit.WORKOUT))
         assertNull(s.habitRestDays[Habit.WATER])

@@ -54,6 +54,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -349,7 +351,26 @@ fun TodoHomeScreen(
             carried = ride
             listState.heightAbove(key, ride.map { it.key })
         },
+        // Slid right while held, a todo (and the selected ones riding with it) goes into the open
+        // todo above as checklist items, as 并入已有待办的检查项 does from the selection bar.
+        canNest = { key, into ->
+            val goes = listOf(key) + carried.map { it.key }
+            val target = (order.firstOrNull { it.key == into } as? Line.Item)?.row
+            target != null && !target.done && target.todo.kind != TodoKind.COMPLETION && into !in goes &&
+                goes.all { id -> (order.firstOrNull { it.key == id } as? Line.Item)?.row?.let { !it.done && it.todo.kind == TodoKind.ORDINARY } == true }
+        },
+        onNest = { key, into ->
+            val goes = listOf(key as String) + carried.map { it.key }
+            carried = emptyList()
+            selection = emptySet()
+            d?.todoById?.get(into as String)?.let { vm.mergeInto(it, goes) }
+        },
     )
+    // The lists in the order on screen; a drag rearranges them here and saves the order on release.
+    val shownLists = remember(d) { d?.lists?.filter { it.archivedAt == null }.orEmpty() }
+    var listOrder by remember(shownLists) { mutableStateOf(shownLists) }
+    // The unfolded layout's side column, where the lists are then.
+    val sideState = rememberLazyListState()
     val todayRows = remember(d, today) { d?.let { TodoViews.today(it.todos, today) }.orEmpty() }
     val doneToday = todayRows.count { it.done }
     val dialGone by remember { derivedStateOf { listState.firstVisibleItemIndex > DIAL_ITEM } }
@@ -441,17 +462,41 @@ fun TodoHomeScreen(
         CompositionLocalProvider(LocalAmbient provides ambient) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= 600.dp
+            val listReorder = rememberReorderState(
+                if (wide) sideState else listState,
+                onMove = { from, to ->
+                    val a = listOrder.indexOfFirst { listKey(it.id) == from }
+                    val b = listOrder.indexOfFirst { listKey(it.id) == to }
+                    if (a < 0 || b < 0) {
+                        false
+                    } else {
+                        listOrder = listOrder.toMutableList().apply { add(b, removeAt(a)) }
+                        true
+                    }
+                },
+                onDrop = { vm.reorderLists(listOrder.map { it.id }) },
+                // Held without moving: nothing; a list has no selection.
+                onHold = {},
+            )
+            val lists = ListsContext(
+                d, listOrder, today, selected,
+                onSelect = { selected = it },
+                onCreate = { name -> vm.createList(name) { selected = ViewKey.list(it) } },
+                swipe = swipe, reorder = listReorder, vm = vm,
+            )
             if (wide) {
                 Row(Modifier.fillMaxSize()) {
-                    Column(
-                        Modifier.width(340.dp).fillMaxHeight().verticalScrollWithIndicator(rememberScrollState()).statusBarsPadding().padding(bottom = 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    LazyColumn(
+                        Modifier.width(340.dp).fillMaxHeight().statusBarsPadding().scrollIndicator(sideState),
+                        state = sideState,
+                        contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
-                        HomeTitle(today, doneToday, todayRows.size, onSettings)
-                        Box(Modifier.padding(horizontal = 16.dp)) { ReminderBanners(vm, onGuide) }
-                        dial(Modifier)
-                        composerField()
-                        ListCards(d, selected, onSelect = { selected = it }, onCreate = { name -> vm.createList(name) { selected = ViewKey.list(it) } })
+                        // The gaps of the column it replaced, which spaced everything by 14dp.
+                        item("title") { Box(Modifier.padding(bottom = 14.dp)) { HomeTitle(today, doneToday, todayRows.size, onSettings) } }
+                        item("banners") { Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) { ReminderBanners(vm, onGuide) } }
+                        item("views") { Box(Modifier.padding(bottom = 14.dp)) { dial(Modifier) } }
+                        item("composer") { Box(Modifier.padding(bottom = 8.dp)) { composerField() } }
+                        listCards(lists)
                     }
                     VerticalDivider(color = cs.outlineVariant)
                     Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -474,7 +519,7 @@ fun TodoHomeScreen(
                         item("banners") { Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) { ReminderBanners(vm, onGuide) } }
                         item("views") { dial(Modifier.padding(top = 2.dp, bottom = 6.dp)) }
                         item("composer") { composerField() }
-                        item("lists") { ListStrip(d, selected, onSelect = { selected = it }, onCreate = { name -> vm.createList(name) { selected = ViewKey.list(it) } }) }
+                        listCards(lists)
                         viewContent(ctx)
                     }
                     }
@@ -587,24 +632,114 @@ private const val PULL_ARMED = "松手新建待办"
 
 // ---------------------------------------------------------------- lists
 
-@Composable
-private fun ListStrip(d: TodoData?, selected: String, onSelect: (String) -> Unit, onCreate: (String) -> Unit) {
-    val lists = d?.lists?.filter { it.archivedAt == null }.orEmpty()
-    var adding by rememberSaveable { mutableStateOf(false) }
-    Column(Modifier.padding(top = 6.dp)) {
-        ListsHeader(adding, Modifier.padding(start = 20.dp, end = 16.dp)) { adding = !adding }
-        NewListField(adding, onCreate, onClose = { adding = false }, Modifier.padding(horizontal = 16.dp))
-        if (lists.isEmpty() && !adding) {
-            Text(
-                "把一个项目拆成清单，再用分区分阶段",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 6.dp),
-            )
-        }
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            itemsIndexed(lists, key = { _, l -> l.id }) { i, l ->
-                ListPill(l, AppTheme.extra.group(i), TodoViews.countInList(l.id, d!!.todos), selected == ViewKey.list(l.id), Modifier.animateItem()) { onSelect(ViewKey.list(l.id)) }
+/** What the lists' cards need from the page. */
+private class ListsContext(
+    val data: TodoData?,
+    /** The lists not archived, in the order on screen: one being dragged is already in its new place. */
+    val lists: List<TodoList>,
+    val today: LocalDate,
+    val selected: String,
+    val onSelect: (String) -> Unit,
+    val onCreate: (String) -> Unit,
+    val swipe: SwipeGroup,
+    val reorder: ReorderState,
+    val vm: TodoViewModel,
+)
+
+/** A list card's key in the LazyColumn, for its swipe and its dust. */
+private fun listKey(id: String) = "list-card:$id"
+
+private val ListCardShape = RoundedCornerShape(18.dp)
+
+/**
+ * 清单, the same on the phone and unfolded: the header with 新建, then a card for each list. A
+ * tap opens the list; a left swipe archives it and a right swipe deletes it, each with an undo;
+ * held, it is dragged to another place.
+ */
+private fun LazyListScope.listCards(c: ListsContext) {
+    item("lists-header") {
+        var adding by rememberSaveable { mutableStateOf(false) }
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 4.dp)) {
+            ListsHeader(adding, Modifier.padding(start = 4.dp)) { adding = !adding }
+            NewListField(adding, c.onCreate, onClose = { adding = false })
+            if (c.lists.isEmpty() && !adding) {
+                Text(
+                    "把一个项目拆成清单，再用分区分阶段",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 6.dp),
+                )
             }
+        }
+    }
+    items(c.lists, key = { listKey(it.id) }) { l ->
+        val key = listKey(l.id)
+        val dragged = c.reorder.dragging == key
+        val cs = MaterialTheme.colorScheme
+        Box(
+            Modifier
+                .zIndex(if (dragged) 1f else 0f)
+                .graphicsLayer { translationY = if (dragged) c.reorder.offset else 0f }
+                .then(if (dragged) Modifier else Modifier.animateItem())
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            SwipeActionsBox(
+                key = key,
+                group = c.swipe,
+                shape = ListCardShape,
+                enabled = c.reorder.dragging == null,
+                actions = listOf(SwipeAction("删除", Icons.Outlined.Delete, cs.error) { c.vm.deleteList(l.id) {} }),
+                onDelete = { c.vm.archiveList(l.id, l.name) },
+                deleteLabel = "归档",
+                deleteIcon = Icons.Outlined.Archive,
+                deleteColor = cs.tertiary,
+            ) {
+                ListCard(
+                    l, listColor(c.data, l.id) ?: cs.primary, TodoViews.countInList(l.id, c.data?.todos.orEmpty()),
+                    selected = c.selected == ViewKey.list(l.id), today = c.today, lifted = dragged,
+                    modifier = Modifier.reorderable(c.reorder, key),
+                ) { if (!c.reorder.ownsClick(key)) c.onSelect(ViewKey.list(l.id)) }
+            }
+        }
+    }
+}
+
+/**
+ * One list: its icon, its name with the deadline's tag under it (the way a todo's reminder sits
+ * under its title), and the open todos in it. Filled with its color while open.
+ */
+@Composable
+private fun ListCard(l: TodoList, color: Color, count: Int, selected: Boolean, today: LocalDate, lifted: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val bg by animateColorAsState(if (selected) color else Color.Transparent, tween(220), label = "listCard")
+    val lift by animateFloatAsState(if (lifted) 1f else 0f, spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow), label = "lift")
+    val badge = TodoViews.parse(l.deadline)?.let { TodoViews.deadlineBadge(it, today) }
+    Row(
+        modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = 1f + 0.03f * lift; scaleY = scaleX }
+            .then(if (selected) Modifier.shadow(8.dp + 12.dp * lift, ListCardShape, spotColor = color) else Modifier.glass(ListCardShape, glass, elevation = 6.dp + 18.dp * lift))
+            .clip(ListCardShape)
+            .background(bg)
+            .clickable(onClick = onClick)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(32.dp).clip(CircleShape).background(if (selected) Color.White.copy(alpha = 0.22f) else color.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.FormatListBulleted, null, tint = if (selected) Color.White else color, modifier = Modifier.size(16.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(l.name, style = MaterialTheme.typography.bodyLarge, color = if (selected) Color.White else cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (badge != null) {
+                Box(Modifier.padding(top = 3.dp)) {
+                    MetaChip(Icons.Outlined.Event, badge.text, if (selected) Color.White else badgeColor(badge.tone), bold = badge.tone == com.assetboard.domain.todo.DateBadge.Tone.ALERT)
+                }
+            }
+        }
+        if (count > 0) {
+            Spacer(Modifier.width(8.dp))
+            Text(count.toString(), style = MaterialTheme.typography.labelLarge, color = if (selected) Color.White.copy(alpha = 0.8f) else cs.onSurfaceVariant)
         }
     }
 }
@@ -678,63 +813,6 @@ private fun NewListField(visible: Boolean, onCreate: (String) -> Unit, onClose: 
             }
             val ready = name.isNotBlank()
             TextButton(onClick = ::create, enabled = ready) { Text("创建") }
-        }
-    }
-}
-
-@Composable
-private fun ListPill(l: TodoList, color: Color, count: Int, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val bg by animateColorAsState(if (selected) color else color.copy(alpha = 0f), tween(220), label = "pill")
-    val fg = if (selected) Color.White else cs.onSurface
-    val source = remember { MutableInteractionSource() }
-    Row(
-        modifier
-            .height(44.dp)
-            .pressScale(source)
-            .then(if (selected) Modifier.shadow(8.dp, RoundedCornerShape(50), spotColor = color) else Modifier.glass(RoundedCornerShape(50), glass, elevation = 6.dp))
-            .clip(RoundedCornerShape(50))
-            .background(bg)
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
-            .padding(start = 6.dp, end = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(32.dp).clip(CircleShape).background(if (selected) Color.White.copy(alpha = 0.22f) else color.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.FormatListBulleted, null, tint = if (selected) Color.White else color, modifier = Modifier.size(16.dp))
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(l.name, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 150.dp))
-        if (count > 0) {
-            Spacer(Modifier.width(6.dp))
-            Text(count.toString(), style = MaterialTheme.typography.labelMedium, color = if (selected) Color.White.copy(alpha = 0.8f) else cs.onSurfaceVariant)
-        }
-    }
-}
-
-/** The wide layout's lists: one long card each. */
-@Composable
-private fun ListCards(d: TodoData?, selected: String, onSelect: (String) -> Unit, onCreate: (String) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val lists = d?.lists?.filter { it.archivedAt == null }.orEmpty()
-    var adding by rememberSaveable { mutableStateOf(false) }
-    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ListsHeader(adding, Modifier.padding(start = 4.dp)) { adding = !adding }
-        NewListField(adding, onCreate, onClose = { adding = false })
-        lists.forEachIndexed { i, l ->
-            val color = AppTheme.extra.group(i)
-            val on = selected == ViewKey.list(l.id)
-            val bg by animateColorAsState(if (on) color else cs.surfaceContainer, tween(220), label = "card")
-            Row(
-                Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(18.dp)).background(bg).clickable { onSelect(ViewKey.list(l.id)) }.padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.size(32.dp).clip(CircleShape).background(if (on) Color.White.copy(alpha = 0.22f) else color.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.FormatListBulleted, null, tint = if (on) Color.White else color, modifier = Modifier.size(16.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Text(l.name, style = MaterialTheme.typography.bodyLarge, color = if (on) Color.White else cs.onSurface, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                CountText(TodoViews.countInList(l.id, d!!.todos))
-            }
         }
     }
 }
@@ -843,13 +921,20 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                 val editing = c.editing == t.id
                 val movable = line.band != null && c.editing == null
                 val dragged = c.reorder.dragging == t.id
+                val nesting = dragged && c.reorder.nestInto != null
                 val stack = if (dragged) c.carried.size else 0
                 val stackColor = MaterialTheme.colorScheme.primary
                 Box(
                     Modifier
                         .then(if (t.id in c.carried) Modifier.foldedAway() else Modifier)
                         .zIndex(if (dragged) 1f else 0f)
-                        .graphicsLayer { translationY = if (dragged) c.reorder.offset else 0f }
+                        .graphicsLayer {
+                            translationY = if (dragged) c.reorder.offset else 0f
+                            // Slid right, toward going into the row above; a little smaller once it would.
+                            translationX = if (dragged) c.reorder.nestOffset else 0f
+                            val s = if (nesting) 0.94f else 1f
+                            scaleX = s; scaleY = s
+                        }
                         .then(if (dragged) Modifier else Modifier.animateItem())
                         // The rows carried along peek out under the one held, as a little stack.
                         .then(if (stack > 0) Modifier.drawBehind { stackUnder(stack, stackColor, side = 16.dp.toPx(), top = 3.dp.toPx(), corner = 18.dp.toPx()) } else Modifier)
@@ -909,7 +994,7 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             onLongClick = if (logbook || line.row.done || movable) null else ({ c.onSelection(c.selection.toggle(t.id)) }),
                             modifier = Modifier.reorderable(c.reorder, t.id, enabled = movable),
                             lifted = dragged,
-                            selected = t.id in c.selection,
+                            selected = t.id in c.selection || c.reorder.nestInto == t.id,
                             inUpcoming = c.view == TodoView.UPCOMING,
                             checklist = if (logbook) emptyList() else items.sortedBy { it.sortOrder },
                             onToggleItem = if (selecting) null else ({ id -> if (!c.reorder.ownsClick(t.id)) c.vm.toggleChecklist(id) }),
@@ -917,7 +1002,11 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             swipe = c.swipe,
                         )
                     }
-                    if (stack > 0) CarryBadge("${stack + 1} 条", Modifier.align(Alignment.TopEnd).padding(end = 6.dp))
+                    when {
+                        // At the leading corner: the card has slid right, its trailing one off the screen.
+                        nesting -> CarryBadge(if (stack > 0) "${stack + 1} 条并入检查项" else "并入检查项", Modifier.align(Alignment.TopStart).padding(start = 28.dp))
+                        stack > 0 -> CarryBadge("${stack + 1} 条", Modifier.align(Alignment.TopEnd).padding(end = 6.dp))
+                    }
                 }
             }
         }
@@ -1015,8 +1104,8 @@ private fun ViewHeader(c: ViewContext) {
                             DropdownMenu(menu, { menu = false }) {
                                 DropdownMenuItem(text = { Text("新建分区") }, onClick = { menu = false; c.onSection("" to "") })
                                 DropdownMenuItem(text = { Text("编辑清单") }, onClick = { menu = false; c.onListMenu("rename") })
-                                DropdownMenuItem(text = { Text("左移") }, onClick = { menu = false; c.vm.moveList(c.list.id, -1) })
-                                DropdownMenuItem(text = { Text("右移") }, onClick = { menu = false; c.vm.moveList(c.list.id, 1) })
+                                DropdownMenuItem(text = { Text("上移") }, onClick = { menu = false; c.vm.moveList(c.list.id, -1) })
+                                DropdownMenuItem(text = { Text("下移") }, onClick = { menu = false; c.vm.moveList(c.list.id, 1) })
                                 DropdownMenuItem(text = { Text("归档（已完成）") }, onClick = { menu = false; c.onListMenu("archive") })
                                 DropdownMenuItem(text = { Text("删除清单", color = cs.error) }, onClick = { menu = false; c.onListMenu("delete") })
                             }

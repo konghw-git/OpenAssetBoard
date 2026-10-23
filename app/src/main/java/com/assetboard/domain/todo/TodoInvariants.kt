@@ -26,6 +26,8 @@ object TodoInvariants {
         ensure(dateOk(t.planDate) && dateOk(t.deadline)) { "待办$name 的日期无法解析" }
         ensure(timeOk(t.remindTime)) { "待办$name 的提醒时刻无法解析" }
         ensure(t.remindTime == null || t.planDate != null) { "待办$name 的提醒必须挂在计划日上" }
+        ensure(t.remindBefore in 0..ReminderState.MAX_ADVANCE_MINUTES) { "待办$name 的提前提醒不合法" }
+        ensure(t.remindBefore == 0 || t.remindTime != null) { "待办$name 没有提醒时刻，不能提前提醒" }
         ensure((t.deletedAt == null) == (t.deleteBatch == null)) { "待办$name 的删除标记不完整" }
         ensure(t.occurrenceCount >= 0) { "待办$name 的次数不合法" }
         when (t.kind) {

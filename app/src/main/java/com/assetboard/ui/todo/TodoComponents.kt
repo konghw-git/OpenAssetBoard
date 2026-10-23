@@ -46,6 +46,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.StickyNote2
@@ -83,6 +85,7 @@ import com.assetboard.data.Todo
 import com.assetboard.data.TodoKind
 import com.assetboard.domain.todo.DateBadge
 import com.assetboard.domain.todo.Recurrence
+import com.assetboard.domain.todo.ReminderState
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.components.DatePickDialog
 import com.assetboard.ui.components.SwipeActionsBox
@@ -254,16 +257,24 @@ fun TodoRow(
                     ChecklistProgress(extras.checklistDone, extras.checklistTotal)
                 }
             }
-            val hasMeta = extras.listName != null || todo.notes.isNotBlank() ||
+            val hasMeta = badge != null || extras.listName != null || todo.notes.isNotBlank() ||
                 todo.kind == TodoKind.REPEAT_SOURCE || (todo.remindTime != null && !done)
             if (hasMeta) {
-                Row(
+                // The date tag first, then the reminder: one line of tags under the title.
+                FlowRow(
                     Modifier.padding(top = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (badge != null) DateChip(badge)
                     if (todo.remindTime != null && !done) {
-                        MetaChip(if (todo.strongRemind) Icons.Outlined.Alarm else Icons.Outlined.Notifications, todo.remindTime, if (todo.strongRemind) cs.error else cs.primary)
+                        val ahead = ReminderState.advanceShort(todo.remindBefore)
+                        MetaChip(
+                            if (todo.strongRemind) Icons.Outlined.Alarm else Icons.Outlined.Notifications,
+                            if (ahead == null) todo.remindTime else "${todo.remindTime} · $ahead",
+                            if (todo.strongRemind) cs.error else cs.primary,
+                        )
                     }
                     if (todo.kind == TodoKind.REPEAT_SOURCE) MetaChip(Icons.Outlined.Repeat, null, cs.tertiary)
                     if (todo.notes.isNotBlank()) Icon(Icons.Outlined.StickyNote2, null, tint = cs.outline, modifier = Modifier.size(14.dp))
@@ -276,20 +287,6 @@ fun TodoRow(
                     }
                 }
             }
-        }
-        if (badge != null) {
-            val c = badgeColor(badge.tone)
-            Text(
-                badge.text,
-                style = MaterialTheme.typography.labelMedium,
-                color = c,
-                fontWeight = if (badge.tone == DateBadge.Tone.ALERT) FontWeight.SemiBold else null,
-                modifier = Modifier
-                    .padding(start = 8.dp, top = if (points.isEmpty()) 0.dp else 9.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(c.copy(alpha = 0.10f))
-                    .padding(horizontal = 9.dp, vertical = 3.dp),
-            )
         }
         trailing?.invoke()
     }
@@ -444,9 +441,9 @@ private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
     }
 }
 
-/** A tinted icon with optional text: reminder time, repeat. */
+/** A tinted icon with optional text: reminder time, repeat, a date. */
 @Composable
-private fun MetaChip(icon: ImageVector, text: String?, color: Color) {
+internal fun MetaChip(icon: ImageVector, text: String?, color: Color, bold: Boolean = false) {
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
@@ -457,10 +454,15 @@ private fun MetaChip(icon: ImageVector, text: String?, color: Color) {
         Icon(icon, null, tint = color, modifier = Modifier.size(12.dp))
         if (text != null) {
             Spacer(Modifier.width(3.dp))
-            Text(text, style = MaterialTheme.typography.labelSmall, color = color)
+            Text(text, style = MaterialTheme.typography.labelSmall, color = color, fontWeight = if (bold) FontWeight.SemiBold else null, maxLines = 1)
         }
     }
 }
+
+/** A date tag on the line of tags: a deadline's with the event icon, a plan date's with the calendar. */
+@Composable
+internal fun DateChip(badge: DateBadge) =
+    MetaChip(if (badge.deadline) Icons.Outlined.Event else Icons.Outlined.CalendarToday, badge.text, badgeColor(badge.tone), bold = badge.tone == DateBadge.Tone.ALERT)
 
 @Composable
 fun TimePickDialog(

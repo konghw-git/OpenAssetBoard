@@ -107,9 +107,12 @@ object Notifier {
         else -> "迟到 ${lateMinutes / 60} 小时 ${lateMinutes % 60} 分钟"
     }
 
+    /** A reminder set to go off ahead says when the todo itself is: "14:00 开始". */
+    private fun aheadText(t: Todo): String? = t.remindTime?.takeIf { t.remindBefore > 0 }?.let { "$it 开始" }
+
     /** The ordinary reminder: title, list name, and Done / 10 min / 1 h / Tomorrow. */
     fun reminder(context: Context, t: Todo, listName: String?, token: ReminderToken, lateMinutes: Long): Notification {
-        val text = listOfNotNull(listName ?: "收件箱", lateText(lateMinutes)).joinToString(" · ")
+        val text = listOfNotNull(aheadText(t), listName ?: "收件箱", lateText(lateMinutes)).joinToString(" · ")
         return NotificationCompat.Builder(context, CH_REMINDER)
             .setSmallIcon(R.drawable.ic_stat_todo)
             .setContentTitle(t.title)
@@ -153,7 +156,7 @@ object Notifier {
         NotificationCompat.Builder(context, CH_STRONG_BOOT)
             .setSmallIcon(R.drawable.ic_stat_todo)
             .setContentTitle(t.title)
-            .setContentText(listOfNotNull("强提醒", lateText(lateMinutes)).joinToString(" · "))
+            .setContentText(listOfNotNull("强提醒", aheadText(t), lateText(lateMinutes)).joinToString(" · "))
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

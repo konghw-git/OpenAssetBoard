@@ -244,10 +244,23 @@ class TodoRepository(
             planDate = date?.toString(),
             remindTime = remindTime?.toString()?.takeIf { date != null },
             someday = if (date != null) false else t.someday,
-        )
+        ).keepingAdvance()
         if (next.planDate == t.planDate && next.remindTime == t.remindTime && next.someday == t.someday) return@tx
         save(ReminderState.afterManualEdit(next, now, zone()).bump())
     }
+
+    /** How far ahead of its time the reminder goes off: one of [ReminderState.ADVANCE_CHOICES]. */
+    suspend fun setRemindBefore(id: String, minutes: Int) = tx {
+        val t = live(id)
+        ensure(t.kind != TodoKind.COMPLETION) { "完成记录不能修改" }
+        ensure(minutes in 0..ReminderState.MAX_ADVANCE_MINUTES) { "提前提醒不合法" }
+        ensure(minutes == 0 || t.remindTime != null) { "先设置提醒时刻，才能提前提醒" }
+        if (t.remindBefore == minutes) return@tx
+        save(ReminderState.afterManualEdit(t.copy(remindBefore = minutes), now, zone()).bump())
+    }
+
+    /** No reminder time, nothing to remind ahead of. */
+    private fun Todo.keepingAdvance() = if (remindTime == null) copy(remindBefore = 0) else this
 
     suspend fun setStrongRemind(id: String, strong: Boolean) = tx {
         val t = live(id)
@@ -266,7 +279,7 @@ class TodoRepository(
             if (t.kind == TodoKind.REPEAT_SOURCE) "重复待办可以跳过本期或删除，不能设为以后再说" else "完成记录不能修改"
         }
         if (t.someday == someday) return@tx
-        val next = if (someday) t.copy(someday = true, planDate = null, remindTime = null, snoozeAt = null) else t.copy(someday = false)
+        val next = if (someday) t.copy(someday = true, planDate = null, remindTime = null, remindBefore = 0, snoozeAt = null) else t.copy(someday = false)
         save(next.bump())
     }
 
@@ -287,7 +300,7 @@ class TodoRepository(
             val t = dao.todo(id)?.takeIf { TodoViews.isOpen(it) } ?: continue
             if (someday) {
                 if (t.kind != TodoKind.ORDINARY) continue
-                if (!t.someday) save(t.copy(someday = true, planDate = null, remindTime = null, snoozeAt = null).bump())
+                if (!t.someday) save(t.copy(someday = true, planDate = null, remindTime = null, remindBefore = 0, snoozeAt = null).bump())
             } else {
                 if (t.kind == TodoKind.REPEAT_SOURCE && date == null) continue
                 val remind = when (time) {
@@ -295,7 +308,7 @@ class TodoRepository(
                     TimeChange.Clear -> null
                     is TimeChange.At -> time.time.toString()
                 }
-                val next = t.copy(planDate = date?.toString(), remindTime = remind.takeIf { date != null }, someday = false)
+                val next = t.copy(planDate = date?.toString(), remindTime = remind.takeIf { date != null }, someday = false).keepingAdvance()
                 if (next.planDate == t.planDate && next.remindTime == t.remindTime && !t.someday) continue
                 save(ReminderState.afterManualEdit(next, now, zone()).bump())
             }
@@ -394,6 +407,7 @@ class TodoRepository(
                     sectionId = t.sectionId,
                     planDate = t.planDate,
                     remindTime = t.remindTime,
+                    remindBefore = t.remindBefore,
                     deadline = t.deadline,
                     important = t.important,
                     occurrenceCount = t.occurrenceCount,
@@ -757,6 +771,16 @@ class TodoRepository(
         if (i < 0 || j !in lists.indices) return@tx
         lists.add(j, lists.removeAt(i))
         dao.updateLists(lists.mapIndexed { idx, l -> l.copy(sortOrder = idx) })
+    }
+
+    /** The lists on screen, [idsInOrder], in that order; the archived ones, not among them, after them as they were. */
+    suspend fun reorderLists(idsInOrder: List<String>) = tx {
+        val lists = dao.liveLists()
+        val byId = lists.associateBy { it.id }
+        val shown = idsInOrder.distinct().mapNotNull(byId::get)
+        val next = (shown + lists.filter { it !in shown }).mapIndexed { i, l -> l.copy(sortOrder = i) }
+        val changed = next.filter { n -> byId.getValue(n.id).sortOrder != n.sortOrder }
+        if (changed.isNotEmpty()) dao.updateLists(changed)
     }
 
     suspend fun createSection(listId: String, name: String): String = tx {

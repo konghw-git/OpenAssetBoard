@@ -92,6 +92,37 @@ class LedgerData(
         return Liquidity(cash.sumOf { it.second }, cash.sortedByDescending { it.second }, invested, locked)
     }
 
+    /**
+     * How the net worth moved over (from, to], from the balances then rather than from stocktakes,
+     * so that an amount changed in place or a flow counts too: for each account counted today, its
+     * balance at [to] minus its balance at [from], or minus its opening balance when it opened in
+     * between (opening an account changes what is tracked, not what one owns). Null when no
+     * counted account has a balance at [to].
+     */
+    fun netWorthChange(from: Long, to: Long): Long? {
+        var any = false
+        var change = 0L
+        for (a in countedAccounts()) {
+            val end = balanceAt(a.id, to) ?: continue
+            any = true
+            val start = if (a.baselineAt > from) balanceAt(a.id, a.baselineAt) else balanceAt(a.id, from)
+            change += end - (start ?: end)
+        }
+        return if (any) change else null
+    }
+
+    /** The net worth at [t] from the balances then, over the accounts counted today; null when none had one yet. */
+    fun netWorthAt(t: Long): Long? {
+        val balances = countedAccounts().mapNotNull { balanceAt(it.id, t) }
+        return if (balances.isEmpty()) null else balances.sum()
+    }
+
+    /** Whether a counted account has a valuation other than its opening one, or a flow, in (from, to]. */
+    fun hasRecordsIn(from: Long, to: Long): Boolean = countedAccounts().any { a ->
+        valuationsOf(a.id).any { it.at > from && it.at <= to && it.at != a.baselineAt } ||
+            flowsOf(a.id).any { it.at > from && it.at <= to }
+    }
+
     fun snapshotTotals(snapshotId: String): Ledger.Totals =
         Ledger.snapshotTotals(itemsOf(snapshotId), { valuationById[it] }, ::isLiability)
 

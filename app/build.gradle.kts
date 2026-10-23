@@ -24,8 +24,8 @@ android {
         applicationId = "com.assetboard"
         minSdk = 29
         targetSdk = 36
-        versionCode = 18
-        versionName = "0.9.8"
+        versionCode = 19
+        versionName = "0.9.9"
         // Where the in-app updater looks for releases; a fork points this at its own repository.
         buildConfigField("String", "UPDATE_REPO", "\"konghw-git/OpenAssetBoard\"")
         // The commit a build came from, for 导出诊断 and for reading a release's crash stacks
@@ -96,6 +96,15 @@ android {
                     test.systemProperty("robolectric.dependency.proxy.port", System.getProperty("https.proxyPort") ?: "80")
                 }
                 test.maxHeapSize = "3g"
+                // -PskipShots (scripts/dev-test.sh --fast): the inner loop leaves out the classes
+                // that render screenshots, the slow half of the suite. They hold assertions too,
+                // so the whole suite still runs before a change is done.
+                if (project.hasProperty("skipShots")) {
+                    test.filter {
+                        excludeTestsMatching("*ShotTest")
+                        excludeTestsMatching("*ScreenshotTest")
+                    }
+                }
             }
         }
     }
