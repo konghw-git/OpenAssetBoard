@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
@@ -38,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.paint
 import com.assetboard.R
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Assume.assumeTrue
@@ -133,7 +133,7 @@ class BrandShotTest {
         val shape = RoundedCornerShape(corner)
         Box(
             Modifier.size(size).then(if (shadow) Modifier.shadow(24.dp, shape, ambientColor = Color.Black, spotColor = Color.Black) else Modifier)
-                .clip(shape).background(colorResource(R.color.ic_launcher_background)),
+                .clip(shape).paint(painterResource(R.drawable.ic_launcher_background), contentScale = ContentScale.FillBounds),
             contentAlignment = Alignment.Center,
         ) {
             // The adaptive foreground is a 108 grid with its art inside 72: drawn larger, clipped.

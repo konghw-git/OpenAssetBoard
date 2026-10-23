@@ -18,11 +18,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.paint
+import androidx.compose.ui.layout.ContentScale
 import com.assetboard.R
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
@@ -43,7 +44,7 @@ class IconShotTest {
         compose.setContent {
             Row(Modifier.background(Color(0xFFF5F3EE)).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 listOf<Shape>(CircleShape, RoundedCornerShape(28)).forEach { shape ->
-                    Box(Modifier.size(110.dp).clip(shape).background(colorResource(R.color.ic_launcher_background)), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(110.dp).clip(shape).paint(painterResource(R.drawable.ic_launcher_background), contentScale = ContentScale.FillBounds), contentAlignment = Alignment.Center) {
                         Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.requiredSize(110.dp * 108f / 72f))
                     }
                 }

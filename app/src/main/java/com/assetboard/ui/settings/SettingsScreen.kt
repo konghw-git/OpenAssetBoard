@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.draw.shadow
 import com.assetboard.R
 import androidx.compose.foundation.layout.Spacer
@@ -73,6 +72,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.paint
+import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.assetboard.AppContainer
@@ -451,7 +452,8 @@ private fun AboutCard(version: String, lastBackup: Long?, onBackup: () -> Unit) 
         // The launcher icon itself: its foreground is drawn on a 108 grid with the art inside 66,
         // so it is drawn larger than the tile and clipped to it.
         Box(
-            Modifier.size(52.dp).shadow(6.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).background(colorResource(R.color.ic_launcher_background)),
+            Modifier.size(52.dp).shadow(6.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
+                .paint(painterResource(R.drawable.ic_launcher_background), contentScale = ContentScale.FillBounds),
             contentAlignment = Alignment.Center,
         ) {
             Image(painterResource(R.drawable.ic_launcher_foreground), null, modifier = Modifier.requiredSize(52.dp * 108f / 66f))

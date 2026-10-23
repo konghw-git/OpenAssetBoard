@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **A new launcher icon.** The rising chart over a gold coin read as a trading app. The icon is now
+  日日行动，日日有盈 drawn: one unbroken line looping three times round, a trefoil knot, with a gold
+  sun in the middle, on a deep green lit from the top left. The themed icon keeps the weave, and the
+  README's icon and banner and the about card in settings show the new one.
+
 ## [0.9.5] - 2026-10-23
 
 ### Added
