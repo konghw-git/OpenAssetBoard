@@ -16,6 +16,11 @@ Release version: **0.9.9**, versionCode **19**, database **11**, backup format *
 Each regression was confirmed to fail with the corresponding original implementation and pass
 after correction. English and Chinese README descriptions are synchronized.
 
+The first release screenshot-verification run also exposed a test synchronization race:
+`ScreenshotTest.foodWithoutProfile` sometimes captured the loading spinner after the ledger was
+ready but before the food view model emitted. The screenshot helper now accepts a page readiness
+condition, and this case waits for the no-profile prompt. Its existing baseline was retained.
+
 ## Verification
 
 - Full suite: **501 discovered, 500 passed, 0 failed, 1 intentionally skipped**. The skipped

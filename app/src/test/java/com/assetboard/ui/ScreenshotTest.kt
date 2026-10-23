@@ -118,13 +118,15 @@ class ScreenshotTest {
         return c
     }
 
-    private fun shot(name: String, container: AppContainer, dark: Boolean = false, sheet: Boolean = false, content: @Composable () -> Unit) {
+    private fun shot(name: String, container: AppContainer, dark: Boolean = false, sheet: Boolean = false, until: () -> Boolean = { true }, content: @Composable () -> Unit) {
         compose.setContent {
             CompositionLocalProvider(LocalContainer provides container) {
                 AssetBoardTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT, upIsRed = true) { content() }
             }
         }
         compose.waitUntil(10_000) { container.repository.ledger.value?.snapshots?.isNotEmpty() == true }
+        // The ledger may be ready before the page's independent repository emits its data.
+        compose.waitUntil(30_000, until)
         // A sheet is a window of its own, attached a moment after the page: wait for it, then take it.
         if (sheet) compose.waitUntil(10_000) { compose.onAllNodes(isRoot()).fetchSemanticsNodes().size > 1 }
         compose.mainClock.advanceTimeBy(2_000)
@@ -526,7 +528,9 @@ class ScreenshotTest {
     /** No profile: the food page still records, and asks for the profile for the burn. */
     @Test fun foodWithoutProfile() {
         val c = withFood(demoContainer())
-        shot("16c-food-no-profile", c) { FoodScreen(noop) }
+        shot("16c-food-no-profile", c, until = {
+            compose.onAllNodes(hasText("填写健康档案后估算基础代谢")).fetchSemanticsNodes().isNotEmpty()
+        }) { FoodScreen(noop) }
     }
 
     @Test fun overviewCashAndHealth() {
