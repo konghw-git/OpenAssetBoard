@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-10-23
+
 ### Changed
 
 - **A new launcher icon.** The rising chart over a gold coin read as a trading app. The icon is now
