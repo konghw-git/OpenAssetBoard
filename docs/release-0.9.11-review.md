@@ -38,6 +38,19 @@ column or backup field moved, so no migration or fixture was needed.
 - `scripts/publish-release.sh` runs the full suite with screenshot verification, lint against its
   baseline, the signed minified build and the certificate check before tagging; its log is kept
   under `build/review-0.9.11/`.
-- The mirror speed test was exercised against the test container only, not live hosts: the probe
-  is a ranged GET with 6 s timeouts and a failed host reads 不可用. No phone was connected; the
-  user installed the pre-release build of this UI and the feedback rounds came from it.
+- Upgrade in place on the Android 15 emulator (`asset-board-review-api35`): the published 0.9.10
+  APK, carrying the previous review's data, took a stocktake (银行 100 → 1,250.50, 基金 5,000 →
+  4,800, one snapshot with two items) and exported; the signed 0.9.11 APK went on with
+  `adb install -r`, opened to the same net worth and exported again. `scripts/compare-backups.py`
+  reports the ledger identical (groups 2, accounts 2, snapshots 1, valuations 4, snapshotItems 2,
+  flows 0) and the whole file differs only in `exportedAt`. No crash in logcat.
+- The mirror speed test ran in the app on that emulator: five of seven measured within about
+  two seconds (gh.llkk.cc 986 ms, gh-proxy.com 1217 ms, direct 1341 ms, ghproxy.net 1942 ms,
+  ghfast.top 2016 ms), hub.gitmirror.com and github.moeyy.xyz read 不可用, and the fastest was
+  picked and shown on the settings row. The same ranged GET from the host agrees. The host's DNS
+  answers from the 198.18.0.0/15 fake-IP range, so it sits behind a proxy and the two failures
+  cannot be told from a proxy rule here; they stay in the list as the app handles them.
+- Phone (420 dpi) and wide (240 dpi) layouts of the overview and settings were captured on the
+  emulator; the captures, exports and driving scripts are under `build/review-0.9.11/device/`.
+  No physical phone was connected; the user installed the pre-release build of this UI and the
+  feedback rounds came from it.
