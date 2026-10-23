@@ -311,7 +311,7 @@ internal fun DialHub(done: Int, total: Int, open: Boolean, modifier: Modifier, o
             .padding(8.dp)
             .shadow(12.dp, CircleShape, ambientColor = extra.heroStart, spotColor = extra.heroStart)
             .clip(CircleShape)
-            .background(Brush.linearGradient(listOf(extra.heroEnd, extra.heroStart)))
+            .background(Brush.linearGradient(listOf(extra.heroEnd, extra.heroMid, extra.heroStart)))
             .drawWithContent {
                 drawContent()
                 drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent), endY = size.height * 0.55f))

@@ -107,6 +107,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import com.assetboard.ui.notes.ExtractOrigin
 import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.TabPageBottomInset
 import androidx.compose.animation.scaleOut
 import androidx.compose.material3.FabPosition
 import androidx.compose.ui.draw.shadow
@@ -294,7 +295,7 @@ fun DiaryScreen(
     CompositionLocalProvider(LocalAmbient provides ambient) {
     Scaffold(
         containerColor = Color.Transparent,
-        snackbarHost = { GlassSnackbarHost(snackbar) },
+        snackbarHost = { GlassSnackbarHost(snackbar, Modifier.padding(bottom = TabPageBottomInset)) },
         // The system's selection menu puts app items last; this one is right above the keyboard.
         floatingActionButton = {
             val text = selected

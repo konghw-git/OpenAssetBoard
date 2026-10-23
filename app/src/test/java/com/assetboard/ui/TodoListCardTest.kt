@@ -32,7 +32,7 @@ import java.time.LocalDate
 
 /**
  * The lists as cards, on the phone as unfolded: a deadline's tag under the name, a left swipe
- * archives, a right swipe deletes, and held, a card is dragged to another place.
+ * deletes (as it does everywhere), a right swipe archives, and held, a card is dragged to another place.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
@@ -77,11 +77,11 @@ class TodoListCardTest {
         assert(tag.top >= name.bottom - 1f) { "the tag should be under the name: $name, $tag" }
     }
 
-    @Test fun aLeftSwipeArchives() {
+    @Test fun aRightSwipeArchives() {
         val c = show()
         // The clock by hand: waiting for idle would run the undo's time out at once.
         compose.mainClock.autoAdvance = false
-        compose.onNodeWithText("搬家").performTouchInput { swipe(-1000f) }
+        compose.onNodeWithText("搬家").performTouchInput { swipe(1000f) }
         repeat(90) {
             if (compose.onAllNodes(hasText("撤销")).fetchSemanticsNodes().isEmpty()) {
                 Thread.sleep(20)
@@ -96,9 +96,9 @@ class TodoListCardTest {
         compose.waitUntil(5_000) { shown(c) == listOf("搬家", "论文", "旅行") }
     }
 
-    @Test fun aRightSwipeDeletes() {
+    @Test fun aLeftSwipeDeletes() {
         val c = show()
-        compose.onNodeWithText("旅行").performTouchInput { swipe(1000f) }
+        compose.onNodeWithText("旅行").performTouchInput { swipe(-1000f) }
         compose.waitUntil(5_000) { lists(c).none { it.name == "旅行" } }
         assertEquals(listOf("搬家", "论文"), shown(c))
         assertNull(lists(c).firstOrNull { it.name == "旅行" })

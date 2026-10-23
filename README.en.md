@@ -121,7 +121,7 @@ Download the latest `OpenAssetBoard-x.y.z.apk` from [Releases](https://github.co
 
 - **Android 10 (API 29) and up.**
 - The app is written for Chinese Android phones (vivo, Xiaomi, OPPO and friends). **Reminder punctuality depends on background permissions**: after installing, open Settings → reminder setup and follow the checklist for autostart, background running, notifications and exact alarms. It works without Google services.
-- There is no store listing. From 0.8.0 the app upgrades itself from Settings › 应用更新 (download, signature check, a backup first, then the system installer); older versions need one manual install.
+- There is no store listing. From 0.8.0 the app upgrades itself from Settings › 应用更新 (download, signature check, a backup first, then the system installer); older versions need one manual install. Download mirrors come preset (GitHub itself and a few accelerators common on the mainland), timed and picked in a tap.
 - The launcher name is 「日盈」 (Gain; 「强者之路」 before 0.9.0) and the package is `com.assetboard`; the repository is OpenAssetBoard. Same app.
 
 > ⚠️ This is a personal project, not audited financial software. Try it with a few days of test data before you trust it with real balances, and back up regularly.

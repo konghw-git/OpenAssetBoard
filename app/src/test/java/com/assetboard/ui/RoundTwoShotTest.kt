@@ -159,7 +159,11 @@ class RoundTwoShotTest {
         todos(c)
         set(c) { TodoHomeScreen({}, {}, initialView = "today") }
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("交水电费")).fetchSemanticsNodes().isNotEmpty() }
+        // Opened, the row offers 改期 and 重要; pushed on to arm, 编辑 spreads over them.
         compose.onNodeWithText("交水电费").performTouchInput { down(center); repeat(8) { moveBy(Offset(10f, 0f)) }; moveBy(Offset(200f, 0f)); moveBy(Offset(200f, 0f)) }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("改期").assertExists()
+        compose.onNodeWithText("交水电费").performTouchInput { repeat(4) { moveBy(Offset(200f, 0f)) } }
         compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithText("编辑").assertExists()
         compose.onRoot().captureRoboImage("screenshots/54a-todo-swipe-edit.png", roborazziOptions = SHOT_OPTIONS)

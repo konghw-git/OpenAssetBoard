@@ -2,6 +2,10 @@ package com.assetboard.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,8 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -25,8 +35,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.assetboard.ui.theme.NumberStyle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.assetboard.BuildConfig
 import com.assetboard.data.AppUpdater
@@ -189,28 +204,114 @@ internal fun releaseNotes(md: String): String = md.lineSequence()
     .replace(Regex("\n{3,}"), "\n\n")
     .trim()
 
-/** A prefix put in front of the download URL, for networks where GitHub downloads crawl. Empty for none. */
+/**
+ * Where the update is downloaded from: GitHub itself or one of the accelerators in common use,
+ * each with its measured speed once tested; a tap picks one, 测速 times them all and picks the
+ * fastest. A prefix of one's own goes in the field at the bottom. The signature check before an
+ * install is what makes any of them safe.
+ */
 @Composable
-fun MirrorDialog(initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var text by rememberSaveable { mutableStateOf(initial) }
+fun MirrorDialog(updater: AppUpdater, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val current by updater.mirrorState.collectAsStateWithLifecycle()
+    val speeds by updater.mirrorSpeeds.collectAsStateWithLifecycle()
+    val testing by updater.testingMirrors.collectAsStateWithLifecycle()
+    val networkOn by LocalContainer.current.settings.networkEnabled.collectAsStateWithLifecycle()
+    val known = AppUpdater.MIRRORS.any { it.prefix == current }
+    var custom by rememberSaveable { mutableStateOf(if (known) "" else current) }
+    var customOpen by rememberSaveable { mutableStateOf(!known) }
+    val best = speeds.filterValues { it >= 0 }.minByOrNull { it.value }?.key
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("下载镜像") },
         text = {
-            Column {
+            Column(Modifier.verticalScrollWithIndicator(rememberScrollState())) {
                 Text(
-                    "填一个 GitHub 加速地址的前缀（以 https:// 开头、以 / 结尾），下载地址会接在它后面。留空就直连 GitHub。安装前会校验签名，镜像改不了安装包。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (networkOn) "国内直连 GitHub 常常很慢，选一个加速镜像，或者测一下速让它自己挑。安装前会校验签名，镜像改不了安装包。"
+                    else "联网已关闭；打开后才能测速和下载。",
+                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                 )
-                OutlinedTextField(
-                    text, { text = it.trim() }, singleLine = true,
-                    placeholder = { Text("https://example.com/") },
-                    isError = text.isNotEmpty() && !text.startsWith("https://"),
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                )
+                FilledTonalButton(
+                    onClick = { updater.testMirrors() },
+                    enabled = networkOn && !testing,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 6.dp),
+                ) {
+                    if (testing) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text("正在测速…")
+                    } else {
+                        Icon(Icons.Outlined.Speed, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (speeds.isEmpty()) "测速并选最快的" else "再测一次")
+                    }
+                }
+                AppUpdater.MIRRORS.forEach { m ->
+                    val picked = current == m.prefix && !customOpen
+                    val ms = speeds[m.prefix]
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (picked) cs.primary.copy(alpha = 0.10f) else Color.Transparent)
+                            .clickable { updater.mirror = m.prefix; onDismiss() }
+                            .padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioDot(picked)
+                        Spacer(Modifier.width(10.dp))
+                        Text(m.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            when {
+                                ms == null -> if (testing) "…" else ""
+                                ms < 0 -> "不可用"
+                                else -> "$ms ms"
+                            },
+                            style = MaterialTheme.typography.labelMedium.merge(NumberStyle),
+                            color = when {
+                                ms == null -> cs.outline
+                                ms < 0 -> cs.error
+                                m.prefix == best -> cs.primary
+                                else -> cs.onSurfaceVariant
+                            },
+                            fontWeight = if (ms != null && m.prefix == best) FontWeight.SemiBold else null,
+                        )
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { customOpen = !customOpen }.padding(horizontal = 10.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioDot(customOpen)
+                    Spacer(Modifier.width(10.dp))
+                    Text("自定义前缀", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                }
+                if (customOpen) {
+                    OutlinedTextField(
+                        custom, { custom = it.trim() }, singleLine = true,
+                        placeholder = { Text("https://example.com/") },
+                        supportingText = { Text("以 https:// 开头、/ 结尾，下载地址接在后面", style = MaterialTheme.typography.labelSmall) },
+                        isError = custom.isNotEmpty() && !custom.startsWith("https://"),
+                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp),
+                    )
+                }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(text) }, enabled = text.isEmpty() || text.startsWith("https://")) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        confirmButton = {
+            if (customOpen) {
+                TextButton(onClick = { updater.mirror = custom; onDismiss() }, enabled = custom.startsWith("https://")) { Text("保存") }
+            } else {
+                TextButton(onClick = onDismiss) { Text("完成") }
+            }
+        },
+        dismissButton = { if (customOpen) TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun RadioDot(on: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    Box(
+        Modifier.size(18.dp).clip(CircleShape).border(if (on) 5.dp else 1.6.dp, if (on) cs.primary else cs.outline, CircleShape),
     )
 }

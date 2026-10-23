@@ -394,7 +394,12 @@ class TodoRepository(
         ensure(TodoViews.isOpen(t)) { "这条已处理过" }
         when (t.kind) {
             TodoKind.ORDINARY -> {
-                save(t.copy(completedAt = now, snoozeAt = null).bump())
+                // Done means all of it done: the checklist is ticked through, and how it stood is
+                // kept on the todo so that unchecking it puts the items back as they were.
+                val items = dao.checklistOf(t.id)
+                val open = items.filterNot { it.done }
+                if (open.isNotEmpty()) dao.updateChecklistItems(open.map { it.copy(done = true) })
+                save(t.copy(completedAt = now, snoozeAt = null, undoBefore = if (open.isEmpty()) null else undoBefore(t, items).encode()).bump())
                 t.id
             }
             TodoKind.REPEAT_SOURCE -> {
@@ -422,7 +427,8 @@ class TodoRepository(
                     completedAt = now,
                 )
                 insert(record)
-                if (items.isNotEmpty()) dao.insertChecklistItems(items.map { it.copy(id = newId(), todoId = record.id) })
+                // The record keeps the period's checklist, all of it ticked: the period is done.
+                if (items.isNotEmpty()) dao.insertChecklistItems(items.map { it.copy(id = newId(), todoId = record.id, done = true) })
                 record.id
             }
             TodoKind.COMPLETION -> throw StaleAction()
@@ -475,7 +481,13 @@ class TodoRepository(
         when (t.kind) {
             TodoKind.ORDINARY -> {
                 ensure(t.completedAt != null) { "这条还没完成" }
-                save(t.copy(completedAt = null).bump())
+                // Items ticked by the completion itself go back to how they stood.
+                t.undoBefore?.let { runCatching { UndoBefore.decode(it) }.getOrNull() }?.let { before ->
+                    val items = dao.checklistOf(t.id)
+                    val changed = items.filter { before.checklist[it.id] == false && it.done }
+                    if (changed.isNotEmpty()) dao.updateChecklistItems(changed.map { it.copy(done = false) })
+                }
+                save(t.copy(completedAt = null, undoBefore = null).bump())
                 UndoOutcome.RESTORED
             }
             TodoKind.COMPLETION -> {

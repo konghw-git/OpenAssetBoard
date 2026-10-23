@@ -2,7 +2,9 @@ package com.assetboard.ui.todo
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import com.assetboard.ui.components.Motion
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -146,18 +148,38 @@ fun badgeColor(tone: DateBadge.Tone): Color = when (tone) {
     DateBadge.Tone.PLAIN -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
-/** The round check box. A repeat source shows a double ring; checking springs the fill in. */
+/**
+ * The round check box. A repeat source shows a double ring; checking springs the fill in and
+ * sends a ring of the theme colour out from it, the way a drop lands.
+ */
 @Composable
 fun CheckCircle(checked: Boolean, important: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, repeat: Boolean = false, box: Dp = 44.dp) {
     val cs = MaterialTheme.colorScheme
     val scale by animateFloatAsState(if (checked) 1f else 0.92f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow), label = "check")
     val fill by animateColorAsState(if (checked) cs.primary else Color.Transparent, tween(220), label = "fill")
     val ring = if (important && !checked) cs.error else cs.outline
+    // The burst runs only on a tick made while on screen, not for a box composed already checked.
+    val burst = remember { Animatable(1f) }
+    var seen by remember { mutableStateOf(checked) }
+    LaunchedEffect(checked) {
+        if (checked && !seen) {
+            burst.snapTo(0f)
+            burst.animateTo(1f, tween(520, easing = Motion.Decelerate))
+        }
+        seen = checked
+    }
+    val burstColor = cs.primary
     Box(
         modifier
             .size(box)
             .clip(CircleShape)
-            .clickable(onClick = onToggle),
+            .clickable(onClick = onToggle)
+            .drawBehind {
+                val p = burst.value
+                if (p <= 0f || p >= 1f) return@drawBehind
+                val r = 11.dp.toPx() + (size.minDimension / 2 - 11.dp.toPx()) * p
+                drawCircle(burstColor.copy(alpha = 0.55f * (1f - p)), r, center, style = Stroke(2.5.dp.toPx() * (1f - p * 0.6f)))
+            },
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -206,6 +228,8 @@ fun TodoRow(
     onToggleItem: ((String) -> Unit)? = null,
     /** A check point swiped left turns to dust on its own and goes; null keeps them in place. */
     onDeleteItem: ((String) -> Unit)? = null,
+    /** A tap on a check point's text edits it in place, as a tap on the title does; null makes the tap tick it. */
+    onEditItem: ((String) -> Unit)? = null,
     swipe: SwipeGroup? = null,
     /** Picked up and being dragged. */
     lifted: Boolean = false,
@@ -296,7 +320,7 @@ fun TodoRow(
     }
     if (points.isNotEmpty()) {
         val lead = with(LocalDensity.current) { headerHeight.toDp() } - CircleBottom - LineGap
-        InlineChecklist(points, onToggleItem, onDeleteItem, swipe, lead.coerceAtLeast(0.dp), Modifier.graphicsLayer { alpha = content })
+        InlineChecklist(points, onToggleItem, onDeleteItem, onEditItem, swipe, lead.coerceAtLeast(0.dp), Modifier.graphicsLayer { alpha = content })
     }
     }
 }
@@ -336,13 +360,15 @@ private val NodeSize = 14.dp
 
 /**
  * The todo's checklist under it, as a thread from the card's check circle: each item is a node
- * on a line running down from the circle, its text on a strip to the right. Tapping either
- * ticks it in place; swiping the strip left deletes just that item, in dust of its own (a right
+ * on a line running down from the circle, its text on a strip to the right. Tapping the node
+ * ticks it in place; tapping the strip edits it where it stands ([onEdit]), or ticks it where the
+ * list is not editable. Swiping the strip left deletes just that item, in dust of its own (a right
  * swipe still goes to the card). The nodes stay on the line while a strip moves. [lead] is how
- * far above the first item the circle ends. Adding and editing stay in the detail page.
+ * far above the first item the circle ends.
  */
 @Composable
-private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> Unit)?, onDelete: ((String) -> Unit)?, swipe: SwipeGroup?, lead: Dp, modifier: Modifier = Modifier) {
+private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> Unit)?, onDelete: ((String) -> Unit)?, onEdit: ((String) -> Unit)?, swipe: SwipeGroup?, lead: Dp, modifier: Modifier = Modifier) {
+    val onTap = onEdit ?: onToggle
     Column(modifier.padding(top = ChecklistGap).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(ChecklistGap)) {
         items.forEachIndexed { i, item ->
             key(item.id) {
@@ -350,10 +376,10 @@ private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> U
                     CheckNode(item, above = if (i == 0) lead + ChecklistGap else ChecklistGap, last = i == items.lastIndex, onToggle)
                     Box(Modifier.weight(1f)) {
                         if (onDelete == null) {
-                            CheckPoint(item, onToggle)
+                            CheckPoint(item, onTap)
                         } else {
                             SwipeActionsBox(checklistKey(item.id), swipe, CheckPointShape, onDelete = { onDelete(item.id) }, compact = true) {
-                                CheckPoint(item, onToggle)
+                                CheckPoint(item, onTap)
                             }
                         }
                     }
@@ -418,9 +444,9 @@ private fun CheckNode(item: ChecklistItem, above: Dp, last: Boolean, onToggle: (
     }
 }
 
-/** An item's text on its strip; the tick is on the node beside it. */
+/** An item's text on its strip; the tick is on the node beside it, [onTap] is the strip's own. */
 @Composable
-private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
+private fun CheckPoint(item: ChecklistItem, onTap: ((String) -> Unit)?) {
     val cs = MaterialTheme.colorScheme
     val text by animateColorAsState(if (item.done) cs.outline else cs.onSurface.copy(alpha = 0.88f), tween(200), label = "pointText")
     // A strip a shade off the card: light on glass, dimmer once done.
@@ -431,7 +457,7 @@ private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
             .fillMaxWidth()
             .clip(shape)
             .background(strip)
-            .then(if (onToggle != null) Modifier.clickable { onToggle(item.id) } else Modifier)
+            .then(if (onTap != null) Modifier.clickable { onTap(item.id) } else Modifier)
             .heightIn(min = 32.dp)
             .padding(horizontal = 12.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,

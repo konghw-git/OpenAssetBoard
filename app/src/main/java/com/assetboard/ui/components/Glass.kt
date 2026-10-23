@@ -1,12 +1,15 @@
 package com.assetboard.ui.components
 
 import android.os.Build
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
@@ -58,8 +61,11 @@ enum class GlassMode(val label: String) { CLEAR("清透"), DEEP("深色") }
 val LocalGlassMode = staticCompositionLocalOf { GlassMode.CLEAR }
 
 /**
- * Quiet translucent surfaces with a fine rim. Cards use a denser fill instead of per-card blur;
- * floating navigation still frosts the content beneath it. Text stays clear over either mode.
+ * The glass of list cards, chips and floating bars: the page's colour fields seen through a
+ * translucent body, a lit rim brighter at the top left, a glow along the inside of the top edge,
+ * and a shadow kept outside the shape so the body never greys over it. Cards need no blur of
+ * their own, the fields behind them being soft already; the floating bars blur the content that
+ * scrolls under them ([frosted]).
  */
 @Immutable
 data class GlassStyle(
@@ -77,51 +83,54 @@ data class GlassStyle(
     val blur: Dp,
 )
 
+// Written as ARGB literals on purpose. Built from Color.copy(alpha = …) chains, this file's
+// static initialiser came out of R8 with a wide-register move the ART verifier rejects
+// (VerifyError on GlassKt.<clinit>, the app dead before its first frame); plain constants do not.
 private val LightClear = GlassStyle(
-    fill = Color.White.copy(alpha = 0.80f),
-    sheen = Color.White.copy(alpha = 0.16f),
-    rimLight = Color.White,
-    rimShade = Color.White.copy(alpha = 0.55f),
-    glow = Color.White.copy(alpha = 0.85f),
-    edge = Color(0xFF1E3A33).copy(alpha = 0.06f),
-    shadow = Color(0xFF1E3A33).copy(alpha = 0.055f),
-    floatFill = Color.White.copy(alpha = 0.82f),
+    fill = Color(0x80FFFFFF),       // white 50%
+    sheen = Color(0x66FFFFFF),      // white 40%
+    rimLight = Color(0xFFFFFFFF),
+    rimShade = Color(0x8CFFFFFF),   // white 55%
+    glow = Color(0xF2FFFFFF),       // white 95%
+    edge = Color(0x0F1E3A33),       // ink 6%
+    shadow = Color(0x1C1E3A33),     // ink 11%
+    floatFill = Color(0x85FFFFFF),  // white 52%
     blur = 0.dp,
 )
 
 private val LightDeep = GlassStyle(
-    fill = Color(0xFFE4EBE6).copy(alpha = 0.94f),
-    sheen = Color.White.copy(alpha = 0.12f),
-    rimLight = Color.White,
-    rimShade = Color.White.copy(alpha = 0.25f),
-    glow = Color.White.copy(alpha = 0.9f),
-    edge = Color(0xFF1E3A33).copy(alpha = 0.09f),
-    shadow = Color(0xFF1E3A33).copy(alpha = 0.07f),
-    floatFill = Color(0xFFE4EBE6).copy(alpha = 0.94f),
+    fill = Color(0xD1F7F9F6),       // paper 82%
+    sheen = Color(0x4DFFFFFF),      // white 30%
+    rimLight = Color(0xFFFFFFFF),
+    rimShade = Color(0x4DFFFFFF),   // white 30%
+    glow = Color(0xF2FFFFFF),       // white 95%
+    edge = Color(0x141E3A33),       // ink 8%
+    shadow = Color(0x211E3A33),     // ink 13%
+    floatFill = Color(0xC7F7F9F6),  // paper 78%
     blur = 0.dp,
 )
 
 private val DarkClear = GlassStyle(
-    fill = Color(0xFF21332B).copy(alpha = 0.88f),
-    sheen = Color.White.copy(alpha = 0.025f),
-    rimLight = Color.White.copy(alpha = 0.13f),
-    rimShade = Color.White.copy(alpha = 0.04f),
-    glow = Color.White.copy(alpha = 0.07f),
-    edge = Color.Black.copy(alpha = 0.25f),
-    shadow = Color.Black.copy(alpha = 0.20f),
-    floatFill = Color(0xFF21332B).copy(alpha = 0.90f),
+    fill = Color(0x13FFFFFF),       // white 7.5%
+    sheen = Color(0x17FFFFFF),      // white 9%
+    rimLight = Color(0x57FFFFFF),   // white 34%
+    rimShade = Color(0x1FFFFFFF),   // white 12%
+    glow = Color(0x38FFFFFF),       // white 22%
+    edge = Color(0x47000000),       // black 28%
+    shadow = Color(0x73000000),     // black 45%
+    floatFill = Color(0x941B2823),  // deep green 58%
     blur = 0.dp,
 )
 
 private val DarkDeep = GlassStyle(
-    fill = Color(0xFF14221C).copy(alpha = 0.96f),
-    sheen = Color.White.copy(alpha = 0.02f),
-    rimLight = Color.White.copy(alpha = 0.10f),
-    rimShade = Color.White.copy(alpha = 0.03f),
-    glow = Color.White.copy(alpha = 0.05f),
-    edge = Color.Black.copy(alpha = 0.35f),
-    shadow = Color.Black.copy(alpha = 0.25f),
-    floatFill = Color(0xFF14221C).copy(alpha = 0.96f),
+    fill = Color(0x85080B0A),       // near black 52%
+    sheen = Color(0x0DFFFFFF),      // white 5%
+    rimLight = Color(0x38FFFFFF),   // white 22%
+    rimShade = Color(0x0FFFFFFF),   // white 6%
+    glow = Color(0x21FFFFFF),       // white 13%
+    edge = Color(0x61000000),       // black 38%
+    shadow = Color(0x8C000000),     // black 55%
+    floatFill = Color(0xCC101513),  // near black 80%
     blur = 0.dp,
 )
 
@@ -137,8 +146,8 @@ val glass: GlassStyle
 
 /**
  * A glass body behind the content. On a page with an [Ambient] (see [LocalAmbient]) the colour
- * fields under the shape are blurred into it (Android 12 and later). [tint] washes the body (a
- * selected row); [elevation] sets how far the shadow spreads, zero for none.
+ * fields under the shape are blurred into it when the style asks for it (Android 12 and later).
+ * [tint] washes the body (a selected row); [elevation] sets how far the shadow spreads, zero for none.
  */
 fun Modifier.glass(shape: Shape, style: GlassStyle, tint: Color = Color.Unspecified, elevation: Dp = 10.dp): Modifier = composed {
     val ambient = LocalAmbient.current
@@ -214,33 +223,42 @@ internal fun DrawScope.rim(path: Path, style: GlassStyle) {
 val LocalAmbient = compositionLocalOf<Ambient?> { null }
 
 /**
- * Restrained mineral-green and warm fields fixed behind a page. A
- * sticky header draws its own slice of the same fields ([ambientSlice]), so it covers the rows
- * under it without showing a seam.
+ * Colour fields fixed behind a page, for the glass over it to show: green from the top left,
+ * brass from the right, blue lower down and teal at the bottom, from the app's group palette.
+ * They breathe in once as the page is first shown ([reveal]). A sticky header draws its own
+ * slice of the same fields ([ambientSlice]), so it covers the rows under it without a seam.
  */
 @Stable
 class Ambient internal constructor(val background: Color, val palette: List<Color>, val dark: Boolean) {
     internal var origin by mutableStateOf(Offset.Zero)
     internal var size by mutableStateOf(Size.Zero)
+    /** How far the fields have come in: zero when the page is first composed, one at rest. */
+    internal val reveal = Animatable(0f)
 }
 
 @Composable
 fun rememberAmbient(): Ambient {
     val cs = MaterialTheme.colorScheme
     val palette = AppTheme.extra.groupPalette
-    return remember(cs.background, palette) { Ambient(cs.background, palette, cs.background.luminance() < 0.5f) }
+    val a = remember(cs.background, palette) { Ambient(cs.background, palette, cs.background.luminance() < 0.5f) }
+    LaunchedEffect(a) { a.reveal.animateTo(1f, tween(1_100, easing = Motion.Decelerate)) }
+    return a
 }
 
 private fun DrawScope.drawAmbient(a: Ambient, w: Float, h: Float) {
     drawRect(a.background, size = Size(w, h))
-    // A body that holds its colour, then a soft edge: blurred under glass it reads as frosted.
+    // A body that holds its colour, then a soft edge: under translucent glass it reads as frosted.
     fun orb(c: Color, alpha: Float, x: Float, y: Float, r: Float) = drawCircle(
         Brush.radialGradient(0f to c.copy(alpha = alpha), 0.55f to c.copy(alpha = alpha * 0.7f), 1f to Color.Transparent, center = Offset(x, y), radius = r),
         r, Offset(x, y),
     )
-    val k = if (a.dark) 1.3f else 1f
-    orb(a.palette[0], 0.065f * k, w * 0.10f, h * 0.05f, w * 0.85f)
-    orb(a.palette[2], 0.035f * k, w, h * 0.40f, w * 0.70f)
+    val t = a.reveal.value
+    val k = (if (a.dark) 1.15f else 1f) * t
+    val s = 0.82f + 0.18f * t
+    orb(a.palette[0], 0.27f * k, w * 0.10f, h * 0.05f, w * 0.80f * s)
+    orb(a.palette[2], 0.25f * k, w * 1.00f, h * 0.26f, w * 0.62f * s)
+    orb(a.palette[1], 0.21f * k, w * 0.02f, h * 0.58f, w * 0.72f * s)
+    orb(a.palette[5], 0.21f * k, w * 0.92f, h * 0.88f, w * 0.68f * s)
 }
 
 /** A page with [Ambient] colour behind [content], for the glass on it. */

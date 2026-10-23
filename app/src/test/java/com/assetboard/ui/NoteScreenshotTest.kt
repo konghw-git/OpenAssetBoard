@@ -236,6 +236,8 @@ class NoteScreenshotTest {
     @Test fun drafts() {
         show(demo())
         openTab()
+        // The banner can still be settling when the tab opens; the click needs it in place.
+        waitFor("有 1 份草稿未处理")
         compose.onNodeWithText("有 1 份草稿未处理").performClick()
         waitFor("未处理的草稿")
         capture("57-note-drafts")

@@ -29,7 +29,9 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -40,6 +42,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -71,6 +74,8 @@ fun <T> SegmentedControl(
     modifier: Modifier = Modifier,
     style: SegmentStyle = SegmentStyle.SOFT,
     height: Dp = 36.dp,
+    /** The labels' type; a smaller one for a control sharing a row with its name. */
+    textStyle: TextStyle = MaterialTheme.typography.labelLarge,
 ) {
     val cs = MaterialTheme.colorScheme
     val haptics = LocalHapticFeedback.current
@@ -112,20 +117,23 @@ fun <T> SegmentedControl(
                 .width(w)
                 .fillMaxHeight()
                 .then(
-                    if (style == SegmentStyle.SOFT) {
-                        Modifier.shadow(3.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.12f))
-                    } else Modifier,
+                    when (style) {
+                        SegmentStyle.SOFT -> Modifier.shadow(3.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.12f))
+                        // The solid thumb casts a little of its own colour, so it reads as lit rather than flat.
+                        SegmentStyle.SOLID -> Modifier.shadow(6.dp, RoundedCornerShape(50), ambientColor = cs.primary.copy(alpha = 0.45f), spotColor = cs.primary.copy(alpha = 0.55f))
+                        SegmentStyle.TINT -> Modifier
+                    },
                 )
                 .clip(RoundedCornerShape(50))
-                .background(thumb),
+                .background(if (style == SegmentStyle.SOLID) Brush.verticalGradient(listOf(cs.primary.copy(alpha = 0.90f), cs.primary)) else SolidColor(thumb)),
         )
         // Labels twice: the unpicked colour outside the thumb, the picked colour inside it, each
         // clipped to the thumb's live bounds, so text stays crisp wherever the thumb is mid-slide.
-        Labels(options, label, off, Modifier.drawWithContent {
+        Labels(options, label, off, textStyle, Modifier.drawWithContent {
             val l = w.toPx() * pos
             clipRect(l, 0f, l + w.toPx(), size.height, ClipOp.Difference) { this@drawWithContent.drawContent() }
         })
-        Labels(options, label, on, Modifier.drawWithContent {
+        Labels(options, label, on, textStyle, Modifier.drawWithContent {
             val l = w.toPx() * pos
             clipRect(l, 0f, l + w.toPx(), size.height) { this@drawWithContent.drawContent() }
         })
@@ -155,14 +163,14 @@ fun <T> SegmentedControl(
 }
 
 @Composable
-private fun <T> Labels(options: List<T>, label: (T) -> String, color: Color, modifier: Modifier) {
+private fun <T> Labels(options: List<T>, label: (T) -> String, color: Color, textStyle: TextStyle, modifier: Modifier) {
     Row(modifier.fillMaxSize().clearAndSetSemantics {}) {
         options.forEach { o ->
             Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                 Text(
                     label(o),
                     color = color,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = textStyle,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

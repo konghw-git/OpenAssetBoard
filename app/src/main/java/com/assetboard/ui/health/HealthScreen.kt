@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.rememberCoroutineScope
+import com.assetboard.ui.components.LocalDust
+import com.assetboard.ui.components.dissolvable
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.Dp
 import com.assetboard.ui.components.PullToCreateBox
 import com.assetboard.ui.components.rememberPullToCreate
@@ -101,6 +105,7 @@ import com.assetboard.ui.components.LineChart
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SwapText
 import com.assetboard.ui.components.animatedCents
+import com.assetboard.ui.components.heroSurface
 import com.assetboard.ui.components.appear
 import com.assetboard.ui.components.pressScale
 import com.assetboard.ui.theme.AppTheme
@@ -246,12 +251,22 @@ fun HealthScreen(onBack: () -> Unit, startRecording: Boolean = false) {
         }
     }
     deleting?.let { m ->
+        val dust = LocalDust.current
+        val scope = rememberCoroutineScope()
+        val cell = with(LocalDensity.current) { 3.dp.toPx() }
         ConfirmDialog(
             title = "删除${dayLabel(m.date)}的记录？",
             text = "${Health.kg(m.weightG)} kg" + (m.bodyFatBp?.let { " · 体脂 ${Health.percent(it)}%" } ?: "") + "。删除后这一天就是空的，不会补点。",
             confirmLabel = "删除",
             destructive = true,
-            onConfirm = { vm.delete(m.id); deleting = null },
+            // The dialog goes first, so the row is seen turning to dust before it is gone.
+            onConfirm = {
+                deleting = null
+                scope.launch {
+                    dust?.dissolve(listOf(recordKey(m.id)), cell = cell)
+                    vm.delete(m.id)
+                }
+            },
             onDismiss = { deleting = null },
         )
     }
@@ -327,9 +342,7 @@ private fun HealthHero(s: HealthState, r: Reading, onRecord: () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
-            .shadow(8.dp, MaterialTheme.shapes.extraLarge, ambientColor = extra.heroStart, spotColor = extra.heroStart)
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd)))
+            .heroSurface(MaterialTheme.shapes.extraLarge, extra)
             .drawBehind {
                 val w = size.width
                 val h = size.height
@@ -739,12 +752,15 @@ private fun RecordsCard(s: HealthState, onOpen: (BodyMeasurement) -> Unit, onDel
     }
 }
 
+/** A record row's dust key, for the row to go in dust when its deletion is confirmed. */
+private fun recordKey(id: String) = "health:$id"
+
 @Composable
 private fun RecordRow(m: BodyMeasurement, prev: BodyMeasurement?, profile: HealthProfile?, onClick: () -> Unit, onLongClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val d = LocalDate.parse(m.date)
     Row(
-        Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(horizontal = 20.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().dissolvable(recordKey(m.id)).combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(

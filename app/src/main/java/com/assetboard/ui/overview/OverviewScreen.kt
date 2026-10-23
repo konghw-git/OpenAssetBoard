@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import com.assetboard.domain.LedgerException
 import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.TabPageBottomInset
 import com.assetboard.ui.components.SwipeAction
 import com.assetboard.ui.components.SwipeActionsBox
 import com.assetboard.ui.components.LocalSwipeAtRest
@@ -95,7 +96,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import com.assetboard.ui.components.animatedCents
 import com.assetboard.ui.components.appear
+import com.assetboard.ui.components.tilt
 import com.assetboard.ui.components.pressScale
+import com.assetboard.ui.components.Motion
+import com.assetboard.ui.components.heroSurface
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -375,7 +381,8 @@ fun OverviewScreen(
         CompositionLocalProvider(LocalAmbient provides ambient) {
         Scaffold(
             containerColor = Color.Transparent,
-            snackbarHost = { GlassSnackbarHost(snackbar) },
+            // Clear of the floating tab bar, which the page runs on under.
+            snackbarHost = { GlassSnackbarHost(snackbar, Modifier.padding(bottom = TabPageBottomInset)) },
             topBar = {
                 val accounts = state?.groups?.sumOf { it.rows.size } ?: 0
                 val today = java.time.LocalDate.now()
@@ -422,9 +429,10 @@ fun OverviewScreen(
                                 verticalArrangement = Arrangement.spacedBy(14.dp),
                             ) {
                                 item { Box(Modifier.appear(0)) { hero(s) } }
-                                item(key = "allocation") { Box(Modifier.appear(1)) { HeroAllocation(s.allocation) } }
-                                accountSections(s, onOpenAccount, onAddAccount, rows, first = 2)
-                                item(key = "tiles") { Tiles(food, health, onFood, onHealth) }
+                                // Today's food and weight right under the figure, before the allocation.
+                                item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(food, health, onFood, onHealth) } }
+                                item(key = "allocation") { Box(Modifier.appear(2)) { HeroAllocation(s.allocation) } }
+                                accountSections(s, onOpenAccount, onAddAccount, rows, first = 3)
                             }
                         }
                     }
@@ -450,25 +458,8 @@ private fun LazyListScope.accountSections(s: OverviewState, onOpenAccount: (Stri
 @Composable
 private fun Hero(s: OverviewState, goal: Long?, onStocktake: () -> Unit, onGoal: () -> Unit, onCash: () -> Unit) {
     val extra = AppTheme.extra
-    val net = animatedCents(s.totals.netWorth)
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .shadow(8.dp, MaterialTheme.shapes.extraLarge, ambientColor = extra.heroStart, spotColor = extra.heroStart)
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd)))
-            .drawBehind {
-                val w = size.width
-                val h = size.height
-                val light = Offset(w, 0f)
-                drawCircle(Brush.radialGradient(listOf(extra.onHeroAccent.copy(alpha = 0.10f), Color.Transparent), light, w), w, light)
-                // Fine contour lines stay outside the main reading column.
-                repeat(3) { i ->
-                    drawCircle(extra.onHero.copy(alpha = 0.045f), w * (0.40f + i * 0.12f), Offset(w * 1.15f, h * 0.18f), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
-                }
-            }
-            .padding(20.dp),
-    ) {
+    val net = animatedCents(s.totals.netWorth, countUp = true)
+    Box(Modifier.fillMaxWidth().tilt().heroSurface(MaterialTheme.shapes.extraLarge, extra).padding(20.dp)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -499,12 +490,12 @@ private fun Hero(s: OverviewState, goal: Long?, onStocktake: () -> Unit, onGoal:
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.Bottom) {
-                Text("¥", color = extra.onHero, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 5.dp, end = 4.dp))
+                Text("¥", color = extra.onHeroAccent, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 7.dp, end = 5.dp))
                 Text(
                     amount(Money.format(net)),
                     color = extra.onHero,
-                    style = MaterialTheme.typography.displaySmall.merge(NumberStyle),
-                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = 38.sp),
+                    style = MaterialTheme.typography.displayMedium.merge(NumberStyle),
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = 42.sp),
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                 )
@@ -654,8 +645,10 @@ private fun GaugeTile(
     Column(
         modifier
             .then(if (onClick != null) Modifier.pressScale(source) else Modifier)
-            .clip(RoundedCornerShape(16.dp))
-            .background(extra.onHero.copy(alpha = 0.07f))
+            .clip(RoundedCornerShape(18.dp))
+            // A pane of lighter glass on the hero: a faint fill and a rim lit along its top.
+            .background(Brush.verticalGradient(listOf(extra.onHero.copy(alpha = 0.13f), extra.onHero.copy(alpha = 0.07f))))
+            .border(1.dp, Brush.verticalGradient(listOf(extra.onHero.copy(alpha = 0.26f), extra.onHero.copy(alpha = 0.05f))), RoundedCornerShape(18.dp))
             .then(if (onClick != null) Modifier.clickable(interactionSource = source, indication = LocalIndication.current, onClick = onClick) else Modifier)
             .semantics(mergeDescendants = true) {}
             .padding(12.dp),
@@ -704,6 +697,9 @@ private fun HeroAllocation(allocation: List<AllocationUi>) {
     val shades = parts.map { extra.group(it.group.colorIndex) }
     var picked by rememberSaveable { mutableStateOf<String?>(null) }
     val index = parts.indexOfFirst { it.group.id == picked }.takeIf { it >= 0 }
+    // The share bars grow in just after the ring starts drawing.
+    val reveal = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { reveal.animateTo(1f, tween(900, delayMillis = 150, easing = Motion.Decelerate)) }
     SectionCard(contentPadding = PaddingValues(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("资产配置", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
@@ -711,12 +707,19 @@ private fun HeroAllocation(allocation: List<AllocationUi>) {
         }
         Spacer(Modifier.height(8.dp))
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val ringSize = if (maxWidth / LocalDensity.current.fontScale < 280.dp) 56.dp else 84.dp
+        val ringSize = if (maxWidth / LocalDensity.current.fontScale < 280.dp) 60.dp else 96.dp
         Row(verticalAlignment = Alignment.CenterVertically) {
+        // The ring turns into place as it draws, the way the todo dial does.
         DonutChart(
             slices = parts.mapIndexed { i, a -> DonutSlice(a.value.toFloat(), shades[i]) },
-            modifier = Modifier.size(ringSize),
-            thickness = if (ringSize < 84.dp) 6.dp else 9.dp,
+            modifier = Modifier.size(ringSize).graphicsLayer {
+                val t = reveal.value
+                rotationZ = -70f * (1f - t)
+                val sc = 0.86f + 0.14f * t
+                scaleX = sc; scaleY = sc
+                alpha = (0.2f + 0.8f * t).coerceAtMost(1f)
+            },
+            thickness = if (ringSize < 96.dp) 7.dp else 11.dp,
             highlighted = index,
             track = cs.outlineVariant,
         ) {
@@ -729,29 +732,38 @@ private fun HeroAllocation(allocation: List<AllocationUi>) {
                 autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = 14.sp),
             )
         }
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             parts.forEachIndexed { i, a ->
                 val on = picked == a.group.id
+                val wash by animateColorAsState(if (on) shades[i].copy(alpha = 0.10f) else Color.Transparent, tween(200), label = "pick")
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (on) shades[i].copy(alpha = 0.10f) else Color.Transparent)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(wash)
                         .clickable { picked = if (on) null else a.group.id }
                         .heightIn(min = 40.dp)
                         .semantics { selected = on }
-                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Dot(shades[i], 7.dp)
                     Spacer(Modifier.width(8.dp))
-                    // Amounts already live in the account list; allocation only compares shares.
-                    Text(a.group.name, color = cs.onSurface, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(
-                        Money.percent(a.value, total), color = cs.onSurfaceVariant, style = MaterialTheme.typography.labelLarge.merge(NumberStyle),
-                        maxLines = 1, textAlign = TextAlign.End, modifier = Modifier.padding(start = 8.dp),
-                    )
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Amounts already live in the account list; allocation only compares shares.
+                            Text(a.group.name, color = cs.onSurface, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text(
+                                Money.percent(a.value, total), color = if (on) shades[i] else cs.onSurfaceVariant, style = MaterialTheme.typography.labelLarge.merge(NumberStyle),
+                                maxLines = 1, textAlign = TextAlign.End, modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                        // Each share as a thin bar too, so the legend reads at a glance without the ring.
+                        Box(Modifier.fillMaxWidth().padding(top = 5.dp).height(3.dp).clip(RoundedCornerShape(50)).background(shades[i].copy(alpha = 0.16f))) {
+                            Box(Modifier.fillMaxWidth((a.value.toFloat() / total * reveal.value).coerceIn(0.02f, 1f)).fillMaxHeight().background(shades[i]))
+                        }
+                    }
                 }
             }
         }
@@ -818,15 +830,15 @@ private fun AccountsCard(s: OverviewState, onOpenAccount: (String) -> Unit, onAd
     val all = s.groups.map { it.group.id }
     val allOpen = all.isNotEmpty() && open.containsAll(all)
     // A heading over the groups, then each group a glass card of its own.
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth().padding(start = 6.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().padding(start = 6.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("账户", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.width(8.dp))
             Text("${s.groups.sumOf { it.rows.size }} 个", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
             Text(
                 if (allOpen) "全部收起" else "全部展开",
                 style = MaterialTheme.typography.labelLarge, color = cs.primary,
-                modifier = Modifier.clip(RoundedCornerShape(50)).clickable { open = if (allOpen) emptyList() else all }.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.clip(RoundedCornerShape(50)).clickable { open = if (allOpen) emptyList() else all }.padding(horizontal = 10.dp, vertical = 4.dp),
             )
         }
         s.groups.forEach { g ->
@@ -852,64 +864,71 @@ private fun GroupSection(
 ) {
     val cs = MaterialTheme.colorScheme
     val color = AppTheme.extra.group(g.group.colorIndex)
-    val turn by animateFloatAsState(if (open) 180f else 0f, label = "fold")
+    val turn by animateFloatAsState(if (open) 180f else 0f, Motion.bouncy(), label = "fold")
     val shape = MaterialTheme.shapes.large
     // Open, the card takes a wash of the group's colour, so its accounts read as one set.
     val wash by animateColorAsState(if (open) color.copy(alpha = 0.07f) else Color.Transparent, tween(240), label = "wash")
     val source = remember { MutableInteractionSource() }
+    // The share of the assets, as a thin line along the card's bottom edge: the figure at a glance.
+    val share = if (!g.group.isLiability && totalAssets > 0 && g.subtotal > 0) (g.subtotal.toFloat() / totalAssets).coerceIn(0f, 1f) else 0f
+    val shareShown by animateFloatAsState(share, tween(700, delayMillis = 200, easing = Motion.Decelerate), label = "share")
+    val detail = when {
+        g.rows.isEmpty() -> "还没有账户"
+        g.group.isLiability -> "${g.rows.size} 个账户 · 负债"
+        totalAssets > 0 && g.subtotal > 0 -> "${g.rows.size} 个账户 · 占 ${Money.percent(g.subtotal, totalAssets)}"
+        else -> "${g.rows.size} 个账户"
+    }
     Column(Modifier.fillMaxWidth().pressScale(source, 0.99f).glass(shape, glass, wash).clip(shape)) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-    val compact = maxWidth / LocalDensity.current.fontScale < 340.dp
+    val compact = maxWidth / LocalDensity.current.fontScale < 300.dp
     Row(
-        Modifier.fillMaxWidth().clickable(interactionSource = source, indication = null, onClick = onToggle).padding(start = 14.dp, end = 12.dp, top = 11.dp, bottom = 11.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable(interactionSource = source, indication = null, onClick = onToggle)
+            .drawBehind {
+                if (shareShown <= 0f) return@drawBehind
+                val h = 2.dp.toPx()
+                drawRoundRect(color.copy(alpha = 0.55f), Offset(0f, size.height - h), Size(size.width * shareShown, h), androidx.compose.ui.geometry.CornerRadius(h))
+            }
+            .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(color.copy(alpha = 0.30f), color.copy(alpha = 0.10f)))),
+            Modifier.size(34.dp).clip(RoundedCornerShape(11.dp))
+                .background(Brush.linearGradient(listOf(color.copy(alpha = 0.34f), color.copy(alpha = 0.10f))))
+                .border(1.dp, color.copy(alpha = 0.22f), RoundedCornerShape(11.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(g.group.name.take(1), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = color)
+            Text(g.group.name.take(1), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = color)
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(g.group.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                if (g.rows.isNotEmpty() && !compact) {
-                    AvatarStack(g.rows)
-                    Spacer(Modifier.width(6.dp))
-                }
-                Text(
-                    if (g.rows.isEmpty()) "还没有账户" else "${g.rows.size} 个账户",
-                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1,
-                )
-            }
+            Text(g.group.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(detail, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(top = 1.dp))
             if (compact) {
-                Text(amount(Money.format(g.subtotal)), style = MaterialTheme.typography.bodyLarge.merge(NumberStyle), fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 16.sp), modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                Text(amount(Money.format(g.subtotal)), style = MaterialTheme.typography.bodyMedium.merge(NumberStyle), fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 15.sp), modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
             }
         }
         Spacer(Modifier.width(8.dp))
-        if (!compact) Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(0.9f)) {
+        if (!compact) {
             Text(amount(Money.format(g.subtotal)), style = MaterialTheme.typography.bodyLarge.merge(NumberStyle), fontWeight = FontWeight.SemiBold,
-                maxLines = 1, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 16.sp), textAlign = TextAlign.End)
-            Text(
-                when {
-                    g.group.isLiability -> "负债"
-                    totalAssets > 0 && g.subtotal > 0 -> "占 ${Money.percent(g.subtotal, totalAssets)}"
-                    else -> "资产"
-                },
-                style = MaterialTheme.typography.labelSmall.merge(NumberStyle), color = cs.onSurfaceVariant,
-            )
+                maxLines = 1, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 16.sp), textAlign = TextAlign.End,
+                modifier = Modifier.weight(0.9f))
         }
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(4.dp))
         Icon(Icons.Default.ExpandMore, if (open) "收起" else "展开", tint = cs.onSurfaceVariant, modifier = Modifier.size(20.dp).rotate(turn))
     }
     }
-    AnimatedVisibility(open) {
-        // Each account on a pane of its own inside the group's card.
+    AnimatedVisibility(
+        open,
+        enter = expandVertically(Motion.soft()) + fadeIn(tween(220, delayMillis = 60)),
+        exit = shrinkVertically(Motion.soft()) + fadeOut(tween(120)),
+    ) {
+        // Each account on a pane of its own inside the group's card, arriving one after another.
         Column(
-            Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             if (g.rows.isEmpty()) {
                 Box(Modifier.fillMaxWidth().clip(AccountPaneShape).background(accountPane())) {
@@ -921,8 +940,10 @@ private fun GroupSection(
                     )
                 }
             }
-            g.rows.forEach { r ->
-                key(r.account.id) { SwipeAccountPane(r, g.group.isLiability, rows, onOpen = { onOpenAccount(r.account.id) }) }
+            g.rows.forEachIndexed { i, r ->
+                key(r.account.id) {
+                    Box(Modifier.appear(i)) { SwipeAccountPane(r, g.group.isLiability, rows, onOpen = { onOpenAccount(r.account.id) }) }
+                }
             }
         }
     }
@@ -1058,34 +1079,19 @@ private fun accountPane(): Color {
     return if (cs.background.luminance() < 0.5f) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.50f)
 }
 
-/** Up to four account tiles overlapping, each ringed in the card colour so the overlap reads as a stack. */
-@Composable
-private fun AvatarStack(rows: List<AccountRowUi>) {
-    val cs = MaterialTheme.colorScheme
-    val extra = AppTheme.extra
-    val shown = rows.take(4)
-    Box(Modifier.width((20 + 13 * (shown.size - 1)).dp).height(20.dp)) {
-        shown.forEachIndexed { i, r ->
-            Box(Modifier.offset(x = (13 * i).dp).size(20.dp).clip(RoundedCornerShape(6.dp)).background(cs.surfaceContainer).padding(1.dp)) {
-                AccountAvatar(r.account, extra.group(r.colorIndex), size = 18.dp)
-            }
-        }
-    }
-}
-
 /** The account tile on a row: small enough that a long group stays a compact list. */
-private val AccountRowAvatar = 36.dp
+private val AccountRowAvatar = 34.dp
 
 @Composable
 fun AccountRow(r: AccountRowUi, onClick: () -> Unit, horizontalPadding: Dp = 20.dp) {
     val extra = AppTheme.extra
     val muted = !r.counted
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = horizontalPadding, vertical = 8.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = horizontalPadding, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AccountAvatar(r.account, extra.group(r.colorIndex), muted = muted, size = AccountRowAvatar)
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 r.account.name,
@@ -1133,10 +1139,10 @@ private fun DisabledCard(rows: List<AccountRowUi>, onOpenAccount: (String) -> Un
             chevron = false,
             trailing = { Icon(if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
         )
-        AnimatedVisibility(open) {
+        AnimatedVisibility(open, enter = expandVertically(Motion.soft()) + fadeIn(tween(220, delayMillis = 60)), exit = shrinkVertically(Motion.soft()) + fadeOut(tween(120))) {
             Column {
                 rows.forEach { r ->
-                    RowDivider(startIndent = 68.dp)
+                    RowDivider(startIndent = 64.dp)
                     AccountRow(r, onClick = { onOpenAccount(r.account.id) })
                 }
             }
@@ -1174,10 +1180,10 @@ private fun Tile(
             Modifier
                 .fillMaxSize()
                 .drawBehind {
-                    drawRect(Brush.verticalGradient(listOf(accent.copy(alpha = 0.10f), Color.Transparent)))
+                    drawRect(Brush.verticalGradient(listOf(accent.copy(alpha = 0.14f), Color.Transparent)))
                     val c = Offset(size.width, 0f)
                     val r = size.width * 0.9f
-                    drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.12f), Color.Transparent), c, r), r, c)
+                    drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.20f), Color.Transparent), c, r), r, c)
                 }
                 .clickable(interactionSource = source, indication = LocalIndication.current, onClick = onClick)
                 .padding(16.dp),
@@ -1243,11 +1249,12 @@ private fun FoodTile(f: FoodState, onFood: (record: Boolean) -> Unit, modifier: 
             Text("估个大概的热量就能记", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
             return@Tile
         }
-        TileNumber(Energy.kcal(animatedCents(day.intakeCal)), sizeFor = Energy.kcal(day.intakeCal), suffix = "kcal")
+        // The eye on the hero hides these figures too.
+        TileNumber(amount(Energy.kcal(animatedCents(day.intakeCal))), sizeFor = Energy.kcal(day.intakeCal), suffix = "kcal")
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
             val deficit = day.deficitCal
             if (day.entries.isNotEmpty() && deficit != null) {
-                Pill(if (deficit >= 0) "缺口 ${Energy.kcal(deficit)}" else "超出 ${Energy.kcal(-deficit)}", cs.secondary)
+                Pill(if (deficit >= 0) "缺口 ${amount(Energy.kcal(deficit))}" else "超出 ${amount(Energy.kcal(-deficit))}", cs.secondary)
             }
             Text(
                 when {
@@ -1319,14 +1326,15 @@ private fun HealthTile(h: HealthState, onHealth: (record: Boolean) -> Unit, modi
             Text("每天称一次，没称的日子空着就好", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
             return@Tile
         }
+        // The eye on the hero hides these figures too.
         TileNumber(
-            Health.kg(animatedCents(latest.weightG)), sizeFor = Health.kg(latest.weightG), suffix = "kg",
-            note = h.previous?.let { Health.kgDelta(latest.weightG - it.weightG) },
+            amount(Health.kg(animatedCents(latest.weightG))), sizeFor = Health.kg(latest.weightG), suffix = "kg",
+            note = h.previous?.let { amount(Health.kgDelta(latest.weightG - it.weightG)) },
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
             h.profile?.let { Health.bmi(latest.weightG, it.heightMm) }?.let { bmi ->
                 val g = Health.bmiGrade(bmi)
-                Pill("BMI ${Health.bmiText(bmi)} ${g.label}", gradeColor(g))
+                Pill("BMI ${amount(Health.bmiText(bmi))} ${g.label}", gradeColor(g))
             }
             Text(
                 com.assetboard.ui.health.dayLabel(latest.date), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,

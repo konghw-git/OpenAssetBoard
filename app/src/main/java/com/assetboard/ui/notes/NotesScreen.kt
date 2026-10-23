@@ -106,6 +106,10 @@ import com.assetboard.data.NoteText
 import com.assetboard.ui.todo.rememberToday
 import androidx.compose.ui.layout.layout
 import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.components.LocalDust
+import com.assetboard.ui.TabPageBottomInset
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.assetboard.ui.components.SwipeAction
 import com.assetboard.ui.components.SwipeActionsBox
 import com.assetboard.ui.components.UndoEvent
@@ -341,10 +345,17 @@ fun NotesScreen(
                 topBar = {
                     if (selection.isNotEmpty()) {
                         TabHeader("已选 ${selection.size} 篇", if (custom) "拖动选中的一篇，其余跟着一起走" else "按住不动可以继续多选") {
+                            val dust = LocalDust.current
+                            val scope = rememberCoroutineScope()
                             HeaderAction(Icons.Outlined.Delete, "删除选中的笔记", {
-                                // In the order they show, so an undo brings them back as they were.
-                                vm.deleteMany(order.filter { it.id in selection }.map { it.id })
+                                // In the order they show, so an undo brings them back as they were;
+                                // the cards turn to dust first, as a swiped one does.
+                                val ids = order.filter { it.id in selection }.map { it.id }
                                 selection = emptySet()
+                                scope.launch {
+                                    dust?.dissolve(ids.map(::noteKey))
+                                    vm.deleteMany(ids)
+                                }
                             }, tint = cs.error)
                             HeaderAction(Icons.Default.Close, "取消选择", { selection = emptySet() })
                         }
@@ -461,7 +472,7 @@ fun NotesScreen(
                 }
             }
         }
-        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp), backdrop)
+        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = TabPageBottomInset), backdrop)
     }
 }
 

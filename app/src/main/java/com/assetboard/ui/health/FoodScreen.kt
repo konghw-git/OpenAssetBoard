@@ -9,6 +9,9 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.rememberCoroutineScope
+import com.assetboard.ui.components.LocalDust
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.Dp
 import com.assetboard.ui.components.PullToCreateBox
 import com.assetboard.ui.components.rememberPullToCreate
@@ -99,6 +102,7 @@ import com.assetboard.ui.components.SwipeActionsBox
 import com.assetboard.ui.components.UndoEvent
 import com.assetboard.ui.components.UndoMessages
 import com.assetboard.ui.components.animatedCents
+import com.assetboard.ui.components.heroSurface
 import com.assetboard.ui.components.appear
 import com.assetboard.ui.components.glassBarColors
 import com.assetboard.ui.components.pressScale
@@ -240,6 +244,9 @@ fun FoodScreen(onBack: () -> Unit, startRecording: Boolean = false, onWeigh: () 
     val s = state
     if (s != null) {
         editing?.let { id ->
+            val dust = LocalDust.current
+            val scope = rememberCoroutineScope()
+            val cell = with(LocalDensity.current) { 3.dp.toPx() }
             val existing = if (id == NEW) null else s.entries.firstOrNull { it.id == id }
             // An entry gone while its sheet was open (an undo, a restore): nothing left to edit.
             val gone = id != NEW && existing == null
@@ -251,7 +258,14 @@ fun FoodScreen(onBack: () -> Unit, startRecording: Boolean = false, onWeigh: () 
                 recent = s.recent,
                 onDismiss = { editing = null },
                 onSave = { draft -> vm.save(draft) { editing = null; selected = draft.date.toString() } },
-                onDelete = { e -> editing = null; vm.delete(e.id) },
+                // Deleted from its sheet, the entry's row still goes in dust, as a swiped one does.
+                onDelete = { e ->
+                    editing = null
+                    scope.launch {
+                        dust?.dissolve(listOf("food:${e.id}"), cell = cell)
+                        vm.delete(e.id)
+                    }
+                },
             )
         }
         if (profileOpen) {
@@ -344,9 +358,7 @@ private fun DayHero(
     Box(
         Modifier
             .fillMaxWidth()
-            .shadow(8.dp, MaterialTheme.shapes.extraLarge, ambientColor = extra.heroStart, spotColor = extra.heroStart)
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd)))
+            .heroSurface(MaterialTheme.shapes.extraLarge, extra)
             .drawBehind {
                 val w = size.width
                 val h = size.height

@@ -94,7 +94,8 @@ private const val FLING = 900f
  *
  * - left reveals 删除; swiping on past the threshold, or tapping it, turns the card to dust and
  *   calls [onDelete];
- * - right reveals [actions]; swiping on past the threshold runs the first one.
+ * - right reveals [actions]; swiping on past the threshold runs [full], or the first of them
+ *   when no [full] is given, the way a full swipe left deletes.
  *
  * An open row closes when another opens, when it is tapped, or when [group] closes all. A stroke
  * on a row is the row's; the tabs turn from anywhere else (see [rowDrag]). A row inside another (a checklist item in its todo) takes only the
@@ -110,6 +111,8 @@ fun SwipeActionsBox(
     shape: RoundedCornerShape,
     modifier: Modifier = Modifier,
     actions: List<SwipeAction> = emptyList(),
+    /** What a full swipe right does when it is not the first of [actions]; its button spreads over them as the swipe arms. */
+    full: SwipeAction? = null,
     onDelete: (() -> Unit)? = null,
     enabled: Boolean = true,
     compact: Boolean = false,
@@ -126,12 +129,13 @@ fun SwipeActionsBox(
     var width by remember { mutableStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
     val delete by rememberUpdatedState(onDelete)
-    val first by rememberUpdatedState(actions.firstOrNull())
+    val first by rememberUpdatedState(full ?: actions.firstOrNull())
 
     val gap = with(density) { Gap.toPx() }
     val startOpen = if (actions.isEmpty()) 0f else with(density) { (ActionWidth + Gap).toPx() } * actions.size + gap
     val endOpen = if (onDelete == null) 0f else with(density) { ((if (compact) CompactDeleteWidth else DeleteWidth) + Gap).toPx() } + gap
-    val startFull = maxOf(startOpen + with(density) { 64.dp.toPx() }, width * 0.58f)
+    // Arming right comes sooner than delete does: the actions already take most of the way, so a short push on past them.
+    val startFull = maxOf(startOpen + with(density) { 36.dp.toPx() }, width * 0.48f)
     val endFull = maxOf(endOpen + with(density) { 64.dp.toPx() }, width * 0.52f)
     val x = offset.value
     val armedStart = x > startFull && actions.isNotEmpty()
@@ -196,7 +200,7 @@ fun SwipeActionsBox(
             .graphicsLayer { alpha = if (hidden) 0f else 1f },
     ) {
         if (x > 0.5f) {
-            StartActions(actions, x, startOpen, armedStart, shape, Modifier.matchParentSize()) { a ->
+            StartActions(actions, full, x, startOpen, armedStart, shape, Modifier.matchParentSize()) { a ->
                 settle(0f)
                 a.onClick()
             }
@@ -229,28 +233,46 @@ fun SwipeActionsBox(
 }
 
 @Composable
-private fun StartActions(actions: List<SwipeAction>, x: Float, open: Float, armed: Boolean, shape: RoundedCornerShape, modifier: Modifier, onClick: (SwipeAction) -> Unit) {
+private fun StartActions(actions: List<SwipeAction>, full: SwipeAction?, x: Float, open: Float, armed: Boolean, shape: RoundedCornerShape, modifier: Modifier, onClick: (SwipeAction) -> Unit) {
     val density = LocalDensity.current
     val progress = (x / open).coerceIn(0f, 1f)
     val gap = with(density) { Gap.toPx() }
     val fill by animateFloatAsState(if (armed) 1f else 0f, spring(stiffness = Spring.StiffnessMedium), label = "armed")
     val base = with(density) { ActionWidth.toPx() }
-    // Armed, the first button stretches over the whole revealed space and the rest fade.
-    val firstWidth = base + (x - gap * 2 - base) * fill
-    Row(modifier.padding(start = Gap), horizontalArrangement = Arrangement.spacedBy(Gap), verticalAlignment = Alignment.CenterVertically) {
-        actions.forEachIndexed { i, a ->
-            val w = if (i == 0) firstWidth.coerceAtLeast(base) else base
+    // Armed, the first button stretches over the whole revealed space and the rest fade; with a
+    // [full] action of its own, that one's button spreads over all of them instead.
+    val stretch = full == null
+    val firstWidth = if (stretch) base + (x - gap * 2 - base) * fill else base
+    Box(modifier) {
+        Row(Modifier.matchParentSize().padding(start = Gap), horizontalArrangement = Arrangement.spacedBy(Gap), verticalAlignment = Alignment.CenterVertically) {
+            actions.forEachIndexed { i, a ->
+                val w = if (i == 0) firstWidth.coerceAtLeast(base) else base
+                ActionButton(
+                    a.label, a.icon, a.color, shape,
+                    Modifier
+                        .width(with(density) { w.toDp() })
+                        .fillMaxHeight()
+                        .graphicsLayer {
+                            val s = 0.7f + 0.3f * progress
+                            scaleX = s; scaleY = s
+                            alpha = if (i == 0 && stretch) progress else progress * (1f - fill)
+                        },
+                ) { onClick(a) }
+            }
+        }
+        if (full != null && fill > 0.01f) {
             ActionButton(
-                a.label, a.icon, a.color, shape,
+                full.label, full.icon, full.color, shape,
                 Modifier
-                    .width(with(density) { w.toDp() })
+                    .padding(start = Gap)
+                    .width(with(density) { (x - gap * 2).coerceAtLeast(base).toDp() })
                     .fillMaxHeight()
                     .graphicsLayer {
-                        val s = 0.7f + 0.3f * progress
-                        scaleX = s; scaleY = s
-                        alpha = if (i == 0) progress else progress * (1f - fill)
+                        alpha = fill
+                        scaleY = 0.92f + 0.08f * fill
                     },
-            ) { onClick(a) }
+                iconScale = 0.9f + 0.2f * fill,
+            ) { onClick(full) }
         }
     }
 }

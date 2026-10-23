@@ -83,6 +83,8 @@ fun TodoInlineEditor(
     modifier: Modifier = Modifier,
     blankTitle: Boolean = false,
     onUndo: (() -> Unit)? = null,
+    /** The checklist item to start in, when the edit began with a tap on one; the title otherwise. */
+    focusItem: String? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     var title by remember(todo.id) { mutableStateOf(if (blankTitle) TextFieldValue("") else TextFieldValue(todo.title, TextRange(todo.title.length))) }
@@ -93,8 +95,8 @@ fun TodoInlineEditor(
     }
     val requesters = remember(todo.id) { mutableMapOf<String, FocusRequester>() }
     fun requester(key: String) = requesters.getOrPut(key) { FocusRequester() }
-    // The field to focus once it is on screen: the title when the edit starts.
-    var pending by remember(todo.id) { mutableStateOf<String?>(TITLE) }
+    // The field to focus once it is on screen: the title when the edit starts, or the item tapped.
+    var pending by remember(todo.id) { mutableStateOf<String?>(focusItem?.takeIf { id -> checklist.any { it.id == id } } ?: TITLE) }
     LaunchedEffect(pending) {
         val target = pending ?: return@LaunchedEffect
         // A new item's field exists only after the next frame; try a few.

@@ -1,9 +1,18 @@
 package com.assetboard.ui.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.assetboard.ui.theme.ExtraColors
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -64,14 +73,19 @@ fun TabHeader(
         modifier
             .fillMaxWidth()
             .then(if (statusBar) Modifier.statusBarsPadding() else Modifier)
-            .padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 10.dp),
+            .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.headlineSmall, color = cs.onBackground)
+            Text(title, style = MaterialTheme.typography.headlineMedium, color = cs.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) {
-                AnimatedContent(subtitle, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "subtitle") {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // A new line of context rises in under the title as the old one fades.
+                AnimatedContent(
+                    subtitle,
+                    transitionSpec = { (fadeIn(tween(240, delayMillis = 40)) + slideInVertically(tween(Motion.MEDIUM, easing = Motion.Decelerate)) { it / 3 }) togetherWith fadeOut(tween(140)) },
+                    label = "subtitle",
+                ) {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                 }
             }
         }
@@ -85,14 +99,14 @@ fun HeaderAction(icon: ImageVector, description: String, onClick: () -> Unit, mo
     val source = remember { MutableInteractionSource() }
     // Glass on a page with colour behind it; a plain soft card elsewhere.
     val onGlass = LocalAmbient.current != null
-    Box(modifier.size(42.dp)) {
+    Box(modifier.size(44.dp)) {
         Box(
             Modifier
-                .size(42.dp)
-                .pressScale(source, 0.9f)
+                .size(44.dp)
+                .pressScale(source, 0.88f)
                 .then(
                     if (onGlass) {
-                        Modifier.glass(CircleShape, glass, elevation = 6.dp)
+                        Modifier.glass(CircleShape, glass, elevation = 8.dp)
                     } else {
                         Modifier
                             .shadow(2.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.10f))
@@ -103,7 +117,7 @@ fun HeaderAction(icon: ImageVector, description: String, onClick: () -> Unit, mo
                 .clickable(interactionSource = source, indication = null, onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, description, tint = tint, modifier = Modifier.size(21.dp))
+            Icon(icon, description, tint = tint, modifier = Modifier.size(22.dp))
         }
         if (badge) {
             Box(
@@ -152,14 +166,15 @@ fun PrimaryActionButton(icon: ImageVector, text: String, onClick: () -> Unit, mo
     Row(
         modifier
             .pressScale(source, 0.93f)
-            .shadow(8.dp, shape, ambientColor = extra.heroStart, spotColor = extra.heroStart)
+            .shadow(12.dp, shape, ambientColor = extra.heroStart, spotColor = extra.heroStart)
             .clip(shape)
-            .background(Brush.linearGradient(listOf(extra.heroEnd, extra.heroStart)))
+            .background(Brush.linearGradient(listOf(extra.heroEnd, extra.heroMid, extra.heroStart)))
             .drawWithContent {
                 drawContent()
                 // A soft gloss over the top half.
-                drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.05f), Color.Transparent), endY = size.height * 0.6f))
+                drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), endY = size.height * 0.6f))
             }
+            .shine(delayMs = 700)
             .clickable(interactionSource = source, indication = null, onClick = onClick)
             .height(58.dp)
             .padding(start = 7.dp, end = 24.dp),
@@ -175,6 +190,32 @@ fun PrimaryActionButton(icon: ImageVector, text: String, onClick: () -> Unit, mo
         Text(text, color = extra.onHero, style = MaterialTheme.typography.titleMedium)
     }
 }
+
+/**
+ * The hero card's surface, shared by every tab's showpiece: a deep three-stop gradient, a cool
+ * light entering at the top right, a brass glow in the lower left, fine contour rings kept out
+ * of the reading column, a lit top edge like the glass cards', and one pass of light as the page
+ * settles.
+ */
+fun Modifier.heroSurface(shape: Shape, extra: ExtraColors, elevation: Dp = 14.dp): Modifier = this
+    .shadow(elevation, shape, ambientColor = extra.heroStart, spotColor = extra.heroStart)
+    .clip(shape)
+    .drawBehind {
+        val w = size.width
+        val h = size.height
+        drawRect(Brush.linearGradient(listOf(extra.heroStart, extra.heroMid, extra.heroEnd), Offset.Zero, Offset(w, h)))
+        val light = Offset(w * 0.95f, -h * 0.15f)
+        drawCircle(Brush.radialGradient(listOf(extra.heroGlow.copy(alpha = 0.55f), Color.Transparent), light, w * 0.65f), w * 0.65f, light)
+        val warm = Offset(w * 0.02f, h * 1.1f)
+        drawCircle(Brush.radialGradient(listOf(extra.onHeroAccent.copy(alpha = 0.22f), Color.Transparent), warm, w * 0.55f), w * 0.55f, warm)
+        repeat(4) { i ->
+            drawCircle(extra.onHero.copy(alpha = 0.05f), w * (0.34f + i * 0.11f), Offset(w * 1.12f, h * 0.2f), style = Stroke(1.dp.toPx()))
+        }
+        drawRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.07f), Color.Transparent), Offset(w * 0.25f, 0f), Offset(w * 0.75f, h)))
+        val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
+        drawPath(path, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.38f), Color.Transparent), endY = 30.dp.toPx()), style = Stroke(2.dp.toPx()))
+    }
+    .shine()
 
 /** A tinted rounded square holding a row's icon, so each settings row has its own color. */
 @Composable

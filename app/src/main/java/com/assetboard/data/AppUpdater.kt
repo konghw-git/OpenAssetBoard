@@ -12,6 +12,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +31,9 @@ import java.net.URL
 
 /** A published version: its number, what changed, and where its APK is. */
 data class Release(val version: String, val notes: String, val apkUrl: String, val size: Long, val page: String)
+
+/** A GitHub download accelerator: [prefix] goes in front of the release URL; empty for GitHub itself. */
+data class Mirror(val name: String, val prefix: String)
 
 sealed interface UpdateState {
     data object Idle : UpdateState
@@ -280,7 +286,84 @@ class AppUpdater(
 
     var mirror: String
         get() = settings.string(KEY_MIRROR).orEmpty()
-        set(value) = settings.putString(KEY_MIRROR, normalizeMirror(value).ifEmpty { null })
+        set(value) {
+            settings.putString(KEY_MIRROR, normalizeMirror(value).ifEmpty { null })
+            _mirrorState.value = normalizeMirror(value)
+        }
+
+    private val _mirrorState = MutableStateFlow(settings.string(KEY_MIRROR).orEmpty())
+    /** The mirror in use, for the settings row to follow. */
+    val mirrorState: StateFlow<String> = _mirrorState.asStateFlow()
+
+    /** Each mirror's last probe, by prefix: milliseconds to the first 64 KB, or -1 for one that failed. */
+    private val _mirrorSpeeds = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val mirrorSpeeds: StateFlow<Map<String, Long>> = _mirrorSpeeds.asStateFlow()
+    private val _testingMirrors = MutableStateFlow(false)
+    val testingMirrors: StateFlow<Boolean> = _testingMirrors.asStateFlow()
+
+    /**
+     * Times a small download through GitHub itself and every known mirror at once, filling
+     * [mirrorSpeeds] as each answers, and makes the fastest the mirror in use. [onDone] gets its
+     * prefix, or null when nothing answered (or networking is off).
+     */
+    fun testMirrors(onDone: (String?) -> Unit = {}) {
+        if (_testingMirrors.value) return
+        if (!settings.networkEnabled.value) {
+            onDone(null)
+            return
+        }
+        _testingMirrors.value = true
+        _mirrorSpeeds.value = emptyMap()
+        scope.launch {
+            // The release's own APK where one is known; a small file from the repository otherwise.
+            val probe = downloading()?.apkUrl ?: "https://github.com/${BuildConfig.UPDATE_REPO}/raw/main/README.md"
+            val results = withContext(Dispatchers.IO) {
+                coroutineScope {
+                    MIRRORS.map { m ->
+                        async {
+                            val ms = probeMirror(m.prefix + probe)
+                            _mirrorSpeeds.value = _mirrorSpeeds.value + (m.prefix to ms)
+                            m.prefix to ms
+                        }
+                    }.awaitAll()
+                }
+            }.toMap()
+            val best = results.filterValues { it >= 0 }.minByOrNull { it.value }?.key
+            if (best != null) mirror = best
+            _testingMirrors.value = false
+            onDone(best)
+        }
+    }
+
+    /** Milliseconds to fetch the first 64 KB of [url], or -1 when it fails or takes too long. */
+    private fun probeMirror(url: String): Long {
+        val start = System.nanoTime()
+        return try {
+            val c = URL(url).openConnection() as HttpURLConnection
+            try {
+                c.connectTimeout = 6_000
+                c.readTimeout = 6_000
+                c.instanceFollowRedirects = true
+                c.setRequestProperty("Range", "bytes=0-65535")
+                c.setRequestProperty("User-Agent", "OpenAssetBoard/$currentVersion")
+                if (c.responseCode !in 200..299) return -1
+                c.inputStream.use { input ->
+                    val buf = ByteArray(16 * 1024)
+                    var total = 0
+                    while (total < 65_536) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        total += n
+                    }
+                }
+                (System.nanoTime() - start) / 1_000_000
+            } finally {
+                c.disconnect()
+            }
+        } catch (e: Exception) {
+            -1
+        }
+    }
 
     private inline fun <T> get(url: URL, timeoutMs: Int = 15_000, read: (java.io.InputStream) -> T): T {
         val c = url.openConnection() as HttpURLConnection
@@ -335,5 +418,20 @@ class AppUpdater(
         private const val KEY_LAST_CHECK = "update_last_check"
         private const val KEY_IGNORED = "update_ignored"
         private const val KEY_MIRROR = "update_mirror"
+
+        /** GitHub itself, then accelerators in common use on the mainland; the speed test sorts them out. */
+        val MIRRORS = listOf(
+            Mirror("直连 GitHub", ""),
+            Mirror("ghfast.top", "https://ghfast.top/"),
+            Mirror("gh-proxy.com", "https://gh-proxy.com/"),
+            Mirror("ghproxy.net", "https://ghproxy.net/"),
+            Mirror("hub.gitmirror.com", "https://hub.gitmirror.com/"),
+            Mirror("github.moeyy.xyz", "https://github.moeyy.xyz/"),
+            Mirror("gh.llkk.cc", "https://gh.llkk.cc/"),
+        )
+
+        /** What a mirror prefix reads as: its name when known, its host otherwise. */
+        fun mirrorName(prefix: String): String =
+            MIRRORS.firstOrNull { it.prefix == prefix }?.name ?: prefix.removePrefix("https://").removePrefix("http://").trimEnd('/')
     }
 }

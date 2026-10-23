@@ -6,6 +6,61 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.11] - 2026-10-24
+
+### Added
+
+- Download mirrors for updates come preset: GitHub itself and six accelerators in common use on
+  the mainland, each timed in a tap (测速并选最快的), the fastest picked automatically. A prefix
+  of one's own still goes in the field at the bottom.
+- A tap on a checklist item's text under a todo edits it where it stands, the cursor in that
+  item, as a tap on the title already did; the node beside it still ticks it.
+- Ticking a todo ticks its whole checklist with it (a repeat's record keeps the period's items
+  all done); unticking it puts the items back as they stood.
+- Deletions that had no dust get it: a batch purged from (or restored to) the trash, a health
+  record, a food entry deleted from its sheet, a section, and notes deleted from a selection.
+
+### Changed
+
+- A todo's right swipe reveals 改期 and 重要 only; the full editor is the swipe all the way,
+  the way a swipe all the way left deletes, its button spreading over the others as it arms;
+  it arms a short push past the open actions (about half the width), not well past them.
+- A list card deletes on a left swipe and archives on a right one, so a left swipe deletes
+  everywhere in the app.
+- Undo capsules on the four tab pages sit clear of the floating tab bar, which hid part of them.
+
+- The overview puts today's food and weight right under the net worth, before the allocation,
+  and the eye that hides amounts hides their figures as well (kcal, deficit, weight, change, BMI).
+- Account groups are lower: a smaller tile, the count and share on one line under the name, the
+  total alone at the end, and the group's share of the assets as a thin line along the card's
+  foot. Accounts arrive one after another as a group unfolds.
+- Settings most used first: appearance at the top, its three choices on three rows with the
+  control at the end of each, and the about card at the bottom. Rows, headers and footnotes are
+  tighter throughout, as are note cards.
+- More motion: the net worth rolls up from zero as the overview opens; the hero and about cards
+  tilt toward the finger while held; the allocation ring turns into place as it draws; a ring of
+  the theme colour spreads from a check box as it is ticked; settings cards cascade in.
+
+- The glass is back, and deeper: every tab sits on four colour fields (green, brass, blue and
+  teal from the group palette) that breathe in as the page opens, and cards, chips and header
+  buttons are translucent panes with a lit rim over them. The 清透 / 深色 choice in settings
+  still picks how dense the glass is.
+- The tab bar is a frosted pill floating over the pages, blurring what scrolls under it. Its
+  highlight glides with the pager rather than stepping, and each tab's icon lifts as the
+  highlight reaches it. Pages pushed over the tabs rise in from the right and grow the last few
+  percent; the bar slides away under them.
+- One hero surface for every showpiece card (overview, trend, health, food, week, about): a
+  three-stop green gradient with a cool light in one corner, a brass glow in the other, a lit
+  top edge and a single pass of light as the page settles. The overview's net worth is larger,
+  with the yuan sign in brass; the cash and goal tiles are panes of lighter glass.
+- The allocation card's ring is larger and each group's share is drawn as a thin bar under its
+  name as well. Account groups fold and unfold on a spring, and the fold chevron has a little give.
+- Shared motion vocabulary (`Motion`): emphasized easings, three durations and three springs,
+  used by card entrances (a longer cascade with a slight grow), press feedback (a touch of
+  bounce on release), subtitle changes and the solid segmented thumb, which now casts its colour.
+- Cooler mineral neutrals and a deeper dark background; headlines heavier and tighter, labels
+  firmer, corners a little rounder.
+
 ## [0.9.10] - 2026-10-24
 
 ### Added
@@ -525,6 +580,7 @@ between minor versions; backup format v3 reads v1 and v2.
   checklist walks through them.
 
 [Unreleased]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.9.10...HEAD
+[0.9.11]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.9.10...v0.9.11
 [0.9.10]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.9.9...v0.9.10
 [0.9.9]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.9.8...v0.9.9
 [0.8.0]: https://github.com/konghw-git/OpenAssetBoard/compare/v0.7.1...v0.8.0

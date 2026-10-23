@@ -1,6 +1,7 @@
 package com.assetboard.ui.week
 
 import com.assetboard.ui.components.LocalAmbient
+import com.assetboard.ui.components.heroSurface
 import androidx.compose.runtime.CompositionLocalProvider
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -323,8 +324,7 @@ private fun WeekHero(start: LocalDate, stats: WeekStats?, onPrev: () -> Unit, on
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd)))
+            .heroSurface(RoundedCornerShape(28.dp), extra, elevation = 10.dp)
             .drawBehind {
                 drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), center = Offset(size.width, 0f), radius = size.width * 0.7f), size.width * 0.7f, Offset(size.width, 0f))
             }

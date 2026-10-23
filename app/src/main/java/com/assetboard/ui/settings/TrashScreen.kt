@@ -27,6 +27,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.rememberCoroutineScope
+import com.assetboard.ui.components.LocalDust
+import com.assetboard.ui.components.dissolvable
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -103,10 +107,11 @@ class TrashViewModel(private val container: AppContainer) : ActionViewModel(cont
 
     fun askPurge(b: TrashBatch) = action { purgeConfirm.value = b.batch to todos.sectionsPurgedAlongside(b.batch) }
 
-    fun purge() {
-        val (batch, _) = purgeConfirm.value ?: return
+    /** Purges [batch] (the one confirmed, by default); the dialog is taken down first. */
+    fun purge(batch: String? = purgeConfirm.value?.first) {
         purgeConfirm.value = null
-        action { todos.purgeBatch(batch) }
+        val b = batch ?: return
+        action { todos.purgeBatch(b) }
     }
 
     fun emptyTrash() = action { todos.emptyTrash() }
@@ -138,6 +143,10 @@ fun TrashScreen(onBack: () -> Unit) {
     var expanded by remember { mutableStateOf(setOf<String>()) }
     ErrorDialog(error) { vm.error.value = null }
     val cs = MaterialTheme.colorScheme
+    // A batch leaving the trash goes in dust: drifting left when purged, right when it comes back.
+    val dust = LocalDust.current
+    val scope = rememberCoroutineScope()
+    fun batchKey(batch: String) = "trash:$batch"
 
     GlassScaffold(
         topBar = {
@@ -167,7 +176,7 @@ fun TrashScreen(onBack: () -> Unit) {
             }
             items(list, key = { it.batch }) { b ->
                 val left = TodoRepository.TRASH_DAYS - Dates.daysBetween(b.deletedAt, System.currentTimeMillis())
-                SectionCard(contentPadding = PaddingValues(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 6.dp)) {
+                SectionCard(Modifier.dissolvable(batchKey(b.batch)), contentPadding = PaddingValues(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 6.dp)) {
                     Text(describe(b), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 12.dp))
                     Text("删除于 ${Dates.dateTime(b.deletedAt)} · 还剩 ${left.coerceAtLeast(0)} 天", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     val preview = b.diary.firstOrNull()?.body?.lineSequence()?.firstOrNull() ?: b.notes.firstOrNull()?.let { NoteText.preview(it.body) }
@@ -177,7 +186,7 @@ fun TrashScreen(onBack: () -> Unit) {
                         val multi = b.todos.size + b.sections.size > 1 || (b.lists.isNotEmpty() && b.todos.isNotEmpty())
                         if (multi) TextButton(onClick = { expanded = if (b.batch in expanded) expanded - b.batch else expanded + b.batch }) { Text(if (b.batch in expanded) "收起" else "展开") }
                         TextButton(onClick = { vm.askPurge(b) }) { Text("彻底删除", color = cs.error) }
-                        TextButton(onClick = { vm.restore(b) }) { Text("恢复") }
+                        TextButton(onClick = { scope.launch { dust?.dissolve(listOf(batchKey(b.batch)), direction = 1f); vm.restore(b) } }) { Text("恢复") }
                     }
                     if (b.batch in expanded) {
                         Column(Modifier.padding(bottom = 6.dp)) {
@@ -214,20 +223,28 @@ fun TrashScreen(onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { vm.resolveWeek(replace = false) }) { Text("保留现有的") } },
         )
     }
-    purge?.let { (_, sections) ->
+    purge?.let { (batch, sections) ->
         ConfirmDialog(
             title = "彻底删除？",
             text = "彻底删除后无法恢复。" + if (sections > 0) "\n另有 $sections 个之前删除的分区将一并永久删除，其中的待办保留。" else "",
             confirmLabel = "彻底删除",
             destructive = true,
-            onConfirm = vm::purge,
+            onConfirm = {
+                vm.purgeConfirm.value = null
+                scope.launch { dust?.dissolve(listOf(batchKey(batch))); vm.purge(batch) }
+            },
             onDismiss = { vm.purgeConfirm.value = null },
         )
     }
     if (emptyAsk) {
         ConfirmDialog(
             title = "清空回收站？", text = "回收站里的所有内容都会被彻底删除，无法恢复。", confirmLabel = "清空", destructive = true,
-            onConfirm = { emptyAsk = false; vm.emptyTrash() }, onDismiss = { emptyAsk = false },
+            onConfirm = {
+                emptyAsk = false
+                val keys = batches.orEmpty().map { batchKey(it.batch) }
+                scope.launch { dust?.dissolve(keys); vm.emptyTrash() }
+            },
+            onDismiss = { emptyAsk = false },
         )
     }
 }

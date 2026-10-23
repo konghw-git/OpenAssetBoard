@@ -173,6 +173,8 @@ import com.assetboard.ui.components.GlassSnackbarHost
 import com.assetboard.ui.components.PullToCreateBox
 import com.assetboard.ui.components.rememberPullToCreate
 import com.assetboard.ui.components.LocalDust
+import com.assetboard.ui.components.dissolvable
+import com.assetboard.ui.TabPageBottomInset
 import com.assetboard.ui.components.SwipeAction
 import com.assetboard.ui.components.SwipeActionsBox
 import com.assetboard.ui.components.SwipeGroup
@@ -259,6 +261,8 @@ fun TodoHomeScreen(
     var selection by remember(selected) { mutableStateOf(setOf<String>()) }
     // The todo being edited in place; switching views ends the edit, which saves it.
     var editingId by rememberSaveable(selected) { mutableStateOf<String?>(null) }
+    // The checklist item the edit began on, when it began with a tap on one rather than the title.
+    var editingItem by rememberSaveable(selected) { mutableStateOf<String?>(null) }
     // A todo just gathered from the selection: its edit starts with the title blank, to be named.
     var gatheredId by rememberSaveable(selected) { mutableStateOf<String?>(null) }
     LaunchedEffect(selection.isEmpty()) { if (selection.isNotEmpty()) editingId = null }
@@ -424,11 +428,20 @@ fun TodoHomeScreen(
         onSelection = { selection = it },
         onOpen = { editingId = null; detailId = it },
         editing = editingId,
+        editingItem = editingItem,
         onEdit = { id ->
             swipe.closeAll()
             if (id != null && composer) closeComposer()
             editingId = id
+            editingItem = null
             if (id != gatheredId) gatheredId = null
+        },
+        onEditItem = { todoId, itemId ->
+            swipe.closeAll()
+            if (composer) closeComposer()
+            editingItem = itemId
+            editingId = todoId
+            if (todoId != gatheredId) gatheredId = null
         },
         gathered = gatheredId,
         onGather = { ids ->
@@ -517,7 +530,7 @@ fun TodoHomeScreen(
                                 }
                             }
                         }
-                        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = 8.dp), backdrop)
+                        GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = TabPageBottomInset), backdrop)
                     }
                 }
             } else {
@@ -534,8 +547,9 @@ fun TodoHomeScreen(
                     }
                     }
                 }
-                // Over the keyboard: an undo offered while a todo is edited in place stays in reach.
-                GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = 8.dp), backdrop)
+                // Over the keyboard, and clear of the floating tab bar: an undo offered while a todo
+                // is edited in place stays in reach.
+                GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = TabPageBottomInset), backdrop)
             }
             ChecklistDragPreview(checklistDrag)
         }
@@ -664,8 +678,8 @@ private val ListCardShape = RoundedCornerShape(18.dp)
 
 /**
  * 清单, the same on the phone and unfolded: the header with 新建, then a card for each list. A
- * tap opens the list; a left swipe archives it and a right swipe deletes it, each with an undo;
- * held, it is dragged to another place.
+ * tap opens the list; a left swipe deletes it (to the trash, in dust, as every left swipe in the
+ * app deletes) and a right swipe archives it, each with an undo; held, it is dragged to another place.
  */
 private fun LazyListScope.listCards(c: ListsContext) {
     item("lists-header") {
@@ -698,11 +712,8 @@ private fun LazyListScope.listCards(c: ListsContext) {
                 group = c.swipe,
                 shape = ListCardShape,
                 enabled = c.reorder.dragging == null,
-                actions = listOf(SwipeAction("删除", Icons.Outlined.Delete, cs.error) { c.vm.deleteList(l.id) {} }),
-                onDelete = { c.vm.archiveList(l.id, l.name) },
-                deleteLabel = "归档",
-                deleteIcon = Icons.Outlined.Archive,
-                deleteColor = cs.tertiary,
+                actions = listOf(SwipeAction("归档", Icons.Outlined.Archive, cs.tertiary) { c.vm.archiveList(l.id, l.name) }),
+                onDelete = { c.vm.deleteList(l.id) {} },
             ) {
                 ListCard(
                     l, listColor(c.data, l.id) ?: cs.primary, TodoViews.countInList(l.id, c.data?.todos.orEmpty()),
@@ -885,6 +896,10 @@ private class ViewContext(
     val editing: String?,
     /** Starts editing a todo in place, or (null) ends the edit, which saves it. */
     val onEdit: (String?) -> Unit,
+    /** The checklist item the edit in place began on, if it began with a tap on one. */
+    val editingItem: String?,
+    /** Starts editing a todo in place from a tap on one of its checklist items, which takes the cursor. */
+    val onEditItem: (String, String) -> Unit,
     /** The todo just made from the selection, whose edit starts with a blank title. */
     val gathered: String?,
     /** Makes the selected todos, in the order given, the checklist of a new todo and edits it in place. */
@@ -924,7 +939,17 @@ private fun LazyListScope.viewContent(c: ViewContext) {
     if (empty) item("empty-${c.view}-$listId") { EmptyView(c.view, Modifier.animateItem()) }
     items(c.lines, key = { it.key }) { line ->
         when (line) {
-            is Line.Header -> HeaderLine(line, Modifier.animateItem(), onRename = { id, name -> c.onSection(id to name) }, onDelete = c.vm::deleteSection, onMove = c.vm::moveSection)
+            is Line.Header -> {
+                // A section deleted goes in dust like a row; its todos stay, loose.
+                val dust = LocalDust.current
+                val scope = rememberCoroutineScope()
+                HeaderLine(
+                    line, Modifier.animateItem().dissolvable(line.key),
+                    onRename = { id, name -> c.onSection(id to name) },
+                    onDelete = { id -> scope.launch { dust?.dissolve(listOf(line.key)); c.vm.deleteSection(id) } },
+                    onMove = c.vm::moveSection,
+                )
+            }
             is Line.Item -> {
                 val t = line.row.todo
                 val selecting = c.selection.isNotEmpty()
@@ -959,6 +984,7 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                         shape = TodoCardShape,
                         enabled = !selecting && !logbook && !editing && c.reorder.dragging == null && !checklistMoving,
                         actions = todoActions(t, line.row.done, c),
+                        full = todoFullSwipe(t, line.row.done, c),
                         onDelete = { c.vm.delete(listOf(t.id)) },
                     ) {
                         val items = d.checklistByTodo[t.id].orEmpty()
@@ -969,6 +995,7 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                                 onDone = { if (c.editing == t.id) c.onEdit(null) },
                                 blankTitle = c.gathered == t.id,
                                 onUndo = if (c.gathered == t.id) ({ c.onUngather(t.id) }) else null,
+                                focusItem = c.editingItem,
                             )
                             return@SwipeActionsBox
                         }
@@ -1012,6 +1039,9 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             checklist = if (logbook) emptyList() else items.sortedBy { it.sortOrder },
                             onToggleItem = if (selecting) null else ({ id -> if (!c.reorder.ownsClick(t.id) && checklistDrag?.ownsClick(id) != true) c.vm.toggleChecklist(id) }),
                             onDeleteItem = if (selecting || c.reorder.dragging != null || checklistMoving) null else c.vm::deleteChecklistItem,
+                            // The item's text, like the title, edits in place; the node beside it still ticks.
+                            onEditItem = if (selecting || logbook || line.row.done || t.kind == TodoKind.COMPLETION) null
+                                else ({ id -> if (!c.reorder.ownsClick(t.id) && checklistDrag?.ownsClick(id) != true) c.onEditItem(t.id, id) }),
                             swipe = c.swipe,
                         )
                     }
@@ -1031,20 +1061,24 @@ private fun LazyListScope.viewContent(c: ViewContext) {
 private fun todoKey(id: String) = "todo:$id"
 
 /**
- * What a right swipe offers: the full editor, the date and the flag; a full swipe opens the
- * editor. Completing is the check box's, a tap away already.
+ * What a right swipe reveals: the date and the flag. The full editor is the full swipe's
+ * ([todoFullSwipe]), the way a full swipe left deletes. Completing is the check box's, a tap away already.
  */
 @Composable
 private fun todoActions(t: Todo, done: Boolean, c: ViewContext): List<SwipeAction> {
     val cs = MaterialTheme.colorScheme
     if (done) return listOf(SwipeAction("未完成", Icons.AutoMirrored.Outlined.Undo, cs.onSurfaceVariant) { c.vm.toggle(t) })
     return listOf(
-        SwipeAction("编辑", Icons.Outlined.EditNote, cs.primary) { c.onOpen(t.id) },
         SwipeAction("改期", Icons.Outlined.CalendarMonth, cs.tertiary) { c.onReschedule(listOf(t.id)) },
         if (t.important) SwipeAction("取消重要", Icons.Outlined.OutlinedFlag, cs.secondary) { c.vm.setImportant(t, false) }
         else SwipeAction("重要", Icons.Default.Flag, Color(0xFFD08A2E)) { c.vm.setImportant(t, true) },
     )
 }
+
+/** A swipe right all the way opens the full editor; for a done row it is the one action there is. */
+@Composable
+private fun todoFullSwipe(t: Todo, done: Boolean, c: ViewContext): SwipeAction? =
+    if (done) null else SwipeAction("编辑", Icons.Outlined.EditNote, MaterialTheme.colorScheme.primary) { c.onOpen(t.id) }
 
 /** The view's title and actions; becomes the selection bar while selecting. Sticks to the top. */
 @Composable

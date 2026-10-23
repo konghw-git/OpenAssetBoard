@@ -66,6 +66,7 @@ import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
 import com.assetboard.ui.components.amount
 import com.assetboard.ui.components.animatedCents
+import com.assetboard.ui.components.heroSurface
 import com.assetboard.ui.components.appear
 import com.assetboard.ui.components.pressScale
 import com.assetboard.ui.theme.AppTheme
@@ -152,9 +153,7 @@ private fun Headline(p: NetWorthTrend.Period, range: ChartRange) {
     Column(
         Modifier
             .fillMaxWidth()
-            .shadow(16.dp, MaterialTheme.shapes.extraLarge, ambientColor = extra.heroStart, spotColor = extra.heroStart)
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd)))
+            .heroSurface(MaterialTheme.shapes.extraLarge, extra, elevation = 16.dp)
             .padding(22.dp),
     ) {
         Text("净资产 · ${Dates.date(p.end.snapshot.at)} 盘点", color = extra.onHeroMuted, style = MaterialTheme.typography.labelLarge)

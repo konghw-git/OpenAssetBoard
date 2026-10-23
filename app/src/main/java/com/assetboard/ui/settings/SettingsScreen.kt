@@ -9,7 +9,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.Image
@@ -49,7 +48,6 @@ import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import com.assetboard.ui.components.GlassScaffold
 import com.assetboard.ui.components.glassBarColors
 import com.assetboard.ui.components.GlassSnackbarHost
@@ -57,21 +55,21 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.layout.ContentScale
@@ -79,6 +77,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.assetboard.AppContainer
 import com.assetboard.BuildConfigInfo
+import com.assetboard.data.AppUpdater
 import com.assetboard.data.BackupKind
 import com.assetboard.data.ThemeMode
 import com.assetboard.data.SettingsStore
@@ -87,15 +86,18 @@ import com.assetboard.domain.Dates
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.SegmentedControl
+import com.assetboard.ui.components.appear
 import com.assetboard.ui.components.rememberBackupProblem
 import androidx.compose.material3.TextButton
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.IconTile
+import com.assetboard.ui.components.heroSurface
 import com.assetboard.ui.components.ListRow
 import com.assetboard.ui.components.RowDivider
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
+import com.assetboard.ui.components.tilt
 import com.assetboard.ui.theme.AppTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -145,6 +147,13 @@ private fun readableTree(uri: String): String {
     return seg.replaceFirst("primary:", "内部存储/")
 }
 
+/** Where a divider starts under a row with an [IconTile]: the row's padding, the tile and the gap. */
+private val RowIndent = 64.dp
+
+/**
+ * The settings, most used first: appearance at the top, the about card at the bottom. The cards
+ * arrive as a cascade, and each row is as low as its text allows.
+ */
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -175,6 +184,8 @@ fun SettingsScreen(
     val updater = container.updater
     val update by updater.state.collectAsStateWithLifecycle()
     val autoUpdate by settings.autoUpdateCheck.collectAsStateWithLifecycle()
+    val mirror by updater.mirrorState.collectAsStateWithLifecycle()
+    val mirrorSpeeds by updater.mirrorSpeeds.collectAsStateWithLifecycle()
     var editMirror by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf<ResetScope?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -213,18 +224,36 @@ fun SettingsScreen(
     ) { padding ->
         Column(
             Modifier.fillMaxSize().padding(padding).verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            AboutCard(BuildConfigInfo.versionName(context), lastBackup, onBackup = { if (tree == null) pickTree.launch(null) else vm.backupNow() })
+            // Appearance first: the one card most people come back to, and three choices on three rows.
+            SectionCard(Modifier.appear(0), contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 6.dp, bottom = 6.dp)) {
+                SectionHeader("外观")
+                ChoiceRow(Icons.Outlined.Palette, palette.group(6), "主题", null, 196.dp) {
+                    SegmentedControl(ThemeMode.entries, theme, { it.label }, settings::setThemeMode, height = 26.dp, textStyle = MaterialTheme.typography.labelMedium)
+                }
+                RowDivider(startIndent = RowIndent)
+                ChoiceRow(Icons.AutoMirrored.Outlined.TrendingUp, palette.group(3), "涨跌颜色", null, 150.dp) {
+                    SegmentedControl(listOf(true, false), upIsRed, { if (it) "红涨绿跌" else "绿涨红跌" }, settings::setUpIsRed, height = 26.dp, textStyle = MaterialTheme.typography.labelMedium)
+                }
+                RowDivider(startIndent = RowIndent)
+                ChoiceRow(Icons.Outlined.BlurOn, palette.group(5), "卡片玻璃", "清透见底色，深色更沉稳", 116.dp) {
+                    SegmentedControl(
+                        listOf(SettingsStore.GLASS_CLEAR, SettingsStore.GLASS_DEEP), glassMode,
+                        { if (it == SettingsStore.GLASS_DEEP) "深色" else "清透" }, settings::setGlass,
+                        height = 26.dp, textStyle = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
 
-            SectionCard {
+            SectionCard(Modifier.appear(1)) {
                 SectionHeader("备份")
                 // What put the red dot on the tabs' settings button, and the way out of it.
                 rememberBackupProblem()?.let { problem ->
                     val failure by settings.backupError.collectAsStateWithLifecycle()
                     Row(
-                        Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().clip(MaterialTheme.shapes.medium)
-                            .background(cs.errorContainer).padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                        Modifier.padding(horizontal = 14.dp, vertical = 4.dp).fillMaxWidth().clip(MaterialTheme.shapes.medium)
+                            .background(cs.errorContainer).padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -239,40 +268,35 @@ fun SettingsScreen(
                 }
                 ListRow(
                     title = "备份目录",
-                    subtitle = tree?.let(::readableTree) ?: "未设置。建议选「文档」下新建的文件夹，卸载 app 后仍保留",
+                    subtitle = tree?.let(::readableTree) ?: "未设置。建议选「文档」下新建的文件夹，卸载后仍保留",
                     leading = { IconTile(Icons.Outlined.Folder, palette.group(1)) },
                     onClick = { pickTree.launch(null) },
                 )
-                RowDivider(startIndent = 68.dp)
+                RowDivider(startIndent = RowIndent)
                 ListRow(
                     title = "立即备份",
                     subtitle = lastBackup?.let { "上次备份 " + Dates.dateTime(it) } ?: "还没有备份过",
                     leading = { IconTile(Icons.Outlined.Backup, palette.group(0)) },
                     onClick = { if (tree == null) pickTree.launch(null) else vm.backupNow() },
                 )
-                RowDivider(startIndent = 68.dp)
+                RowDivider(startIndent = RowIndent)
                 ListRow(
                     title = "从备份恢复",
                     subtitle = "整库覆盖，恢复前自动另存当前数据",
                     leading = { IconTile(Icons.Outlined.Restore, palette.group(2)) },
                     onClick = { pickBackup.launch(arrayOf("application/json", "application/octet-stream", "text/plain")) },
                 )
-                RowDivider(startIndent = 68.dp)
+                RowDivider(startIndent = RowIndent)
                 ListRow(
                     title = "恢复前副本",
                     subtitle = "每次恢复前自动另存的数据，点一下就能回去",
                     leading = { IconTile(Icons.Outlined.Layers, palette.group(4)) },
                     onClick = onPreRestore,
                 )
-                Text(
-                    "备份包含资产、待办（含回收站和日志）、日记和草稿。每天自动备份一次，和手动备份一样写进同一个文件 asset-board-backup.json，新的覆盖旧的，目录里不会越积越多。手机厂商的后台限制可能让自动备份推迟，改完数据后建议手动点一次「立即备份」。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
-                )
+                Footnote("每天自动备份一次，和手动备份写进同一个文件 asset-board-backup.json，新的覆盖旧的。厂商的后台限制可能让自动备份推迟，改完数据后建议手动点一次「立即备份」。")
             }
 
-            SectionCard {
+            SectionCard(Modifier.appear(2)) {
                 SectionHeader("待办与日记")
                 ListRow(
                     title = "提醒设置检查",
@@ -280,12 +304,12 @@ fun SettingsScreen(
                     leading = { IconTile(Icons.Outlined.NotificationsActive, palette.group(3)) },
                     onClick = onGuide,
                 )
-                RowDivider(startIndent = 68.dp)
-                SwitchRow(Icons.Outlined.Alarm, palette.group(2), "所有提醒走闹钟通道", "深度休眠时也准时\n状态栏会显示闹钟图标", allAlarms) {
+                RowDivider(startIndent = RowIndent)
+                SwitchRow(Icons.Outlined.Alarm, palette.group(2), "所有提醒走闹钟通道", "深度休眠时也准时，状态栏会显示闹钟图标", allAlarms) {
                     settings.setBool(settings.allRemindersAsAlarms, it)
                     container.appScope.launch { runCatching { container.reminders.syncAll(fromBoot = false) } }
                 }
-                RowDivider(startIndent = 68.dp)
+                RowDivider(startIndent = RowIndent)
                 SwitchRow(Icons.Outlined.EditNote, palette.group(5), "每晚提醒写日记", "今天已经写过就不提醒", diaryOn) {
                     settings.setBool(settings.diaryReminderEnabled, it)
                     container.reminders.scheduleDiaryReminder()
@@ -298,7 +322,7 @@ fun SettingsScreen(
                         onClick = { pickDiaryTime = true },
                     )
                 }
-                RowDivider(startIndent = 68.dp)
+                RowDivider(startIndent = RowIndent)
                 ListRow(
                     title = "回收站",
                     subtitle = "删除的待办、清单和日记保留 30 天",
@@ -307,17 +331,17 @@ fun SettingsScreen(
                 )
             }
 
-            SectionCard {
+            SectionCard(Modifier.appear(3)) {
                 SectionHeader("联网")
                 SwitchRow(Icons.Outlined.Public, palette.group(1), "允许联网", "关闭后不发起任何网络请求：节假日用内置数据，不显示天气", networkOn) {
                     settings.setBool(settings.networkEnabled, it)
                 }
                 if (networkOn) {
-                    RowDivider(startIndent = 68.dp)
+                    RowDivider(startIndent = RowIndent)
                     SwitchRow(Icons.Outlined.WbSunny, palette.group(2), "日记天气", "写日记时用大致位置取当天天气（Open-Meteo）", weatherOn) {
                         settings.setBool(settings.weatherEnabled, it)
                     }
-                    RowDivider(startIndent = 68.dp)
+                    RowDivider(startIndent = RowIndent)
                     SwitchRow(Icons.Outlined.Event, palette.group(3), "节假日自动更新", "每年 11 月起每周检查一次新一年的放假安排，只下载不上传", holidayOn) {
                         settings.setBool(settings.holidayUpdateEnabled, it)
                     }
@@ -330,15 +354,10 @@ fun SettingsScreen(
                         )
                     }
                 }
-                Text(
-                    "资产、待办、日记的内容永远不会离开手机。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
-                )
+                Footnote("资产、待办、日记的内容永远不会离开手机。")
             }
 
-            SectionCard {
+            SectionCard(Modifier.appear(4)) {
                 SectionHeader("应用更新")
                 ListRow(
                     title = "检查更新",
@@ -346,27 +365,28 @@ fun SettingsScreen(
                     leading = { IconTile(Icons.Outlined.SystemUpdate, palette.group(0)) },
                     onClick = updater::checkNow,
                 )
-                RowDivider(startIndent = 68.dp)
+                RowDivider(startIndent = RowIndent)
                 SwitchRow(Icons.Outlined.Autorenew, palette.group(2), "自动检查", "每天第一次打开时看看有没有新版本，有才提示", autoUpdate) {
                     settings.setBool(settings.autoUpdateCheck, it)
                 }
-                RowDivider(startIndent = 68.dp)
+                RowDivider(startIndent = RowIndent)
                 ListRow(
                     title = "下载镜像",
-                    subtitle = updater.mirror.ifEmpty { "未设置，直连 GitHub" },
+                    subtitle = AppUpdater.mirrorName(mirror) + (mirrorSpeeds[mirror]?.takeIf { it >= 0 }?.let { " · $it ms" } ?: "") +
+                        if (mirror.isEmpty()) " · 国内慢可以测速选一个" else "",
                     leading = { IconTile(Icons.Outlined.Speed, palette.group(5)) },
                     onClick = { editMirror = true },
                 )
-                RowDivider(startIndent = 68.dp)
+                RowDivider(startIndent = RowIndent)
                 ListRow(
                     title = "导出诊断",
-                    subtitle = "版本、手机型号和崩溃、异常退出的记录，不含你的数据，可发给开发者排查",
+                    subtitle = "版本、机型和崩溃记录，不含你的数据，可发给开发者排查",
                     leading = { IconTile(Icons.Outlined.BugReport, palette.group(3)) },
                     onClick = { shareDiagnostics(context, settings) },
                 )
             }
 
-            SectionCard {
+            SectionCard(Modifier.appear(5)) {
                 SectionHeader("账户")
                 ListRow(
                     title = "分组管理",
@@ -376,10 +396,10 @@ fun SettingsScreen(
                 )
             }
 
-            SectionCard {
+            SectionCard(Modifier.appear(6)) {
                 SectionHeader("数据初始化")
                 ResetScope.entries.forEachIndexed { i, scope ->
-                    if (i > 0) RowDivider(startIndent = 68.dp)
+                    if (i > 0) RowDivider(startIndent = RowIndent)
                     ListRow(
                         title = scope.title,
                         subtitle = scope.subtitle,
@@ -389,41 +409,10 @@ fun SettingsScreen(
                         onClick = { confirmReset = scope },
                     )
                 }
-                Text(
-                    "账户里混进了别人的数据、又已经改成自己的余额时，用「清空资产历史」，改过的余额不会白费。执行前都会自动另存一份当前数据，可以在「恢复前副本」里一键还原。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
-                )
+                Footnote("账户里混进了别人的数据、又已经改成自己的余额时，用「清空资产历史」。执行前都会自动另存一份当前数据，可在「恢复前副本」里一键还原。")
             }
 
-            SectionCard(contentPadding = PaddingValues(bottom = 16.dp)) {
-                SectionHeader("外观")
-                Column(Modifier.padding(horizontal = 20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-                        IconTile(Icons.Outlined.Palette, palette.group(6), size = 28.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text("主题", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    SegmentedControl(ThemeMode.entries, theme, { it.label }, settings::setThemeMode)
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)) {
-                        IconTile(Icons.AutoMirrored.Outlined.TrendingUp, palette.group(3), size = 28.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text("涨跌颜色", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    SegmentedControl(listOf(true, false), upIsRed, { if (it) "红涨绿跌" else "绿涨红跌" }, settings::setUpIsRed)
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)) {
-                        IconTile(Icons.Outlined.BlurOn, palette.group(5), size = 28.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text("卡片玻璃", style = MaterialTheme.typography.bodyMedium)
-                            Text("各页的卡片：清透能看见背后的颜色，深色更沉稳、对比更高", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    SegmentedControl(listOf(SettingsStore.GLASS_CLEAR, SettingsStore.GLASS_DEEP), glassMode, { if (it == SettingsStore.GLASS_DEEP) "深色" else "清透" }, settings::setGlass)
-                }
-            }
-
+            AboutCard(BuildConfigInfo.versionName(context), lastBackup, Modifier.appear(7), onBackup = { if (tree == null) pickTree.launch(null) else vm.backupNow() })
         }
     }
 
@@ -438,7 +427,7 @@ fun SettingsScreen(
         )
     }
     if (editMirror) {
-        MirrorDialog(updater.mirror, onDismiss = { editMirror = false }) { updater.mirror = it; editMirror = false }
+        MirrorDialog(updater) { editMirror = false }
     }
     if (pickDiaryTime) {
         com.assetboard.ui.todo.TimePickDialog(
@@ -477,16 +466,48 @@ private fun SwitchRow(icon: ImageVector, color: Color, title: String, subtitle: 
     )
 }
 
+/** A choice on one row: the icon and name at the start, the segmented [control] at the end, [controlWidth] wide. */
+@Composable
+private fun ChoiceRow(icon: ImageVector, color: Color, title: String, subtitle: String?, controlWidth: Dp, control: @Composable () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconTile(icon, color, size = 30.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Box(Modifier.width(controlWidth)) { control() }
+    }
+}
+
+/** The small print under a card's rows. */
+@Composable
+private fun Footnote(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 2.dp, bottom = 8.dp),
+    )
+}
+
 /** The app at a glance: name, version, and the backup state with a one-tap backup. */
 @Composable
-private fun AboutCard(version: String, lastBackup: Long?, onBackup: () -> Unit) {
+private fun AboutCard(version: String, lastBackup: Long?, modifier: Modifier = Modifier, onBackup: () -> Unit) {
     val extra = AppTheme.extra
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(Brush.linearGradient(listOf(extra.heroStart, extra.heroEnd)))
-            .padding(20.dp),
+            .tilt()
+            .heroSurface(MaterialTheme.shapes.extraLarge, extra)
+            .padding(18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // The launcher icon itself: its foreground is drawn on a 108 grid with the art inside 66,

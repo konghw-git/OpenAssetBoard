@@ -158,8 +158,8 @@ fun NoteCard(
             .border(1.5.dp, ring, NoteCardShape)
             .clip(NoteCardShape)
             .combinedClickable(interactionSource = source, indication = ripple(), onClick = onClick, onLongClick = onLongClick)
-            .padding(start = 18.dp, end = 16.dp, top = 14.dp, bottom = 13.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+            .padding(start = 16.dp, end = 14.dp, top = 11.dp, bottom = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -177,7 +177,7 @@ fun NoteCard(
         if (body.isNotEmpty()) {
             Text(body, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(top = 1.dp), verticalAlignment = Alignment.CenterVertically) {
             if (showTopic && topic != null) {
                 TopicTag(topic.name, topicColor(topics, topic.id))
                 Spacer(Modifier.width(8.dp))
