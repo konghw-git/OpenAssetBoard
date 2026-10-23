@@ -46,7 +46,9 @@ updates. No ledger calculations or persistence format changed as part of the UI 
 - Phone, dark-mode and wide layouts were inspected. Old local screenshot baselines were backed
   up before accepting the reviewed UI changes; baselines remain ignored by git.
 - Fixed an existing health-chart screenshot race by waiting for the metric control before
-  switching it. Tests that drag a parent now target the title, separately from checklist items.
+  switching it. The common page screenshot helper also waits for loading indicators to disappear.
+  The swipe/dust screenshot waits for the actual burst and committed deletion before settling
+  surrounding rows. Tests that drag a parent now target the title, separately from checklist items.
 
 Logs, before/after backups and emulator captures are retained under `build/review-0.9.10/`.
 The release-script verification mode intentionally skips the fixture writer, branding banner

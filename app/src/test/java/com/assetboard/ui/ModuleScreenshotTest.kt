@@ -147,10 +147,10 @@ class ModuleScreenshotTest {
 
     @Test fun todoSwipeAndDust() {
         val d = demo()
+        val dust = DustState()
         compose.setContent {
             CompositionLocalProvider(LocalContainer provides d.c) {
                 AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) {
-                    val dust = remember { DustState() }
                     CompositionLocalProvider(LocalDust provides dust) {
                         Box {
                             TodoHomeScreen({}, {}, initialView = "today")
@@ -161,6 +161,7 @@ class ModuleScreenshotTest {
             }
         }
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("交水电费")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000, habitsShown)
         compose.mainClock.advanceTimeBy(2_000)
         // Eased past touch slop first: a deliberate drag, which the row takes (a flick goes to the pager).
         compose.onNodeWithText("交水电费").performTouchInput { down(center); repeat(8) { moveBy(Offset(10f, 0f)) }; moveBy(Offset(200f, 0f)); moveBy(Offset(200f, 0f)) }
@@ -172,9 +173,24 @@ class ModuleScreenshotTest {
         // by hand, or waiting for idle would run the dust to its end.
         compose.mainClock.autoAdvance = false
         compose.onNodeWithText("给导师发周报").performTouchInput { down(center); repeat(8) { moveBy(Offset(-10f, 0f)) }; moveBy(Offset(-300f, 0f)); moveBy(Offset(-300f, 0f)); up() }
-        repeat(30) { compose.mainClock.advanceTimeByFrame() }
+        // Bitmap capture and the Room write run outside the test frame clock. Anchor the shot
+        // to a real burst and a committed deletion, then let the surrounding rows settle.
+        repeat(60) {
+            if (dust.bursts.isEmpty()) { Thread.sleep(5); compose.mainClock.advanceTimeByFrame() }
+        }
+        org.junit.Assert.assertTrue("A full swipe should start the dust", dust.bursts.isNotEmpty())
+        compose.mainClock.advanceTimeBy(400)
+        compose.waitUntil(10_000) { d.c.todos.data.value?.todos?.none { it.title == "给导师发周报" } == true }
+        repeat(90) {
+            if (compose.onAllNodes(hasText("撤销")).fetchSemanticsNodes().isEmpty()) {
+                Thread.sleep(10)
+                compose.mainClock.advanceTimeByFrame()
+            }
+        }
+        compose.onNodeWithText("撤销").assertExists()
+        compose.mainClock.advanceTimeBy(700)
         compose.onRoot().captureRoboImage("screenshots/27-todo-dust.png", roborazziOptions = SHOT_OPTIONS)
-        repeat(120) { compose.mainClock.advanceTimeByFrame() }
+        repeat(80) { compose.mainClock.advanceTimeByFrame() }
         compose.onRoot().captureRoboImage("screenshots/28-todo-undo.png", roborazziOptions = SHOT_OPTIONS)
     }
 

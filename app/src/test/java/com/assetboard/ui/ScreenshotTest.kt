@@ -28,6 +28,9 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
@@ -125,6 +128,12 @@ class ScreenshotTest {
             }
         }
         compose.waitUntil(10_000) { container.repository.ledger.value?.snapshots?.isNotEmpty() == true }
+        // Food and health load independently of the ledger. Never accept their loading spinner
+        // as a page screenshot, even when the test clock has already advanced its animations.
+        compose.waitUntil(30_000) {
+            compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate))
+                .fetchSemanticsNodes().isEmpty()
+        }
         // The ledger may be ready before the page's independent repository emits its data.
         compose.waitUntil(30_000, until)
         // A sheet is a window of its own, attached a moment after the page: wait for it, then take it.
