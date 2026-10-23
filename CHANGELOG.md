@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-Built as 0.9.7 (versionCode 17) for a try on the phone; not tagged yet.
+## [0.9.7] - 2026-10-23
 
 ### Added
 
