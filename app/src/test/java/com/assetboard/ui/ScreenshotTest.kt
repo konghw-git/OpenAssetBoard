@@ -14,8 +14,11 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performTouchInput
@@ -24,6 +27,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
 import com.assetboard.CloseTestContainers
@@ -42,7 +46,11 @@ import com.assetboard.ui.settings.SettingsScreen
 import com.assetboard.ui.stocktake.StocktakeScreen
 import com.assetboard.ui.theme.AssetBoardTheme
 import com.assetboard.ui.trend.TrendScreen
+import com.assetboard.ui.health.FoodScreen
 import com.assetboard.ui.health.HealthScreen
+import com.assetboard.data.FoodDraft
+import com.assetboard.data.FoodUnit
+import com.assetboard.domain.health.Energy
 import com.assetboard.data.MeasurementDraft
 import com.assetboard.data.Sex
 import java.time.LocalDate
@@ -418,8 +426,102 @@ class ScreenshotTest {
         shot("01e-overview-one-weigh-in", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
     }
 
-    @Test fun overviewCashAndHealth() {
+    /** A week of eating: labels and portions most days, one day not recorded at all. */
+    private fun withFood(c: AppContainer): AppContainer {
+        runBlocking(c.gate.bound()) {
+            val today = LocalDate.now()
+            suspend fun label(d: LocalDate, name: String, per: Int, amount: Int, unit: FoodUnit, cal: Long, p: Long, f: Long, carb: Long, na: Long?, kj: Boolean = true) =
+                c.food.save(FoodDraft(null, d, name, per, amount, unit, cal, kj, p, f, carb, na))
+            suspend fun portion(d: LocalDate, name: String, cal: Long) = c.food.save(FoodDraft(null, d, name, null, null, null, cal, false, null, null, null, null))
+            for (i in 6 downTo 0) {
+                if (i == 4) continue
+                val d = today.minusDays(i.toLong())
+                label(d, "燕麦奶", 100, 500, FoodUnit.ML, 40_870, 600, 1_600, 6_000, 40)
+                label(d, "全麦面包", 100, 80, FoodUnit.G, 250_960, 11_200, 4_100, 47_000, 380)
+                portion(d, "午饭 · 鸡胸肉沙拉", 520_000L + i * 35_000L)
+                if (i != 0) portion(d, "晚饭", 610_000L + (i % 3) * 90_000L)
+                // Two eggs: one portion's numbers, counted.
+                if (i == 1) c.food.save(FoodDraft(null, d, "水煮蛋", Energy.SERVING_PER, 4, FoodUnit.SERVING, 70_000, false, 6_500, 5_000, 600, 70))
+            }
+            label(today, "希腊酸奶", 100, 150, FoodUnit.G, 97_000, 9_000, 4_000, 6_200, 45, kj = false)
+        }
+        return c
+    }
+
+    @Test fun food() {
+        val c = withFood(withHealth(demoContainer()))
+        shot("15-food", c) { FoodScreen(noop) }
+        compose.onNode(hasScrollAction()).performScrollToIndex(3)
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.onRoot().captureRoboImage("build/screenshots/15b-food-week.png")
+    }
+
+    @Test fun foodDark() {
+        val c = withFood(withHealth(demoContainer()))
+        shot("15c-food-dark", c, dark = true) { FoodScreen(noop) }
+    }
+
+    /** Picking something eaten before fills the label in; the result works itself out. */
+    @Test fun foodEdit() {
+        val c = withFood(withHealth(demoContainer()))
+        shot("16-food-edit", c) { FoodScreen(noop, startRecording = true) }
+        compose.onNode(hasText("希腊酸奶") and hasClickAction() and !hasText("kcal", substring = true)).performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNode(hasSetTextAction() and hasText("希腊酸奶")).assertExists()
+        // The sheet is a window of its own; capture it rather than the page under it.
+        compose.onAllNodes(isRoot()).onLast().captureRoboImage("build/screenshots/16b-food-edit-filled.png")
+    }
+
+    /** Most food has no label: a guessed kcal is all it takes, every other number stays empty. */
+    @Test fun foodQuickEstimate() {
         val c = withHealth(demoContainer())
+        shot("16d-food-quick", c) { FoodScreen(noop, startRecording = true) }
+        compose.onNode(hasSetTextAction() and hasText("热量 kcal")).performTextInput("350")
+        compose.mainClock.advanceTimeBy(500)
+        compose.onAllNodes(isRoot()).onLast().captureRoboImage("build/screenshots/16d-food-quick.png")
+        compose.onNode(hasText("保存 · 350 kcal") and hasClickAction()).performClick()
+        compose.waitUntil(5_000) { runBlocking { c.food.onDate(LocalDate.now()) }.isNotEmpty() }
+        val e = runBlocking { c.food.onDate(LocalDate.now()) }.single()
+        org.junit.Assert.assertEquals(350_000L, e.energyCal)
+        org.junit.Assert.assertNull(e.per)
+        org.junit.Assert.assertNull(e.proteinMg)
+        org.junit.Assert.assertNull(e.name)
+    }
+
+    /** 水煮蛋 × 2: one portion's kcal and a tap on +; the nutrients open and fold again. */
+    @Test fun foodServings() {
+        val c = withHealth(demoContainer())
+        shot("16e-food-servings", c) { FoodScreen(noop, startRecording = true) }
+        compose.onNode(hasSetTextAction() and hasText("热量 kcal")).performTextInput("70")
+        compose.onNode(hasContentDescription("多一份") and hasClickAction()).performClick()
+        compose.onNode(hasSetTextAction() and hasText("每份热量 kcal")).assertExists()
+        compose.onNode(hasText("营养素") and hasClickAction()).performClick()
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNode(hasSetTextAction() and hasText("蛋白质 g")).performTextInput("6.5")
+        compose.mainClock.advanceTimeBy(500)
+        compose.onAllNodes(isRoot()).onLast().captureRoboImage("build/screenshots/16e-food-servings.png")
+        compose.onNode(hasText("营养素") and hasClickAction()).performClick()
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNode(hasSetTextAction() and hasText("蛋白质 g")).assertDoesNotExist()
+        compose.onNode(hasText("已填 1 项")).assertExists()
+        compose.onNode(hasText("保存 · 140 kcal") and hasClickAction()).performClick()
+        compose.waitUntil(5_000) { runBlocking { c.food.onDate(LocalDate.now()) }.isNotEmpty() }
+        val e = runBlocking { c.food.onDate(LocalDate.now()) }.single()
+        org.junit.Assert.assertEquals(FoodUnit.SERVING, e.unit)
+        org.junit.Assert.assertEquals(4, e.amount)
+        org.junit.Assert.assertEquals(70_000L, e.energyCal)
+        org.junit.Assert.assertEquals(140_000L, Energy.energyOf(e))
+        org.junit.Assert.assertEquals(13_000L, Energy.proteinOf(e))
+    }
+
+    /** No profile: the food page still records, and asks for the profile for the burn. */
+    @Test fun foodWithoutProfile() {
+        val c = withFood(demoContainer())
+        shot("16c-food-no-profile", c) { FoodScreen(noop) }
+    }
+
+    @Test fun overviewCashAndHealth() {
+        val c = withFood(withHealth(demoContainer()))
         shot("01a-overview-health", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
         compose.onNodeWithText("可用现金").performClick()
         compose.mainClock.advanceTimeBy(2_000)

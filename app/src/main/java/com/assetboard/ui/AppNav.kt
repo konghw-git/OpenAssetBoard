@@ -91,6 +91,7 @@ import com.assetboard.ui.account.AccountEditScreen
 import com.assetboard.ui.diary.DiaryCalendarScreen
 import com.assetboard.ui.diary.DiaryScreen
 import com.assetboard.ui.diary.DiarySearchScreen
+import com.assetboard.ui.health.FoodScreen
 import com.assetboard.ui.health.HealthScreen
 import com.assetboard.ui.notes.NoteScreen
 import com.assetboard.ui.notes.NoteSearchScreen
@@ -162,6 +163,7 @@ object Routes {
     /** A note's page; without [id] a new note, placed in [topicId] on its first write. */
     fun note(id: String? = null, topicId: String? = null) = "note?id=${id.orEmpty()}&topic=${topicId.orEmpty()}"
     fun health(record: Boolean = false) = "health?record=${if (record) "1" else ""}"
+    fun food(record: Boolean = false) = "food?record=${if (record) "1" else ""}"
     fun stocktake(snapshotId: String? = null) = "stocktake?snapshotId=${snapshotId.orEmpty()}"
     fun account(id: String) = "account/$id"
     fun accountEdit(id: String? = null, groupId: String? = null) = "account_edit?id=${id.orEmpty()}&groupId=${groupId.orEmpty()}"
@@ -365,6 +367,7 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
                             onSettings = settings,
                             onAddAccount = { groupId -> nav.navigate(Routes.accountEdit(groupId = groupId)) },
                             onHealth = { record -> nav.navigate(Routes.health(record)) },
+                            onFood = { record -> nav.navigate(Routes.food(record)) },
                         )
                         Tab.TODO -> TodoHomeScreen(
                             onSettings = settings,
@@ -427,6 +430,9 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit) {
             }
             composable("health?record={record}", arguments = listOf(optional("record"))) {
                 HealthScreen(onBack = back, startRecording = it.arg("record") != null)
+            }
+            composable("food?record={record}", arguments = listOf(optional("record"))) {
+                FoodScreen(onBack = back, startRecording = it.arg("record") != null, onWeigh = { nav.navigate(Routes.health(record = true)) })
             }
             composable(Routes.TREND) {
                 TrendScreen(

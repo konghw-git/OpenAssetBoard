@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Food and energy.** A 饮食 tile on the assets tab and a page of its own: copy a nutrition label
+  (energy in kJ or kcal, protein, fat, carbohydrate and sodium per 100 g/ml, then how much you had)
+  and it works out the portion in kcal. Most food has no label, so the sheet opens on one number,
+  a guessed kcal, with − and + for how many (two eggs, half a bowl); every nutrient is optional
+  and folded away, and folds up again. Energy
+  left empty is estimated from the three nutrients, and a label whose energy and nutrients disagree
+  is pointed out. Anything eaten before refills the form in one tap. Each day shows its intake
+  against a burn estimated from the profile and that day's weight (Mifflin–St Jeor × 1.2), the
+  deficit, the nutrients and the last seven days. It records; there are no targets.
+- Backup format 9 carries the food entries (schema 8); older backups restore with none.
+
+### Changed
+
+- **Cash at hand moved into the net worth card.** Cash, the goal and the debt ratio now sit side by
+  side as three small tiles instead of three stacked bars, and the allocation takes one line a
+  group; tapping cash still opens the cash accounts. The food tile takes its place beside health.
+- **Slimmer rows.** Account rows, group headers, todo cards and food entries take less height,
+  with smaller tiles and less padding.
+- The health and food pages keep one record button, on the hero card; the app bar no longer repeats it.
+
 ## [0.9.4] - 2026-10-21
 
 ### Fixed

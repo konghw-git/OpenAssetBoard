@@ -26,7 +26,7 @@ import java.io.File
  * Format 2 adds the todo and diary tables, format 3 the daily habit checks, format 4 the health
  * profile and weigh-ins, format 5 the notes, format 6 the notes' order and the weekly reviews,
  * format 7 the net worth goal, format 8 the habits themselves (a file without them reads as the
- * five built in); older files read with the newer tables empty. Device-local
+ * five built in), format 9 what was eaten; older files read with the newer tables empty. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -51,6 +51,7 @@ data class BackupFile(
     val habits: List<com.assetboard.domain.Habit> = emptyList(),
     val healthProfile: HealthProfile? = null,
     val bodyMeasurements: List<BodyMeasurement> = emptyList(),
+    val foodEntries: List<FoodEntry> = emptyList(),
     val noteTopics: List<NoteTopic> = emptyList(),
     val notes: List<Note> = emptyList(),
     val noteSources: List<NoteSource> = emptyList(),
@@ -86,6 +87,8 @@ data class BackupPreview(
     val currentDiaries: Int,
     val healthRecords: Int = 0,
     val currentHealthRecords: Int = 0,
+    val foodEntries: Int = 0,
+    val currentFoodEntries: Int = 0,
     val notes: Int = 0,
     val currentNotes: Int = 0,
     val weeks: Int = 0,
@@ -159,6 +162,7 @@ class BackupManager(
                 habits = db.habitDao().habits(),
                 healthProfile = db.healthDao().profile(),
                 bodyMeasurements = db.healthDao().all(),
+                foodEntries = db.foodDao().all(),
                 noteTopics = db.noteDao().allTopics(),
                 notes = db.noteDao().all(),
                 noteSources = db.noteDao().allSources(),
@@ -282,6 +286,8 @@ class BackupManager(
             currentDiaries = db.diaryDao().all().count { it.deletedAt == null },
             healthRecords = file.bodyMeasurements.size,
             currentHealthRecords = db.healthDao().all().size,
+            foodEntries = file.foodEntries.size,
+            currentFoodEntries = db.foodDao().all().size,
             notes = file.notes.count { it.deletedAt == null },
             currentNotes = db.noteDao().all().count { it.deletedAt == null },
             weeks = file.weeklyReviews.count { it.deletedAt == null && it.body.isNotBlank() },
@@ -323,6 +329,8 @@ class BackupManager(
             // Only the format and the range; a young birthday never fails a restore.
             HealthRepository.checkProfile(p.birthDate, p.heightMm, p.targetWeightG, java.time.LocalDate.MAX)
         }
+        unique(file.foodEntries, { it.id }, "饮食记录")
+        for (e in file.foodEntries) FoodRepository.check(e)
         val groupIds = file.groups.map { it.id }.toSet()
         val byId = file.accounts.associateBy { it.id }
         val snapshotIds = file.snapshots.map { it.id }.toSet()
@@ -470,6 +478,7 @@ class BackupManager(
         db.habitDao().clearHabits()
         db.healthDao().clearProfile()
         db.healthDao().clear()
+        db.foodDao().clear()
         n.clearDrafts()
         n.clearSources()
         n.clear()
@@ -493,6 +502,7 @@ class BackupManager(
         db.habitDao().insertAll(file.habitChecks)
         file.healthProfile?.let { db.healthDao().insertProfiles(listOf(it)) }
         db.healthDao().insertAll(file.bodyMeasurements)
+        db.foodDao().insertAll(file.foodEntries)
         // Parents first: foreign keys are checked row by row, so the wrong order fails the restore.
         n.insertTopics(file.noteTopics)
         // Before format 6 notes had no hand-set order: they take the one they showed in.
@@ -670,7 +680,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 8
+        const val FORMAT_VERSION = 9
 
         /**
          * [file] with each account's current balance as its only valuation at [now], and one

@@ -47,8 +47,9 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Trend**: 3 months / 6 months / 1 year / all time, with period high, low, change and change ratio; a bar-and-line chart of assets vs liabilities.
 - **Investment accounts**: buy, redeem, dividend, transfer, repay, borrow, external in/out. Fees have a payer, so the P&L arithmetic stays honest. Market value and net invested drawn as two lines.
 - **Account management**: groups, icons (built-in marks for common banks, payment apps and funds), an include-in-net-worth switch, suspend, "locked until" dates, moving the baseline earlier. In an open group, swipe an account left to dissolve it (an account with records is suspended instead; both undo), right to change its balance right in the row.
-- **Cash at hand**: the counted accounts minus investments and locked balances, with a bar splitting assets into cash / locked / invested; tapping it lists every cash account.
+- **Cash at hand**: the counted accounts minus investments and locked balances, shown in the net worth card with a bar splitting assets into cash / locked / invested; tapping it lists every cash account.
 - **Health as an asset**: weigh in once a day, record weight (body fat optional), and follow weight, body fat and BMI with a 7-day average; BMI and body-fat grades, fat and lean mass, progress to a target and a nine-cell body type. A day without a weigh-in simply stays empty — no interpolation, no streaks.
+- **Food and energy**: most food needs only a guessed kcal, with every nutrient optional; with a label, copy it (energy and the rest per 100 g/ml, then how much you had) and kJ turns into kcal by itself. Anything eaten before refills in one tap. The day's burn is estimated from the profile and weight, so each day shows its deficit, and the last seven days their intake. It records; it sets no targets.
 - **Home-screen widget**: net worth plus a one-tap stocktake.
 
 <img src="docs/images/01-overview.webp" width="24%" alt="Asset overview"> <img src="docs/images/28-health.webp" width="24%" alt="Health"> <img src="docs/images/04-trend.webp" width="24%" alt="Net worth trend"> <img src="docs/images/07-account-investment.webp" width="24%" alt="Investment account">
@@ -206,6 +207,7 @@ The rule is **calculation out of the UI**: every number on screen comes from a p
 - [x] Todos, diary, daily habits, trash
 - [x] Backup / restore (v6), reminders, widgets
 - [x] Health as an asset (weight, body fat, BMI), cash at hand
+- [x] Food energy log (label conversion, daily deficit)
 - [x] Notes: one level of topics, extracted from the diary, traced back to their day, searchable
 - [x] Today's note review, extracting a selection, weekly review
 - [ ] One search across diary, weekly reviews and notes; `[[links]]`

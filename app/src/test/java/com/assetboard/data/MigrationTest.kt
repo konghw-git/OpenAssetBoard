@@ -108,7 +108,7 @@ class MigrationTest {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7)
+            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7, Migrations.MIGRATION_7_8)
             .allowMainThreadQueries()
             .build()
         try {
@@ -238,11 +238,27 @@ class MigrationTest {
         }
     }
 
+    @Test fun migrationSevenToEightAddsAnEmptyFoodTableAndKeepsTheWeighIns() {
+        helper.createDatabase(name, 7).use { db ->
+            db.put("body_measurements", "id" to "m1", "date" to "2026-10-17", "measured_at" to 1L, "weight_g" to 92_100L, "body_fat_bp" to 2_580, "note" to null, "created_at" to 1L, "updated_at" to 1L)
+        }
+        helper.runMigrationsAndValidate(name, 8, true, Migrations.MIGRATION_7_8).use { db ->
+            assertTrue(db.dump("food_entries").isEmpty())
+            assertEquals(1, db.dump("body_measurements").size)
+            db.put(
+                "food_entries", "id" to "f1", "date" to "2026-10-17", "eaten_at" to 1L, "name" to "燕麦奶", "per" to 100, "amount" to 500,
+                "unit" to "ML", "energy_cal" to 40_870L, "in_kj" to true, "protein_mg" to 600L, "fat_mg" to null, "carb_mg" to null,
+                "sodium_mg" to null, "created_at" to 1L, "updated_at" to 1L,
+            )
+            assertEquals(1, db.dump("food_entries").size)
+        }
+    }
+
     @Test fun databaseAtThreeOpensWithRoomAfterTheHealthMigration() = runBlocking {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7)
+            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7, Migrations.MIGRATION_7_8)
             .allowMainThreadQueries()
             .build()
         try {

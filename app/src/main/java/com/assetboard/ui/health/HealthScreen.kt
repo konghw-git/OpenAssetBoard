@@ -39,7 +39,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.outlined.ManageAccounts
@@ -49,12 +48,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -198,7 +195,6 @@ fun HealthScreen(onBack: () -> Unit, startRecording: Boolean = false) {
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = {
                     IconButton(onClick = { profileOpen = true }) { Icon(Icons.Outlined.ManageAccounts, "健康档案") }
-                    RecordAction { editing = NEW }
                 },
                 colors = glassBarColors(),
             )
@@ -303,28 +299,6 @@ private fun HealthContent(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
             )
         }
-    }
-}
-
-/** The pill in the app bar that opens the record sheet. */
-@Composable
-private fun RecordAction(onClick: () -> Unit) {
-    val extra = AppTheme.extra
-    val source = remember { MutableInteractionSource() }
-    Row(
-        Modifier
-            .padding(end = 12.dp)
-            .pressScale(source, 0.92f)
-            .clip(RoundedCornerShape(50))
-            .background(Brush.linearGradient(listOf(extra.heroEnd, extra.heroStart)))
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
-            .height(36.dp)
-            .padding(start = 10.dp, end = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Default.Add, null, tint = extra.onHero, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(4.dp))
-        Text("记录", color = extra.onHero, style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -435,7 +409,7 @@ private fun HeroRecordButton(onClick: () -> Unit) {
 }
 
 @Composable
-private fun HeroFigure(label: String, value: String, grade: String?, modifier: Modifier) {
+internal fun HeroFigure(label: String, value: String, grade: String?, modifier: Modifier) {
     val extra = AppTheme.extra
     Column(modifier) {
         Text(label, color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium)

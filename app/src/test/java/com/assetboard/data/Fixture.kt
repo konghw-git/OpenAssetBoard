@@ -37,6 +37,7 @@ class Fixture {
     val weeks = WeekRepository(db, gate, diary.editors, clock = { now })
     val habits = HabitRepository(db, gate, clock = { now }, zone = { zone })
     val health = HealthRepository(db, gate, clock = { now }, zone = { zone })
+    val food = FoodRepository(db, gate, clock = { now }, zone = { zone })
     val settings = SettingsStore(context)
     var effectsFail = false
     val effectCalls = mutableListOf<List<String>>()

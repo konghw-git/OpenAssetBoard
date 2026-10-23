@@ -139,7 +139,7 @@ interface LedgerDao {
         AccountGroup::class, Account::class, Snapshot::class, Valuation::class, SnapshotItem::class, MoneyFlow::class,
         TodoList::class, TodoSection::class, Todo::class, ChecklistItem::class, DiaryEntry::class, DiaryDraft::class,
         Holiday::class, HolidayYear::class, AppMeta::class, HabitCheck::class, com.assetboard.domain.Habit::class,
-        HealthProfile::class, BodyMeasurement::class,
+        HealthProfile::class, BodyMeasurement::class, FoodEntry::class,
         NoteTopic::class, Note::class, NoteSource::class, NoteDraft::class,
         WeeklyReview::class, WeeklyDraft::class,
     ],
@@ -153,15 +153,16 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun metaDao(): MetaDao
     abstract fun habitDao(): HabitDao
     abstract fun healthDao(): HealthDao
+    abstract fun foodDao(): FoodDao
     abstract fun noteDao(): NoteDao
     abstract fun weekDao(): WeekDao
 
     companion object {
-        const val SCHEMA_VERSION = 7
+        const val SCHEMA_VERSION = 8
 
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "asset-board.db")
-                .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7)
+                .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7, Migrations.MIGRATION_7_8)
                 .build()
     }
 }

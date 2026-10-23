@@ -740,7 +740,7 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                         .zIndex(if (dragged) 1f else 0f)
                         .graphicsLayer { translationY = if (dragged) c.reorder.offset else 0f }
                         .then(if (dragged) Modifier else Modifier.animateItem())
-                        .padding(horizontal = 16.dp, vertical = 5.dp),
+                        .padding(horizontal = 16.dp, vertical = 3.dp),
                 ) {
                     SwipeActionsBox(
                         key = todoKey(t.id),

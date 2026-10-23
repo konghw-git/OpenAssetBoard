@@ -177,7 +177,8 @@ object Health {
     fun percentInput(bp: Int): String = java.math.BigDecimal.valueOf(bp.toLong(), 2).stripTrailingZeros().toPlainString()
     fun cmInput(mm: Int): String = java.math.BigDecimal.valueOf(mm.toLong(), 1).stripTrailingZeros().toPlainString()
 
-    private fun parseScaled(input: String, shift: Int, maxDecimals: Int): Long? {
+    /** [input] times 10^[shift] as a whole number; null unless it is a non-negative number of at most [maxDecimals] decimals. */
+    internal fun parseScaled(input: String, shift: Int, maxDecimals: Int): Long? {
         val t = input.trim().replace("，", ".").replace(",", ".")
         if (t.isEmpty()) return null
         return try {

@@ -12,6 +12,7 @@ import com.assetboard.data.BackupManager
 import com.assetboard.data.BackupWorker
 import com.assetboard.data.DiaryRepository
 import com.assetboard.data.EditorRegistry
+import com.assetboard.data.FoodRepository
 import com.assetboard.data.GoalRepository
 import com.assetboard.data.HabitRepository
 import com.assetboard.data.HealthRepository
@@ -66,6 +67,7 @@ class AppContainer(private val context: Context) {
     val weeks by lazy { WeekRepository(db, gate, editors) }
     val habits by lazy { HabitRepository(db, gate) }
     val health by lazy { HealthRepository(db, gate) }
+    val food by lazy { FoodRepository(db, gate) }
     val goal by lazy { GoalRepository(db, gate) }
     val weather by lazy { WeatherService(context, settings) }
     val updater by lazy { AppUpdater(context, settings, appScope) { backup.backupNow(BackupKind.AUTO) } }

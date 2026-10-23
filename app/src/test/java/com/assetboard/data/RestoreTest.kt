@@ -59,6 +59,8 @@ class RestoreTest {
         f.health.saveProfile(Sex.MALE, date("2001-08-02"), 1820, null)
         f.health.save(MeasurementDraft(null, date("2026-10-17"), 92_100, 2_580, "体脂秤"))
         f.health.save(MeasurementDraft(null, date("2026-10-20"), 91_800, null, null))
+        f.food.save(FoodDraft(null, date("2026-10-20"), "燕麦奶", 100, 500, FoodUnit.ML, 40_870, true, 600, 1_600, 6_000, 40))
+        f.food.save(FoodDraft(null, date("2026-10-19"), null, null, null, null, 650_000, false, null, null, null, null))
         val s = DiarySession(f.diary, date("2026-10-20"), f.scope + f.gate.bound(), clock = { f.now })
         s.open(null)
         s.onInput("今天写了日记")
@@ -218,6 +220,7 @@ class RestoreTest {
         assertEquals(listOf(92_100L, 91_800L), again.bodyMeasurements.map { it.weightG })
         assertEquals(listOf(2_580, null), again.bodyMeasurements.map { it.bodyFatBp })
         assertEquals(1820, again.healthProfile?.heightMm)
+        assertEquals(listOf(40_870L, 650_000L), again.foodEntries.map { it.energyCal }.sorted())
         assertEquals(epoch + 1, f.gate.epochNow())
         assertFalse(exported.contains(WriteGate.KEY_EPOCH))
     }
@@ -234,6 +237,7 @@ class RestoreTest {
             diaryEntries = b.diaryEntries.sortedBy { it.id }, diaryDrafts = b.diaryDrafts.sortedBy { it.id },
             habitChecks = b.habitChecks.sortedBy { it.date + it.habit },
             bodyMeasurements = b.bodyMeasurements.sortedBy { it.date },
+            foodEntries = b.foodEntries.sortedBy { it.id },
         )
     }
 
@@ -268,6 +272,36 @@ class RestoreTest {
         assertTrue(f.db.healthDao().all().isEmpty())
         assertEquals(null, f.db.healthDao().profile())
         assertEquals(1, f.db.dao().accounts().size)
+    }
+
+    /** A format 8 file has no food: it reads, and the restore leaves the food empty. */
+    @Test fun formatEightBackupWipesFood() = f.run {
+        seed()
+        val v9 = codec.parseToJsonElement(f.backup.exportJson()).jsonObject
+        val v8 = JsonObject(
+            v9.filterKeys { it != "foodEntries" }.mapValues { (k, v) ->
+                when (k) {
+                    "formatVersion" -> kotlinx.serialization.json.JsonPrimitive(8)
+                    "schemaVersion" -> kotlinx.serialization.json.JsonPrimitive(7)
+                    else -> v
+                }
+            },
+        )
+        val uri = file("v8.json", v8.toString())
+        val preview = f.backup.inspect(uri)
+        assertEquals(0, preview.foodEntries)
+        assertEquals(2, preview.currentFoodEntries)
+        f.backup.restore(uri)
+        assertTrue(f.db.foodDao().all().isEmpty())
+        assertEquals(2, f.db.healthDao().all().size)
+    }
+
+    @Test fun foodEntriesThatBreakTheRules() = f.run {
+        seed()
+        rejects { b -> b.copy(foodEntries = b.foodEntries + b.foodEntries.first().copy(name = "同一个 id")) }
+        rejects { b -> b.copy(foodEntries = b.foodEntries.map { it.copy(amount = null) }) }
+        rejects { b -> b.copy(foodEntries = b.foodEntries.map { it.copy(date = "2026-13-01") }) }
+        rejects { b -> b.copy(foodEntries = b.foodEntries.map { it.copy(energyCal = -1) }) }
     }
 
     @Test fun healthRecordsTwoOnOneDate() = f.run {

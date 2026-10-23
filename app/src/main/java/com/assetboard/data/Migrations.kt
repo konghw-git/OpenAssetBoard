@@ -56,6 +56,18 @@ object Migrations {
         }
     }
 
+    /** Adds what was eaten; nothing else changes. */
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            for (sql in V8_TABLES) db.execSQL(sql)
+        }
+    }
+
+    private val V8_TABLES = listOf(
+        "CREATE TABLE IF NOT EXISTS `food_entries` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `eaten_at` INTEGER NOT NULL, `name` TEXT, `per` INTEGER, `amount` INTEGER, `unit` TEXT, `energy_cal` INTEGER NOT NULL, `in_kj` INTEGER NOT NULL, `protein_mg` INTEGER, `fat_mg` INTEGER, `carb_mg` INTEGER, `sodium_mg` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "CREATE INDEX IF NOT EXISTS `index_food_entries_date` ON `food_entries` (`date`)",
+    )
+
     private const val V7_HABITS =
         "CREATE TABLE IF NOT EXISTS `habits` (`key` TEXT NOT NULL, `label` TEXT NOT NULL, `icon` TEXT NOT NULL, `color` INTEGER NOT NULL, `position` INTEGER NOT NULL, `added_on` TEXT, `removed_on` TEXT, PRIMARY KEY(`key`))"
 

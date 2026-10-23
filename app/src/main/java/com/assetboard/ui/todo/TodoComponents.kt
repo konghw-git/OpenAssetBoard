@@ -73,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -143,14 +144,14 @@ fun badgeColor(tone: DateBadge.Tone): Color = when (tone) {
 
 /** The round check box. A repeat source shows a double ring; checking springs the fill in. */
 @Composable
-fun CheckCircle(checked: Boolean, important: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, repeat: Boolean = false) {
+fun CheckCircle(checked: Boolean, important: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, repeat: Boolean = false, box: Dp = 44.dp) {
     val cs = MaterialTheme.colorScheme
     val scale by animateFloatAsState(if (checked) 1f else 0.92f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow), label = "check")
     val fill by animateColorAsState(if (checked) cs.primary else Color.Transparent, tween(220), label = "fill")
     val ring = if (important && !checked) cs.error else cs.outline
     Box(
         modifier
-            .size(44.dp)
+            .size(box)
             .clip(CircleShape)
             .clickable(onClick = onToggle),
         contentAlignment = Alignment.Center,
@@ -216,20 +217,21 @@ fun TodoRow(
         modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = 1f + 0.03f * lift; scaleY = scaleX }
-            .glass(TodoCardShape, glass, tint, elevation = if (done) 0.dp else 10.dp + 18.dp * lift)
+            .glass(TodoCardShape, glass, tint, elevation = if (done) 0.dp else 6.dp + 18.dp * lift)
             .clip(TodoCardShape)
             .then(if (selected) Modifier.border(1.5.dp, cs.primary, TodoCardShape) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .heightIn(min = 60.dp)
-            .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = if (points.isEmpty()) 4.dp else 8.dp),
+            .heightIn(min = 50.dp)
+            .padding(start = 4.dp, end = 12.dp, top = 2.dp, bottom = if (points.isEmpty()) 2.dp else 8.dp),
     ) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 52.dp).onSizeChanged { headerHeight = it.height },
+        Modifier.fillMaxWidth().heightIn(min = 46.dp).onSizeChanged { headerHeight = it.height },
         // With check points under the title, the box and badge stay with the title line.
         verticalAlignment = if (points.isEmpty()) Alignment.CenterVertically else Alignment.Top,
     ) {
-        CheckCircle(done, todo.important, onToggle, repeat = todo.kind == TodoKind.REPEAT_SOURCE)
-        Column(Modifier.weight(1f).padding(vertical = 8.dp).graphicsLayer { alpha = content }) {
+        CheckCircle(done, todo.important, onToggle, repeat = todo.kind == TodoKind.REPEAT_SOURCE, box = CircleBox)
+        // With check points, the title line is centred on the circle; otherwise the row centres it.
+        Column(Modifier.weight(1f).padding(top = if (points.isEmpty()) 5.dp else 9.dp, bottom = 5.dp).graphicsLayer { alpha = content }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (todo.important && !done) {
                     Icon(Icons.Default.Flag, null, tint = cs.error, modifier = Modifier.size(14.dp))
@@ -237,7 +239,7 @@ fun TodoRow(
                 }
                 Text(
                     todo.title,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 21.sp),
                     fontWeight = FontWeight.Medium,
                     color = if (done) cs.onSurfaceVariant else cs.onSurface,
                     textDecoration = if (done) TextDecoration.LineThrough else null,
@@ -255,7 +257,7 @@ fun TodoRow(
                 todo.kind == TodoKind.REPEAT_SOURCE || (todo.remindTime != null && !done)
             if (hasMeta) {
                 Row(
-                    Modifier.padding(top = 5.dp),
+                    Modifier.padding(top = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
@@ -282,7 +284,7 @@ fun TodoRow(
                 color = c,
                 fontWeight = if (badge.tone == DateBadge.Tone.ALERT) FontWeight.SemiBold else null,
                 modifier = Modifier
-                    .padding(start = 8.dp, top = if (points.isEmpty()) 0.dp else 10.dp)
+                    .padding(start = 8.dp, top = if (points.isEmpty()) 0.dp else 9.dp)
                     .clip(RoundedCornerShape(50))
                     .background(c.copy(alpha = 0.10f))
                     .padding(horizontal = 9.dp, vertical = 3.dp),
@@ -320,12 +322,14 @@ private fun ChecklistProgress(done: Int, total: Int) {
     }
 }
 
-/** Where the card's check circle ends, from the top of the title line: 44dp box, 22dp ring. */
-private val CircleBottom = 33.dp
+/** The card's check circle: a 40dp touch box around a 22dp ring. */
+private val CircleBox = 40.dp
+/** Where the card's check circle ends, from the top of the title line. */
+private val CircleBottom = 31.dp
 /** The air between a circle or node and the line running into it. */
 private val LineGap = 3.dp
 /** The width of the column the line runs down: the check circle's, so they share a centre. */
-private val RailWidth = 44.dp
+private val RailWidth = CircleBox
 private val NodeSize = 14.dp
 
 /**
@@ -426,8 +430,8 @@ private fun CheckPoint(item: ChecklistItem, onToggle: ((String) -> Unit)?) {
             .clip(shape)
             .background(strip)
             .then(if (onToggle != null) Modifier.clickable { onToggle(item.id) } else Modifier)
-            .heightIn(min = 36.dp)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .heightIn(min = 32.dp)
+            .padding(horizontal = 12.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -446,7 +450,7 @@ private fun MetaChip(icon: ImageVector, text: String?, color: Color) {
         Modifier
             .clip(RoundedCornerShape(50))
             .background(color.copy(alpha = 0.10f))
-            .padding(horizontal = if (text == null) 4.dp else 7.dp, vertical = 2.dp),
+            .padding(horizontal = if (text == null) 4.dp else 7.dp, vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = color, modifier = Modifier.size(12.dp))

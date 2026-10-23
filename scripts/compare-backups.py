@@ -8,8 +8,9 @@ import json
 import sys
 
 LEDGER = ["groups", "accounts", "snapshots", "valuations", "snapshotItems", "flows"]
-# Reported but never failing: a backup from before format 4 has no health tables at all.
-HEALTH = ["bodyMeasurements"]
+# Reported but never failing: a backup from before format 4 has no health tables at all, and one
+# from before format 9 no food.
+HEALTH = ["bodyMeasurements", "foodEntries"]
 
 
 def key(table, row):

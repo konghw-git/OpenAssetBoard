@@ -69,9 +69,11 @@ fun RestoreConfirm(vm: RestoreViewModel) {
     val text = if (p.formatVersion == 1) {
         "此备份来自旧版本，不含待办、日记和笔记。恢复后将清空当前 ${p.currentTodos} 条待办、${p.currentDiaries} 篇日记、${p.currentNotes} 篇笔记、${p.currentWeeks} 篇周复盘。\n\n恢复前会自动另存一份当前数据，可以在「恢复前副本」里一键还原。"
     } else {
-        "备份于 ${Dates.dateTime(p.exportedAt)}：${p.accounts} 个账户、${p.todos} 条待办、${p.diaries} 篇日记、${p.notes} 篇笔记、${p.weeks} 篇周复盘、${p.healthRecords} 条健康记录。" +
+        "备份于 ${Dates.dateTime(p.exportedAt)}：${p.accounts} 个账户、${p.todos} 条待办、${p.diaries} 篇日记、${p.notes} 篇笔记、${p.weeks} 篇周复盘、${p.healthRecords} 条健康记录" +
+            (if (p.foodEntries > 0) "、${p.foodEntries} 条饮食记录。" else "。") +
             (if (p.formatVersion < 3) "这份备份来自旧版本，不含每日指标，恢复后打卡记录会清空。" else "") +
             (if (p.formatVersion < 4 && p.currentHealthRecords > 0) "这份备份不含健康数据，恢复后当前 ${p.currentHealthRecords} 条健康记录会清空。" else "") +
+            (if (p.formatVersion < 9 && p.currentFoodEntries > 0) "这份备份不含饮食记录，恢复后当前 ${p.currentFoodEntries} 条饮食记录会清空。" else "") +
             (if (p.formatVersion < 5 && p.currentNotes > 0) "这份备份不含笔记，恢复后当前 ${p.currentNotes} 篇笔记会清空。" else "") +
             (if (p.formatVersion < 6 && p.currentWeeks > 0) "这份备份不含周复盘，恢复后当前 ${p.currentWeeks} 篇周复盘会清空。" else "") +
             (if (p.formatVersion < 8 && p.habits == 0) "这份备份不含自定义的每日打卡，恢复后会回到内置的五项。" else "") +
