@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-10-23
+
 ### Added
 
 - **Food and energy.** A 饮食 tile on the assets tab and a page of its own: copy a nutrition label
