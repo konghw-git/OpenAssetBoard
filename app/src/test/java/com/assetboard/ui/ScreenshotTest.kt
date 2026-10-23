@@ -26,6 +26,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
@@ -175,7 +177,9 @@ class ScreenshotTest {
         shot("01-overview-account-swipes", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
         compose.onNode(hasScrollAction()).performScrollToIndex(2)
         compose.mainClock.advanceTimeBy(1_000)
-        compose.onNodeWithText("全部展开").performClick()
+        // Its click action rather than a touch: a touch leaves a ripple that the hand-run clock
+        // below sometimes still shows in 01h and sometimes not.
+        compose.onNodeWithText("全部展开").performSemanticsAction(SemanticsActions.OnClick)
         compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("农行①").performTouchInput { down(center); repeat(6) { moveBy(Offset(30f, 0f)) }; repeat(4) { moveBy(Offset(220f, 0f)) }; up() }
         compose.mainClock.advanceTimeBy(1_000)
