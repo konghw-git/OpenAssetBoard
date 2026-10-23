@@ -181,11 +181,17 @@ import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.LineChart
 import com.assetboard.ui.components.ListRow
 import com.assetboard.ui.components.MoneyText
+import com.assetboard.ui.components.LocalHideAmounts
+import kotlinx.coroutines.launch
+import com.assetboard.ui.components.amount
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import com.assetboard.ui.components.Pill
 import com.assetboard.ui.components.RowDivider
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
 import com.assetboard.ui.components.HeaderAction
+import com.assetboard.ui.components.SettingsAction
 import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.Sparkline
 import com.assetboard.ui.theme.AppTheme
@@ -381,7 +387,7 @@ fun OverviewScreen(
                 ) {
                     HeaderAction(Icons.AutoMirrored.Filled.ShowChart, "净值趋势", onTrend)
                     HeaderAction(Icons.Default.Add, "新建账户", { onAddAccount(null) })
-                    HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
+                    SettingsAction(onSettings)
                 }
             },
         ) { padding ->
@@ -479,7 +485,28 @@ private fun Hero(s: OverviewState, goal: Long?, onStocktake: () -> Unit, onGoal:
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("净资产", color = extra.onHeroMuted, style = MaterialTheme.typography.labelLarge)
+                    // The eye hides every amount, here and wherever else one is shown, and on the widget.
+                    val container = LocalContainer.current
+                    val settings = container.settings
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val hidden = LocalHideAmounts.current
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("净资产", color = extra.onHeroMuted, style = MaterialTheme.typography.labelLarge)
+                        Icon(
+                            if (hidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                            if (hidden) "显示金额" else "隐藏金额",
+                            tint = extra.onHeroMuted,
+                            modifier = Modifier
+                                .padding(start = 2.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    settings.setBool(settings.hideAmounts, !hidden)
+                                    container.appScope.launch { com.assetboard.widget.NetWorthWidget.refresh(context) }
+                                }
+                                .padding(6.dp)
+                                .size(16.dp),
+                        )
+                    }
                     Text(
                         s.history.lastOrNull()?.let { "上次盘点 · ${Dates.relative(it.snapshot.at)}" } ?: "还没有盘点过",
                         color = extra.onHeroMuted,
@@ -492,7 +519,7 @@ private fun Hero(s: OverviewState, goal: Long?, onStocktake: () -> Unit, onGoal:
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("¥", color = extra.onHero, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 5.dp, end = 4.dp))
                 Text(
-                    Money.format(net),
+                    amount(Money.format(net)),
                     color = extra.onHero,
                     style = MaterialTheme.typography.displaySmall,
                     maxLines = 1,
@@ -510,7 +537,7 @@ private fun Hero(s: OverviewState, goal: Long?, onStocktake: () -> Unit, onGoal:
                 ) {
                     Icon(if (up) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, null, tint = extra.onHero, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("较上次盘点 ${Money.format(c, signed = true)}", color = extra.onHero, style = MaterialTheme.typography.labelMedium.merge(NumberStyle))
+                    Text("较上次盘点 " + amount(Money.format(c, signed = true)), color = extra.onHero, style = MaterialTheme.typography.labelMedium.merge(NumberStyle))
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -583,7 +610,7 @@ private fun HeroGauges(s: OverviewState, goal: Long?, onCash: () -> Unit, onGoal
             val parts = listOf(l.cash to extra.onHero, l.locked to extra.onHero.copy(alpha = 0.5f), l.invested to extra.onHero.copy(alpha = 0.24f))
                 .filter { it.first > 0 }
             GaugeTile(
-                Icons.Outlined.Payments, extra.onHero, "可用现金", "¥" + Money.short(animatedCents(l.cash)), extra.onHero,
+                Icons.Outlined.Payments, extra.onHero, "可用现金", amount("¥" + Money.short(animatedCents(l.cash))), extra.onHero,
                 "占 " + Money.percent(l.cash, l.total), tile, onCash,
             ) {
                 Row(Modifier.fillMaxWidth(reveal.value).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -600,7 +627,7 @@ private fun HeroGauges(s: OverviewState, goal: Long?, onCash: () -> Unit, onGoal
             val ratio = (debts.toDouble() / s.totals.assets.toDouble()).toFloat().coerceIn(0f, 1f)
             GaugeTile(
                 Icons.Outlined.CreditCard, extra.onHero, "负债率", Money.percent(debts, s.totals.assets), extra.onHero,
-                "负债 ¥" + Money.short(debts), tile, null,
+                "负债 " + amount("¥" + Money.short(debts)), tile, null,
             ) {
                 Box(Modifier.fillMaxWidth(ratio * reveal.value).fillMaxHeight().clip(RoundedCornerShape(50)).background(Brush.horizontalGradient(listOf(extra.onHero.copy(alpha = 0.55f), extra.onHero))))
             }
@@ -616,13 +643,13 @@ private fun GoalTile(p: GoalProgress, modifier: Modifier, onClick: () -> Unit) {
     LaunchedEffect(p.fraction) { shown.animateTo(p.fraction, tween(1_300, delayMillis = 300, easing = FastOutSlowInEasing)) }
     val run by rememberInfiniteTransition(label = "goal").animateFloat(-0.3f, 1.3f, infiniteRepeatable(tween(2_600, easing = LinearEasing)), label = "run")
     GaugeTile(
-        Icons.Outlined.Flag, GoalGold, "目标 " + Money.compact(p.goal),
+        Icons.Outlined.Flag, GoalGold, "目标 " + amount(Money.compact(p.goal)),
         if (p.reached) "已达成" else Money.percent(p.net.coerceAtLeast(0), p.goal),
         if (p.reached) GoalGold else extra.onHero,
         when {
             p.reached -> "点这里设新目标"
             p.monthsToGo != null -> "约 ${monthsText(p.monthsToGo)}"
-            else -> "还差 ¥" + Money.short(p.remaining)
+            else -> "还差 " + amount("¥" + Money.short(p.remaining))
         },
         modifier, onClick,
     ) {
@@ -739,7 +766,7 @@ private fun HeroAllocation(allocation: List<AllocationUi>) {
                     Spacer(Modifier.width(8.dp))
                     // One line a group; the amount without cents, so the name keeps its room.
                     Text(a.group.name, color = extra.onHero.copy(alpha = 0.9f), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(Money.compact(a.value), color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall.merge(NumberStyle), maxLines = 1, modifier = Modifier.padding(start = 6.dp))
+                    Text(amount(Money.compact(a.value)), color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall.merge(NumberStyle), maxLines = 1, modifier = Modifier.padding(start = 6.dp))
                     Text(
                         Money.percent(a.value, total), color = extra.onHero, style = MaterialTheme.typography.labelLarge.merge(NumberStyle),
                         textAlign = TextAlign.End, modifier = Modifier.width(58.dp),
@@ -997,7 +1024,7 @@ private fun AccountRowEditor(r: AccountRowUi, noun: String, onSave: (String) -> 
         BasicTextField(
             value = value,
             onValueChange = { v ->
-                value = v.copy(text = v.text.filter { it.isDigit() || it == '.' || it == ',' || it == '-' })
+                value = v.copy(text = v.text.filter { it.isDigit() || it in ".,-+*/×÷()" })
                 text = value.text
             },
             singleLine = true,
@@ -1190,8 +1217,8 @@ private fun TileNumber(value: String, sizeFor: String, prefix: String? = null, s
 }
 
 /**
- * Today's food: what was eaten counting up, the deficit against today's burn, and the last seven
- * days as small bars under today's burn. The + records straight away.
+ * Today's food: what was eaten counting up, the deficit against today's resting rate, and the last
+ * seven days as small bars under it. The + records straight away.
  */
 @Composable
 private fun FoodTile(f: FoodState, onFood: (record: Boolean) -> Unit, modifier: Modifier) {
@@ -1235,12 +1262,12 @@ private fun FoodTile(f: FoodState, onFood: (record: Boolean) -> Unit, modifier: 
     }
 }
 
-/** Seven small bars ending in today's solid one, today's burn a dashed level over them; a day without entries is a dot. */
+/** Seven small bars ending in today's solid one, today's resting rate a dashed level over them; a day without entries is a dot. */
 @Composable
 private fun FoodWeek(week: List<Energy.Day>, color: Color, modifier: Modifier) {
     val reveal = remember { Animatable(0f) }
     LaunchedEffect(Unit) { reveal.animateTo(1f, tween(900, delayMillis = 200, easing = FastOutSlowInEasing)) }
-    val burn = week.last().burn?.totalCal
+    val burn = week.last().burn?.restingCal
     Canvas(modifier) {
         val top = maxOf(week.maxOf { it.intakeCal }, burn ?: 0).coerceAtLeast(1)
         val slot = size.width / week.size
@@ -1364,7 +1391,7 @@ private fun CashSheet(s: OverviewState, onOpenAccount: (String) -> Unit, onDismi
             Spacer(Modifier.height(16.dp))
             Row {
                 Text("¥", style = MaterialTheme.typography.titleMedium, modifier = Modifier.alignByBaseline().padding(end = 3.dp))
-                Text(Money.format(animatedCents(l.cash)), style = MaterialTheme.typography.headlineMedium.merge(NumberStyle), maxLines = 1, modifier = Modifier.alignByBaseline())
+                Text(amount(Money.format(animatedCents(l.cash))), style = MaterialTheme.typography.headlineMedium.merge(NumberStyle), maxLines = 1, modifier = Modifier.alignByBaseline())
             }
             if (l.total > 0) {
                 Spacer(Modifier.height(14.dp))

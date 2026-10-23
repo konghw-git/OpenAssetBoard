@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EditNote
@@ -86,6 +87,8 @@ import com.assetboard.domain.Dates
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.SegmentedControl
+import com.assetboard.ui.components.rememberBackupProblem
+import androidx.compose.material3.TextButton
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.IconTile
@@ -216,6 +219,24 @@ fun SettingsScreen(
 
             SectionCard {
                 SectionHeader("备份")
+                // What put the red dot on the tabs' settings button, and the way out of it.
+                rememberBackupProblem()?.let { problem ->
+                    val failure by settings.backupError.collectAsStateWithLifecycle()
+                    Row(
+                        Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().clip(MaterialTheme.shapes.medium)
+                            .background(cs.errorContainer).padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(problem, style = MaterialTheme.typography.bodyMedium, color = cs.onErrorContainer)
+                            failure?.let { Text(Dates.dateTime(it.at), style = MaterialTheme.typography.labelSmall, color = cs.onErrorContainer.copy(alpha = 0.75f)) }
+                        }
+                        val lost = problem.startsWith("备份目录的授权")
+                        TextButton(onClick = { if (lost || tree == null) pickTree.launch(null) else vm.backupNow() }) {
+                            Text(if (lost) "重新选择" else "立即备份", color = cs.onErrorContainer)
+                        }
+                    }
+                }
                 ListRow(
                     title = "备份目录",
                     subtitle = tree?.let(::readableTree) ?: "未设置。建议选「文档」下新建的文件夹，卸载 app 后仍保留",
@@ -336,6 +357,13 @@ fun SettingsScreen(
                     leading = { IconTile(Icons.Outlined.Speed, palette.group(5)) },
                     onClick = { editMirror = true },
                 )
+                RowDivider(startIndent = 68.dp)
+                ListRow(
+                    title = "导出诊断",
+                    subtitle = "版本、手机型号和崩溃、异常退出的记录，不含你的数据，可发给开发者排查",
+                    leading = { IconTile(Icons.Outlined.BugReport, palette.group(3)) },
+                    onClick = { shareDiagnostics(context, settings) },
+                )
             }
 
             SectionCard {
@@ -423,6 +451,18 @@ fun SettingsScreen(
             },
         )
     }
+}
+
+/** The diagnostics as a text file, to whatever the user shares it with. */
+private fun shareDiagnostics(context: android.content.Context, settings: SettingsStore) {
+    val file = com.assetboard.data.CrashLog.diagnostics(context, settings)
+    val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
+    val send = Intent(Intent.ACTION_SEND)
+        .setType("text/plain")
+        .putExtra(Intent.EXTRA_STREAM, uri)
+        .putExtra(Intent.EXTRA_SUBJECT, "日盈诊断信息")
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    context.startActivity(Intent.createChooser(send, "导出诊断"))
 }
 
 @Composable

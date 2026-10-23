@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.sp
 import com.assetboard.domain.Dates
 import com.assetboard.domain.Money
 import com.assetboard.domain.NetWorthPoint
+import com.assetboard.ui.components.LocalHideAmounts
+import com.assetboard.ui.components.MASKED
 import com.assetboard.ui.components.MorphEasing
 import com.assetboard.ui.components.fadeInAlpha
 import com.assetboard.ui.components.fadeOutAlpha
@@ -77,11 +79,14 @@ private fun niceTicks(lo: Long, hi: Long): List<Long> {
     return (0..4).map { first + it * step }.filter { it <= hi + step / 2 }.take(5)
 }
 
-private fun DrawScope.yGrid(ticks: List<Long>, py: (Long) -> Float, right: Float, grid: Color, measurer: TextMeasurer, style: TextStyle, alpha: Float = 1f) {
+/** An axis figure, or nothing while amounts are hidden. */
+private fun axis(v: Long, hide: Boolean): String = if (hide) "" else Money.compact(v)
+
+private fun DrawScope.yGrid(ticks: List<Long>, py: (Long) -> Float, right: Float, grid: Color, measurer: TextMeasurer, style: TextStyle, alpha: Float = 1f, hide: Boolean = false) {
     for (t in ticks) {
         val y = py(t)
         drawLine(grid.copy(alpha = grid.alpha * alpha), Offset(0f, y), Offset(right, y), strokeWidth = 1f)
-        val label = measurer.measure(Money.compact(t), style)
+        val label = measurer.measure(axis(t, hide), style)
         drawText(label, topLeft = Offset(size.width - label.size.width, y - label.size.height / 2f), alpha = alpha)
     }
 }
@@ -133,6 +138,7 @@ private fun DrawScope.bubble(x: Float, lines: List<Pair<String, TextStyle>>, mea
 @Composable
 fun NetWorthChart(points: List<NetWorthPoint>, selected: Int?, onSelect: (Int?) -> Unit, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
+    val hide = LocalHideAmounts.current
     val extra = AppTheme.extra
     val measurer = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 10.sp, color = cs.onSurfaceVariant, fontFeatureSettings = "tnum")
@@ -168,7 +174,7 @@ fun NetWorthChart(points: List<NetWorthPoint>, selected: Int?, onSelect: (Int?) 
         val bottom = size.height - 22.dp.toPx()
         val t = morph.value
         val old = from?.takeIf { t < 1f }
-        frame.gutter = ticks.maxOf { measurer.measure(Money.compact(it), labelStyle).size.width } + 10.dp.toPx()
+        frame.gutter = ticks.maxOf { measurer.measure(axis(it, hide), labelStyle).size.width } + 10.dp.toPx()
         val gutter = if (old != null) old.gutter + (frame.gutter - old.gutter) * t else frame.gutter
         plot.left = 8.dp.toPx()
         plot.right = size.width - gutter
@@ -181,10 +187,10 @@ fun NetWorthChart(points: List<NetWorthPoint>, selected: Int?, onSelect: (Int?) 
             return sy(from0 + (n - from0) * t)
         }
         if (old != null) {
-            yGrid(old.ticks.map { it.second }, { v -> sy(old.ticks.first { it.second == v }.first) }, plot.right + 4.dp.toPx(), extra.chartGrid, measurer, labelStyle, fadeOutAlpha(t))
+            yGrid(old.ticks.map { it.second }, { v -> sy(old.ticks.first { it.second == v }.first) }, plot.right + 4.dp.toPx(), extra.chartGrid, measurer, labelStyle, fadeOutAlpha(t), hide)
             xLabels(old.times, { at -> plot.left + (plot.right - plot.left) * old.nx(at) }, bottom, 0f, plot.right, measurer, labelStyle, fadeOutAlpha(t))
         }
-        yGrid(ticks, ::py, plot.right + 4.dp.toPx(), extra.chartGrid, measurer, labelStyle, if (old != null) fadeInAlpha(t) else 1f)
+        yGrid(ticks, ::py, plot.right + 4.dp.toPx(), extra.chartGrid, measurer, labelStyle, if (old != null) fadeInAlpha(t) else 1f, hide)
         xLabels(points.map { it.snapshot.at }, ::px, bottom, 0f, plot.right, measurer, labelStyle, if (old != null) fadeInAlpha(t) else 1f)
 
         // The starting value, for "above the line is a gain".
@@ -225,7 +231,7 @@ fun NetWorthChart(points: List<NetWorthPoint>, selected: Int?, onSelect: (Int?) 
             x,
             listOf(
                 Dates.date(pick.snapshot.at) to TextStyle(fontSize = 10.sp, color = cs.inverseOnSurface.copy(alpha = 0.75f)),
-                Money.format(pick.netWorth) to TextStyle(fontSize = 13.sp, color = cs.inverseOnSurface, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"),
+                (if (hide) MASKED else Money.format(pick.netWorth)) to TextStyle(fontSize = 13.sp, color = cs.inverseOnSurface, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"),
             ),
             measurer, cs.inverseSurface,
         )
@@ -264,6 +270,7 @@ private class TrendFrame(
 @Composable
 fun BalanceBars(points: List<NetWorthPoint>, selected: Int?, onSelect: (Int?) -> Unit, assetsColor: Color, debtsColor: Color, netColor: Color, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
+    val hide = LocalHideAmounts.current
     val extra = AppTheme.extra
     val measurer = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 10.sp, color = cs.onSurfaceVariant, fontFeatureSettings = "tnum")
@@ -287,7 +294,7 @@ fun BalanceBars(points: List<NetWorthPoint>, selected: Int?, onSelect: (Int?) ->
             add(0L); add(top0)
             if (bottom0 > 0) add(-bottom0)
         }
-        val gutter = ticks.maxOf { measurer.measure(Money.compact(it), labelStyle).size.width } + 10.dp.toPx()
+        val gutter = ticks.maxOf { measurer.measure(axis(it, hide), labelStyle).size.width } + 10.dp.toPx()
         plot.left = 4.dp.toPx()
         plot.right = size.width - gutter
         val total = (top0 + bottom0).toFloat()
@@ -296,7 +303,7 @@ fun BalanceBars(points: List<NetWorthPoint>, selected: Int?, onSelect: (Int?) ->
         for (t in ticks) {
             val y = py(t)
             drawLine(if (t == 0L) cs.outline else extra.chartGrid, Offset(0f, y), Offset(plot.right, y), strokeWidth = if (t == 0L) 1.2f else 1f)
-            val label = measurer.measure(Money.compact(t), labelStyle)
+            val label = measurer.measure(axis(t, hide), labelStyle)
             drawText(label, topLeft = Offset(size.width - label.size.width, y - label.size.height / 2f))
         }
         xLabels(listOf(0L, (n - 1).toLong()).distinct().map { points[it.toInt()].snapshot.at }, { t -> cx(points.indexOfFirst { it.snapshot.at == t }) }, bottom, 0f, plot.right, measurer, labelStyle)

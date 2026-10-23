@@ -51,6 +51,15 @@ class ReorderState internal constructor(
     private var scroller: Job? = null
     private var travelled = 0f
     private var moved = false
+    private var released: Any? = null
+    private var releasedAt = 0L
+
+    /**
+     * Whether a click on [key]'s row is only the finger lifting after a long press picked it up.
+     * The row's own click sees that lift too, just before or just after [end]; it is not a tap.
+     */
+    fun ownsClick(key: Any): Boolean =
+        dragging == key || (released == key && System.nanoTime() - releasedAt < CLICK_AFTER_RELEASE_NS)
 
     internal fun start(key: Any) {
         haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
@@ -73,6 +82,8 @@ class ReorderState internal constructor(
         scroller?.cancel()
         dragging = null
         offset = 0f
+        released = key
+        releasedAt = System.nanoTime()
         haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
         val hold = onHold
         if (hold != null && !moved && travelled < slop) hold(key) else onDrop(key)
@@ -126,6 +137,8 @@ class ReorderState internal constructor(
         }
     }
 }
+
+private const val CLICK_AFTER_RELEASE_NS = 300_000_000L
 
 @Composable
 fun rememberReorderState(

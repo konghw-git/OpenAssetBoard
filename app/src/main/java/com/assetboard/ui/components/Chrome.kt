@@ -24,8 +24,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,31 +79,65 @@ fun TabHeader(
     }
 }
 
-/** A round icon button on a soft card background, the header's action style. */
+/** A round icon button on a soft card background, the header's action style. [badge] adds a red dot. */
 @Composable
-fun HeaderAction(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = MaterialTheme.colorScheme.onSurface) {
+fun HeaderAction(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = MaterialTheme.colorScheme.onSurface, badge: Boolean = false) {
     val source = remember { MutableInteractionSource() }
     // Glass on a page with colour behind it; a plain soft card elsewhere.
     val onGlass = LocalAmbient.current != null
-    Box(
-        modifier
-            .size(42.dp)
-            .pressScale(source, 0.9f)
-            .then(
-                if (onGlass) {
-                    Modifier.glass(CircleShape, glass, elevation = 6.dp)
-                } else {
-                    Modifier
-                        .shadow(2.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.10f))
-                        .background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
-                },
+    Box(modifier.size(42.dp)) {
+        Box(
+            Modifier
+                .size(42.dp)
+                .pressScale(source, 0.9f)
+                .then(
+                    if (onGlass) {
+                        Modifier.glass(CircleShape, glass, elevation = 6.dp)
+                    } else {
+                        Modifier
+                            .shadow(2.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.10f))
+                            .background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
+                    },
+                )
+                .clip(CircleShape)
+                .clickable(interactionSource = source, indication = null, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, description, tint = tint, modifier = Modifier.size(21.dp))
+        }
+        if (badge) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 3.dp).size(10.dp).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface).padding(1.5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error),
             )
-            .clip(CircleShape)
-            .clickable(interactionSource = source, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, description, tint = tint, modifier = Modifier.size(21.dp))
+        }
     }
+}
+
+/** What the backup needs looking at ([BackupHealth]), checked again each time the app comes back. */
+@Composable
+fun rememberBackupProblem(): String? {
+    val settings = com.assetboard.ui.LocalContainer.current.settings
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val tree by settings.backupTreeUri.collectAsStateWithLifecycle()
+    val last by settings.lastBackupAt.collectAsStateWithLifecycle()
+    val failure by settings.backupError.collectAsStateWithLifecycle()
+    // Bumped on every resume: a folder's permission can go while the app is away.
+    var resumed by remember { mutableIntStateOf(0) }
+    LifecycleResumeEffect(Unit) {
+        resumed++
+        onPauseOrDispose {}
+    }
+    return remember(tree, last, failure, resumed) {
+        com.assetboard.data.BackupHealth.problem(context, tree, last, failure, System.currentTimeMillis())
+    }
+}
+
+/** The tabs' settings button, with a red dot while the backup needs looking at. */
+@Composable
+fun SettingsAction(onClick: () -> Unit) {
+    val problem = rememberBackupProblem()
+    HeaderAction(Icons.Outlined.Settings, if (problem != null) "设置（备份需要处理）" else "设置", onClick, badge = problem != null)
 }
 
 /**

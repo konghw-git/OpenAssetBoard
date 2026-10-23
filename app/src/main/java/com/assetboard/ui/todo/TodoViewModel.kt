@@ -3,6 +3,8 @@ package com.assetboard.ui.todo
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import com.assetboard.AppContainer
+import com.assetboard.data.InlineItem
+import com.assetboard.data.TimeChange
 import com.assetboard.data.Todo
 import com.assetboard.data.TodoData
 import com.assetboard.data.TodoDraft
@@ -23,6 +25,9 @@ import java.time.LocalDate
 
 /** A snackbar message, optionally with a 5-second undo. */
 typealias TodoEvent = UndoEvent
+
+/** What a todo gathered from others is called until it is named; its edit starts with the title blank. */
+internal const val GATHERED_TITLE = "新待办"
 
 /** Actions shared by the todo screens. Every write carries the epoch bound at creation. */
 class TodoViewModel(private val container: AppContainer) : ActionViewModel(container) {
@@ -45,6 +50,15 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
     val activeHabits: Flow<List<Habit>> = container.habits.observeActive()
 
     fun toggleHabit(h: Habit) = action { container.habits.toggle(h) }
+
+    /** The keys of the habits that have [date] off. */
+    fun habitsSkippedOn(date: LocalDate): Flow<Set<String>> = container.habits.observeSkipped(date)
+
+    /** A long press on a battery cell: today off for [h], or back on. */
+    fun toggleHabitRest(h: Habit) = action {
+        val rest = container.habits.toggleSkip(h)
+        _events.tryEmit(TodoEvent(if (rest) "「${h.label}」今天休息，不算断签" else "「${h.label}」取消休息"))
+    }
 
     fun addHabit(label: String, icon: String, color: Long, onDone: () -> Unit = {}) = action(onDone) { container.habits.add(label, icon, color) }
 
@@ -97,7 +111,18 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
 
     fun setImportant(t: Todo, important: Boolean) = action { repo.setImportant(t.id, important) }
 
-    fun reschedule(ids: List<String>, date: LocalDate?, someday: Boolean) = action { repo.reschedule(ids, date, someday) }
+    fun reschedule(ids: List<String>, date: LocalDate?, someday: Boolean, time: TimeChange = TimeChange.Keep) = action { repo.reschedule(ids, date, someday, time) }
+
+    /** An edit in place has ended: its title and checklist in one write. */
+    fun saveInline(id: String, title: String, items: List<InlineItem>) = action { repo.editInline(id, title, items) }
+
+    /** [ids] as the checklist of one new todo; [onMade] gets it, to edit in place. Undo brings them back. */
+    fun gather(ids: List<String>, onMade: (String) -> Unit) = action {
+        if (ids.isEmpty()) return@action
+        val (id, batch) = repo.gather(ids, GATHERED_TITLE)
+        onMade(id)
+        _events.tryEmit(TodoEvent("${ids.size} 条已变成新待办的检查项") { repo.ungather(id, batch) })
+    }
 
     fun move(ids: List<String>, listId: String?) = action { repo.moveMany(ids, listId) }
 

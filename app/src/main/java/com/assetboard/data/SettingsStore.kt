@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class ThemeMode(val label: String) { SYSTEM("跟随系统"), LIGHT("浅色"), DARK("深色") }
 
+/** Why the last backup did not happen, and when. */
+data class BackupFailure(val reason: String, val at: Long)
+
 /** Per-device preferences and bookkeeping; none of it is user data, so none is backed up. */
 class SettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -50,6 +53,8 @@ class SettingsStore(context: Context) {
     val reminderGuideSeen = bool(KEY_GUIDE_SEEN, false)
     /** Look for a new version once a day on start (only while networking is on). */
     val autoUpdateCheck = bool(KEY_AUTO_UPDATE, true)
+    /** Amounts read **** on the overview, wherever an amount is shown as such, and on the widget. */
+    val hideAmounts = bool(KEY_HIDE_AMOUNTS, false)
 
     fun setBool(flow: MutableStateFlow<Boolean>, value: Boolean) {
         val key = when (flow) {
@@ -60,6 +65,7 @@ class SettingsStore(context: Context) {
             diaryReminderEnabled -> KEY_DIARY_REMINDER
             reminderGuideSeen -> KEY_GUIDE_SEEN
             autoUpdateCheck -> KEY_AUTO_UPDATE
+            hideAmounts -> KEY_HIDE_AMOUNTS
             else -> error("unknown setting")
         }
         prefs.edit { putBoolean(key, value) }
@@ -100,9 +106,29 @@ class SettingsStore(context: Context) {
         _backupTreeUri.value = uri
     }
 
+    /** A backup that worked; it also clears the last failure. */
     fun setLastBackupAt(at: Long) {
-        prefs.edit { putLong(KEY_LAST_BACKUP, at) }
+        prefs.edit {
+            putLong(KEY_LAST_BACKUP, at)
+            remove(KEY_BACKUP_ERROR)
+            remove(KEY_BACKUP_ERROR_AT)
+        }
         _lastBackupAt.value = at
+        _backupError.value = null
+    }
+
+    private val _backupError = MutableStateFlow(
+        prefs.getString(KEY_BACKUP_ERROR, null)?.let { BackupFailure(it, prefs.getLong(KEY_BACKUP_ERROR_AT, 0L)) },
+    )
+    /** The last backup that failed, until one works again. */
+    val backupError: StateFlow<BackupFailure?> = _backupError.asStateFlow()
+
+    fun setBackupError(reason: String, at: Long) {
+        prefs.edit {
+            putString(KEY_BACKUP_ERROR, reason)
+            putLong(KEY_BACKUP_ERROR_AT, at)
+        }
+        _backupError.value = BackupFailure(reason, at)
     }
 
     companion object {
@@ -122,5 +148,8 @@ class SettingsStore(context: Context) {
         private const val KEY_GUIDE_SEEN = "reminder_guide_seen"
         private const val KEY_AUTO_UPDATE = "auto_update_check"
         private const val KEY_RESCHEDULE = "reschedule_needed"
+        private const val KEY_HIDE_AMOUNTS = "hide_amounts"
+        private const val KEY_BACKUP_ERROR = "backup_error"
+        private const val KEY_BACKUP_ERROR_AT = "backup_error_at"
     }
 }

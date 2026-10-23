@@ -6,6 +6,58 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Built as 0.9.7 (versionCode 17) for a try on the phone; not tagged yet.
+
+### Added
+
+- **Todos edited where they sit.** Tapping a todo turns its card into fields for the title and the
+  checklist: Enter adds an item, Enter on an empty one ends the edit, Backspace at the start of an
+  item joins it upward, several pasted lines become several items. It is written once, when the
+  edit ends (完成, Back, another row, the app leaving the screen). Notes, dates and the rest stay
+  in the full editor, which a right swipe (编辑, or a full swipe) opens; 完成 left the swipe, the
+  check box is a tap away.
+- **Selected todos as a checklist.** With todos selected, a new button makes them the checklist of
+  one new todo, in screen order, and opens it in place with the title to fill in. The new todo
+  shows wherever they all showed (their list, the earliest plan date and deadline); they go to the
+  trash, and the undo bar brings them back.
+- **A time of day for todos.** 安排时间 picks the day and, optionally, the hour and minute, which
+  is also when it reminds; quick add reads 明天下午3点, 周五 9:30, 下周一, 3天后 and the like out of the
+  title, highlights them, and 不识别 keeps the text as typed.
+- **The diary:** 一键排版 indents paragraphs, sets Chinese punctuation, folds blank lines and keeps
+  titles and lists as they are, with an undo; a mood picked from five emoji shows in the day, the
+  calendar and the week review.
+- **Habit rest days.** A long press on a habit marks today 休: it does not count as missed, and the
+  week review shows the rest days.
+- **Amounts as sums.** Balances, valuations and flows take 12000+350 and the like, with + − × ÷
+  keys under the field and the result beside it.
+- **Hide amounts.** The eye next to 净资产 masks every amount on the overview, the trend and the
+  widget.
+- **Food:** a right swipe on an entry records it again today (再来一份, or 记到今天 from another day).
+- **Diagnostics.** Crashes and the system's reasons for past exits are kept on the phone; 设置 ›
+  导出诊断 shares them with the version and commit. A failed or stale backup puts a red dot on the
+  settings button and a banner in settings.
+- Backup format 10 carries the diary mood and habit rest days (schema 9); older backups restore
+  without them.
+
+### Changed
+
+- **Food against the resting rate.** The day's intake is now compared with the basal metabolic
+  rate alone (Mifflin–St Jeor); the × 1.2 daily burn is gone, since how much a day really burns
+  cannot be measured here. The deficit is the one with no exercise at all, so any activity only
+  adds to it, and the card shows how much of the resting rate was eaten, in percent.
+
+### Fixed
+
+- A long press on a todo selected it and also opened it; it now only selects.
+- The stocktake field dropped the + of a sum.
+
+### Development
+
+- The release script refuses to publish unless versionCode went up, the unit tests (and the
+  screenshot baselines, when recorded) and lint pass, and the APK is signed with the release key;
+  it uploads the R8 mapping next to the APK. Lint runs against a baseline and fails on new issues;
+  debug builds run StrictMode; a real format-10 backup is kept as a test fixture.
+
 ## [0.9.6] - 2026-10-23
 
 ### Changed

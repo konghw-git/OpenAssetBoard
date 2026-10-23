@@ -24,10 +24,19 @@ android {
         applicationId = "com.assetboard"
         minSdk = 29
         targetSdk = 36
-        versionCode = 16
-        versionName = "0.9.6"
+        versionCode = 17
+        versionName = "0.9.7"
         // Where the in-app updater looks for releases; a fork points this at its own repository.
         buildConfigField("String", "UPDATE_REPO", "\"konghw-git/OpenAssetBoard\"")
+        // The commit a build came from, for 导出诊断 and for reading a release's crash stacks
+        // against its mapping file; "unknown" outside a git checkout.
+        val commit = runCatching {
+            providers.exec {
+                commandLine("git", "rev-parse", "--short", "HEAD")
+                isIgnoreExitValue = true
+            }.standardOutput.asText.get().trim()
+        }.getOrNull()?.takeIf { it.isNotEmpty() } ?: "unknown"
+        buildConfigField("String", "COMMIT_SHA", "\"$commit\"")
     }
 
     signingConfigs {
@@ -64,6 +73,13 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // What lint found when it was switched on is frozen in the baseline; anything new fails
+    // lintRelease, which the release script runs before building.
+    lint {
+        abortOnError = true
+        baseline = file("lint-baseline.xml")
     }
 
     // MigrationTestHelper reads the exported Room schemas from the app's assets under Robolectric;

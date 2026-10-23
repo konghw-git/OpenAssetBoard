@@ -50,6 +50,7 @@ import com.assetboard.domain.Money
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.AccountAvatar
+import com.assetboard.ui.components.CalcKeys
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.DateField
 import com.assetboard.ui.components.ErrorDialog
@@ -186,6 +187,7 @@ fun ValuationEditScreen(accountId: String, valuationId: String?, onBack: () -> U
                     shape = FieldShape,
                     colors = glassFieldColors(),
                 )
+                if (!vm.isBaseline) CalcKeys(vm.input, { vm.input = it }, Modifier.padding(top = 8.dp))
                 val implied = vm.implied()
                 val parsed = Money.parse(vm.input)
                 if (implied != null) {

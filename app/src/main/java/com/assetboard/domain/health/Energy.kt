@@ -12,9 +12,10 @@ import java.util.Locale
 
 /**
  * Food energy and what a day burns, as pure functions. Energy is cal (1/1000 kcal), nutrients mg.
- * The burn is an estimate from the profile and the day's weight: Mifflin–St Jeor for the resting
- * rate, times 1.2 for a day without exercise. There is no target and no advice: the deficit is
- * only what the day burns minus what was eaten.
+ * The baseline is the resting rate from the profile and the day's weight (Mifflin–St Jeor). What
+ * a day burns on top of it, walking about or training, cannot be measured here, so it is left out:
+ * the deficit is the resting rate minus what was eaten, the least a day can have, and any activity
+ * only adds to it. There is no target and no advice.
  */
 object Energy {
     /** 1 kcal = 4.184 kJ, the conversion GB 28050 labels use. */
@@ -31,9 +32,6 @@ object Energy {
     /** Portions are counted in halves: 2 份 is 4 of [SERVING_PER]. */
     const val SERVING_PER = 2
     const val SERVINGS_MAX_HALVES = 99 * SERVING_PER
-
-    /** A day with no exercise, in tenths: the burn is the resting rate times 1.2. */
-    private const val SEDENTARY_TENTHS = 12L
 
     // ------------------------------------------------------------ scaling
 
@@ -99,7 +97,7 @@ object Energy {
         return records.lastOrNull { it.date <= day } ?: records.firstOrNull()
     }
 
-    class Burn(val restingCal: Long, val totalCal: Long, val weight: BodyMeasurement)
+    class Burn(val restingCal: Long, val weight: BodyMeasurement)
 
     /**
      * What [date] burns, or null without a profile or a weigh-in, and under 18, where the formula
@@ -112,15 +110,17 @@ object Energy {
         if (age < 18) return null
         val resting = restingCal(profile.sex, age, w.weightG, profile.heightMm)
         if (resting <= 0) return null
-        return Burn(resting, (resting * SEDENTARY_TENTHS + 5) / 10, w)
+        return Burn(resting, w)
     }
 
     /** One day: what was eaten, in order, and what it burned. */
     class Day(val date: LocalDate, val entries: List<FoodEntry>, val burn: Burn?) {
         val totals: Totals = totals(entries)
         val intakeCal: Long get() = totals.energyCal
-        /** Burned minus eaten; negative when more was eaten. Null without a burn. */
-        val deficitCal: Long? get() = burn?.let { it.totalCal - intakeCal }
+        /** The resting rate minus what was eaten; negative when more was eaten. Null without a burn. */
+        val deficitCal: Long? get() = burn?.let { it.restingCal - intakeCal }
+        /** What was eaten as a share of the resting rate, in whole percent rounded half up. */
+        val percentOfResting: Int? get() = burn?.let { ((intakeCal * 100 + it.restingCal / 2) / it.restingCal).toInt() }
     }
 
     fun day(date: LocalDate, entries: List<FoodEntry>, profile: HealthProfile?, records: List<BodyMeasurement>): Day {

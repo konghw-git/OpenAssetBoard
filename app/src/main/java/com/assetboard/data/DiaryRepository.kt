@@ -3,6 +3,7 @@ package com.assetboard.data
 import com.assetboard.domain.LedgerException
 import com.assetboard.domain.ensure
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
@@ -102,6 +103,24 @@ class DiaryRepository(
     }
 
     suspend fun discardDraft(id: String) = serial { dao.deleteDraft(id) }
+
+    /** The days of [from]..[to] with a mood, as date to [com.assetboard.domain.Mood] value. */
+    fun observeMoods(from: LocalDate, to: LocalDate): Flow<Map<String, Int>> =
+        dao.observeMoods(from.toString(), to.toString()).map { rows -> rows.associate { it.date to it.mood } }
+
+    /**
+     * Sets [date]'s mood, or clears it with null. A day without an entry gets an empty one to
+     * hold it, which the first text written that day then takes over. Never touches the body.
+     */
+    suspend fun setMood(date: LocalDate, mood: Int?) = serial {
+        ensure(mood == null || com.assetboard.domain.Mood.of(mood) != null) { "无效的心情" }
+        val now = clock()
+        val e = dao.liveByDate(date.toString())
+        when {
+            e != null -> dao.setMood(e.id, mood, now)
+            mood != null -> dao.insert(DiaryEntry(newId(), date.toString(), "", createdAt = now, updatedAt = now, mood = mood))
+        }
+    }
 
     /** Moves the entry to the trash as its own batch; open sessions on it become stale. */
     suspend fun delete(entryId: String): String = serial {

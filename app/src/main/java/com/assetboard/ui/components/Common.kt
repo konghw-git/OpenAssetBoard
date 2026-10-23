@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,6 +97,16 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, trailing: @Compo
     }
 }
 
+/** Whether amounts show as [MASKED]: the 隐藏金额 eye on the overview, set app-wide. */
+val LocalHideAmounts = staticCompositionLocalOf { false }
+
+/** What a hidden amount reads as. */
+const val MASKED = "****"
+
+/** [text] unless amounts are hidden; for amounts written outside [MoneyText]. */
+@Composable
+fun amount(text: String): String = if (LocalHideAmounts.current) MASKED else text
+
 @Composable
 fun MoneyText(
     cents: Long,
@@ -106,13 +117,43 @@ fun MoneyText(
     fontWeight: FontWeight? = null,
 ) {
     Text(
-        text = Money.format(cents, signed),
+        text = amount(Money.format(cents, signed)),
         modifier = modifier,
         style = style.merge(NumberStyle),
         color = color,
         fontWeight = fontWeight,
         maxLines = 1,
     )
+}
+
+/**
+ * + − × ÷ under an amount field, which the number keyboard lacks: each adds its sign to [input]
+ * (replacing a sign already at the end), and once [input] is a sum, what it comes to. The field
+ * itself reads the sum through [Money.parse].
+ */
+@Composable
+fun CalcKeys(input: String, onInput: (String) -> Unit, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf("+", "−", "×", "÷").forEach { op ->
+            Box(
+                Modifier.size(30.dp).clip(CircleShape).background(cs.primary.copy(alpha = 0.10f))
+                    .clickable { onInput(input.trimEnd().trimEnd('+', '-', '−', '×', '÷', '*', '/') + op) },
+                contentAlignment = Alignment.Center,
+            ) { Text(op, style = MaterialTheme.typography.titleMedium, color = cs.primary) }
+        }
+        if (Money.isExpression(input)) {
+            val result = Money.parse(input)
+            Text(
+                if (result != null) "= " + Money.format(result) else "算式不完整",
+                style = MaterialTheme.typography.labelLarge.merge(NumberStyle),
+                color = if (result != null) cs.primary else cs.error,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+    }
 }
 
 @Composable

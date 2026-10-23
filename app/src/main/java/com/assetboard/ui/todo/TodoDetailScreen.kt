@@ -28,6 +28,8 @@ import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.Schedule
+import com.assetboard.data.TimeChange
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -242,6 +244,12 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
     var dialog by remember { mutableStateOf<String?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val askNotifications = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {}
+    // The first time of day is the moment to ask for the notification permission.
+    fun askForNotifications() {
+        if (android.os.Build.VERSION.SDK_INT >= 33 && !com.assetboard.reminder.ReminderScheduler.hasNotificationPermission(context)) {
+            askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     val record = t.kind == TodoKind.COMPLETION
     val done = !TodoViews.isOpen(t)
     val ended = t.kind == TodoKind.REPEAT_SOURCE && t.repeatEndedAt != null
@@ -356,22 +364,29 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
             today,
             allowSomeday = t.kind == TodoKind.ORDINARY,
             allowClear = t.kind == TodoKind.ORDINARY,
-            onPick = { d, someday ->
+            onPick = { d, someday, time ->
                 dialog = null
-                if (someday) vm.setSomeday(true) else vm.setPlan(d, t.remindTime?.let(LocalTime::parse))
+                val at = when (time) {
+                    TimeChange.Keep -> t.remindTime?.let(LocalTime::parse)
+                    TimeChange.Clear -> null
+                    is TimeChange.At -> time.time
+                }
+                if (someday) vm.setSomeday(true) else vm.setPlan(d, at)
+                if (at != null) askForNotifications()
             },
             onDismiss = { dialog = null },
+            current = TodoViews.parse(t.planDate),
+            currentTime = t.remindTime?.let(LocalTime::parse),
         )
         "remind" -> TimePickDialog(
             initial = t.remindTime?.let(LocalTime::parse),
+            title = "几点",
+            clearLabel = "不定时",
             onDismiss = { dialog = null },
             onPick = { time ->
                 dialog = null
                 vm.setPlan(TodoViews.parse(t.planDate) ?: today, time)
-                // The first reminder is the moment to ask for the notification permission.
-                if (android.os.Build.VERSION.SDK_INT >= 33 && !com.assetboard.reminder.ReminderScheduler.hasNotificationPermission(context)) {
-                    askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                }
+                askForNotifications()
             },
             onClear = if (t.remindTime != null) ({ dialog = null; vm.setPlan(TodoViews.parse(t.planDate), null) }) else null,
         )
@@ -422,10 +437,10 @@ private fun Schedule(t: Todo, today: LocalDate, editable: Boolean, onDialog: (St
         )
         RowDivider(58.dp)
         ListRow(
-            title = "提醒",
-            subtitle = if (t.someday) "「以后再说」的待办不提醒" else null,
-            leading = { Icon(Icons.Outlined.Notifications, null, tint = cs.primary) },
-            trailing = { Text(t.remindTime ?: "不提醒", color = cs.onSurfaceVariant) },
+            title = "时间",
+            subtitle = if (t.someday) "「以后再说」的待办不定时" else "到点提醒",
+            leading = { Icon(Icons.Outlined.Schedule, null, tint = cs.primary) },
+            trailing = { Text(t.remindTime ?: "不定时", color = cs.onSurfaceVariant) },
             onClick = if (editable && !t.someday) ({ onDialog("remind") }) else null,
         )
         if (t.remindTime != null) {

@@ -25,6 +25,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -317,16 +318,25 @@ internal fun DialHub(done: Int, total: Int, open: Boolean, modifier: Modifier, o
 // ---------------------------------------------------------------- the habit battery
 
 /**
- * The daily habits as the cells of an upright battery. Each tap charges a cell; the charge color
- * climbs from amber to green as more are done, and a full battery lights its cap. The 每日 pill
- * in the corner opens [onCustomize]. Fewer habits keep their cells at a comfortable height
- * instead of stretching them over the whole body.
+ * The daily habits as the cells of an upright battery. Each tap charges a cell; a long press
+ * gives the habit the day off ([skipped]), which takes its cell out of the count rather than
+ * leaving it empty. The charge color climbs from amber to green as more are done, and a full
+ * battery lights its cap. The 每日 pill in the corner opens [onCustomize]. Fewer habits keep their
+ * cells at a comfortable height instead of stretching them over the whole body.
  */
 @Composable
-internal fun HabitBattery(habits: List<Habit>, checked: Set<String>, onToggle: (Habit) -> Unit, onCustomize: () -> Unit, modifier: Modifier = Modifier) {
+internal fun HabitBattery(
+    habits: List<Habit>,
+    checked: Set<String>,
+    onToggle: (Habit) -> Unit,
+    onCustomize: () -> Unit,
+    modifier: Modifier = Modifier,
+    skipped: Set<String> = emptySet(),
+    onSkip: (Habit) -> Unit = {},
+) {
     val cs = MaterialTheme.colorScheme
     val level = habits.count { it.key in checked }
-    val total = habits.size
+    val total = habits.count { it.key !in skipped || it.key in checked }
     val full = total > 0 && level == total
     val charge by animateColorAsState(habitCharge(level, total), tween(400), label = "charge")
     val flow = rememberInfiniteTransition(label = "battery")
@@ -362,7 +372,11 @@ internal fun HabitBattery(habits: List<Habit>, checked: Set<String>, onToggle: (
         ) {
             habits.forEach { h ->
                 key(h.key) {
-                    HabitCell(h, h.key in checked, charge, shimmer, Modifier.weight(1f, fill = false).fillMaxWidth().height(MaxCell)) { onToggle(h) }
+                    val on = h.key in checked
+                    HabitCell(
+                        h, on, rest = !on && h.key in skipped, charge, shimmer, Modifier.weight(1f, fill = false).fillMaxWidth().height(MaxCell),
+                        onLongClick = { onSkip(h) },
+                    ) { onToggle(h) }
                 }
             }
         }
@@ -393,8 +407,9 @@ private fun CustomizePill(text: String, color: Color, onClick: () -> Unit) {
     }
 }
 
+/** One habit's cell: charged when done, hatched and marked 休 on a rest day ([rest]). */
 @Composable
-private fun HabitCell(h: Habit, on: Boolean, charge: Color, shimmer: Float, modifier: Modifier, onClick: () -> Unit) {
+private fun HabitCell(h: Habit, on: Boolean, rest: Boolean, charge: Color, shimmer: Float, modifier: Modifier, onLongClick: () -> Unit, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
     // The cell fills left to right when charged, and drains back when unchecked.
@@ -402,12 +417,22 @@ private fun HabitCell(h: Habit, on: Boolean, charge: Color, shimmer: Float, modi
     val source = remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(12.dp)
     val empty = cs.surfaceContainerHighest.copy(alpha = 0.6f)
+    val hatch = cs.outline.copy(alpha = 0.16f)
     Row(
         modifier
             .pressScale(source, 0.95f)
             .clip(shape)
             .drawBehind {
                 drawRect(empty)
+                if (rest) {
+                    // Thin diagonal strokes: a day off, not an empty cell.
+                    val step = 7.dp.toPx()
+                    var x = -size.height
+                    while (x < size.width) {
+                        drawLine(hatch, Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = 1.dp.toPx())
+                        x += step
+                    }
+                }
                 if (level > 0f) {
                     val w = size.width * level
                     drawRect(Brush.horizontalGradient(listOf(charge.copy(alpha = 0.85f), charge), endX = w), size = Size(w, size.height))
@@ -418,21 +443,37 @@ private fun HabitCell(h: Habit, on: Boolean, charge: Color, shimmer: Float, modi
                     }
                 }
             }
-            .clickable(interactionSource = source, indication = null) {
+            .combinedClickable(
+                interactionSource = source,
+                indication = null,
+                onLongClickLabel = if (rest) "取消休息" else "今天休息",
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                },
+            ) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onClick()
             }
             .semantics(mergeDescendants = true) {
                 role = Role.Checkbox
-                stateDescription = if (on) "已完成" else "未完成"
+                stateDescription = when {
+                    on -> "已完成"
+                    rest -> "今天休息"
+                    else -> "未完成"
+                }
             }
             .padding(start = 8.dp, end = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val fg = lerp(cs.onSurface, Color.White, level)
-        Icon(h.iconVector, null, tint = lerp(h.tint, Color.White, level), modifier = Modifier.size(15.dp))
+        val fg = lerp(if (rest) cs.outline else cs.onSurface, Color.White, level)
+        Icon(h.iconVector, null, tint = lerp(if (rest) cs.outline else h.tint, Color.White, level), modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
         Text(h.label, fontSize = 12.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, color = fg, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
+        if (rest) {
+            Text("休", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = cs.outline, modifier = Modifier.width(17.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            return@Row
+        }
         Box(
             Modifier.size(17.dp).clip(CircleShape)
                 .background(if (on) Color.White else Color.Transparent)
@@ -462,12 +503,14 @@ internal fun ViewsAndHabits(
     onHabit: (Habit) -> Unit,
     onCustomize: () -> Unit,
     modifier: Modifier = Modifier,
+    skipped: Set<String> = emptySet(),
+    onSkipHabit: (Habit) -> Unit = {},
 ) {
     BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         val ring = (maxWidth * 0.58f).coerceAtMost(236.dp)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ViewRing(d, today, selected, doneToday, totalToday, composing, onSelect, onHub, ring)
-            HabitBattery(habits, checked, onHabit, onCustomize, Modifier.weight(1f).height(ring).padding(vertical = 2.dp))
+            HabitBattery(habits, checked, onHabit, onCustomize, Modifier.weight(1f).height(ring).padding(vertical = 2.dp), skipped, onSkipHabit)
         }
     }
 }

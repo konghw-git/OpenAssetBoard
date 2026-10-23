@@ -9,3 +9,5 @@ captures/
 *.jks
 *.keystore
 keystore.properties
+# Screenshot baselines: recorded and checked on this machine (see the README).
+/app/screenshots/

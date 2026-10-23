@@ -39,7 +39,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +70,7 @@ import com.assetboard.domain.Money
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.AccountAvatar
+import com.assetboard.ui.components.CalcKeys
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.DatePickDialog
 import com.assetboard.ui.components.Dot
@@ -148,7 +151,8 @@ class StocktakeViewModel(private val container: AppContainer, private val snapsh
     }
 
     fun onInput(accountId: String, text: String) {
-        val clean = text.filter { it.isDigit() || it == '.' || it == '-' }
+        // Digits, and the signs of a sum ([Money.parse] works it out).
+        val clean = text.filter { it.isDigit() || it in ".-+*/×÷−()" }
         _ui.update { s -> s.copy(rows = s.rows.map { if (it.account.id == accountId) it.copy(input = clean) else it }) }
     }
 
@@ -354,6 +358,8 @@ private fun StockRowItem(r: StockRow, onInput: (String, String) -> Unit) {
     val focus = LocalFocusManager.current
     val cs = MaterialTheme.colorScheme
     val invalid = r.parsed == null
+    // The + − × ÷ keys show under the field being typed in.
+    var focused by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
@@ -390,11 +396,13 @@ private fun StockRowItem(r: StockRow, onInput: (String, String) -> Unit) {
                 keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
                 modifier = Modifier
                     .widthIn(min = 120.dp, max = 160.dp)
+                    .onFocusChanged { focused = it.isFocused }
                     .clip(MaterialTheme.shapes.small)
                     .background(cs.surfaceContainerHigh)
                     .border(1.dp, if (invalid) cs.error else if (r.changed) cs.primary else cs.surfaceContainerHigh, MaterialTheme.shapes.small)
                     .padding(horizontal = 12.dp, vertical = 9.dp),
             )
+            if (focused) CalcKeys(r.input, { onInput(r.account.id, it) }, Modifier.padding(top = 6.dp))
             if (r.changed) {
                 val d = r.stored(r.parsed!!) - r.stored(r.original)
                 Text(

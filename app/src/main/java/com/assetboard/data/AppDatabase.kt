@@ -158,11 +158,11 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun weekDao(): WeekDao
 
     companion object {
-        const val SCHEMA_VERSION = 8
+        const val SCHEMA_VERSION = 9
 
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "asset-board.db")
-                .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7, Migrations.MIGRATION_7_8)
+                .addMigrations(*Migrations.ALL)
                 .build()
     }
 }

@@ -43,7 +43,12 @@ object Money {
         return sign + (if (strip) v.stripTrailingZeros() else v).toPlainString() + name
     }
 
-    /** Accepts "1,660.24", "1660.2", "¥12". Returns null for anything that is not a plain amount. */
+    /**
+     * Accepts "1,660.24", "1660.2", "¥12", and a sum worked out on the spot: "12000+350",
+     * "3×1999.5", "(800-120)/2" (+ − × ÷ or + - * /, × and ÷ first, the result rounded to the
+     * cent). Returns null for anything else: a plain amount with more than two decimals, a
+     * division by zero, a stray sign.
+     */
     fun parse(input: String): Long? {
         val t = input.trim().replace(",", "").replace("，", "").replace("¥", "").replace(" ", "")
         if (t.isEmpty()) return null
@@ -54,7 +59,71 @@ object Money {
         } catch (e: ArithmeticException) {
             null
         } catch (e: NumberFormatException) {
+            expression(t)
+        }
+    }
+
+    /** Whether [input] is a sum to work out rather than a plain amount, so the field can show the result. */
+    fun isExpression(input: String): Boolean = OPERATORS.containsMatchIn(input.trim().removePrefix("-").removePrefix("−"))
+
+    private val OPERATORS = Regex("[+\\-*/×÷xX＋－−]")
+
+    private fun expression(t: String): Long? {
+        val s = t.replace('×', '*').replace('x', '*').replace('X', '*').replace('÷', '/')
+            .replace('＋', '+').replace('－', '-').replace('−', '-').replace('（', '(').replace('）', ')')
+        if (!s.any { it in "+-*/" }) return null
+        return try {
+            Expression(s).value().setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact()
+        } catch (e: ArithmeticException) {
             null
+        } catch (e: IllegalArgumentException) {
+            null
+        }
+    }
+
+    /** + and − of × and ÷ of numbers, a minus sign or a bracket; anything left over is an error. */
+    private class Expression(private val s: String) {
+        private var i = 0
+
+        fun value(): BigDecimal = sum().also { require(i == s.length) }
+
+        private fun sum(): BigDecimal {
+            var v = product()
+            while (i < s.length && s[i] in "+-") {
+                val op = s[i++]
+                val r = product()
+                v = if (op == '+') v.add(r) else v.subtract(r)
+            }
+            return v
+        }
+
+        private fun product(): BigDecimal {
+            var v = factor()
+            while (i < s.length && s[i] in "*/") {
+                val op = s[i++]
+                val r = factor()
+                v = if (op == '*') v.multiply(r) else v.divide(r, 10, RoundingMode.HALF_UP)
+            }
+            return v
+        }
+
+        private fun factor(): BigDecimal {
+            require(i < s.length)
+            if (s[i] == '-') {
+                i++
+                return factor().negate()
+            }
+            if (s[i] == '(') {
+                i++
+                val v = sum()
+                require(i < s.length && s[i] == ')')
+                i++
+                return v
+            }
+            val start = i
+            while (i < s.length && (s[i].isDigit() || s[i] == '.')) i++
+            require(i > start)
+            return BigDecimal(s.substring(start, i))
         }
     }
 

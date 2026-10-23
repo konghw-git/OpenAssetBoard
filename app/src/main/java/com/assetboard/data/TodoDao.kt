@@ -113,6 +113,9 @@ interface TodoDao {
     @Query("DELETE FROM todo_lists") suspend fun clearLists()
 }
 
+/** A day and its mood, for the calendar. */
+data class DayMood(val date: String, val mood: Int)
+
 @Dao
 interface DiaryDao {
     @Query("SELECT * FROM diary_entries WHERE date = :date AND deleted_at IS NULL LIMIT 1") suspend fun liveByDate(date: String): DiaryEntry?
@@ -139,6 +142,13 @@ interface DiaryDao {
     /** The versioned body write: affects 0 rows when the session's view is stale. */
     @Query("UPDATE diary_entries SET body = :body, body_rev = body_rev + 1, updated_at = :now WHERE id = :id AND deleted_at IS NULL AND body_rev = :expectedRev")
     suspend fun updateBody(id: String, body: String, expectedRev: Long, now: Long): Int
+
+    /** The mood alone: never a body write, so it neither needs nor bumps `body_rev`. */
+    @Query("UPDATE diary_entries SET mood = :mood, updated_at = :now WHERE id = :id AND deleted_at IS NULL")
+    suspend fun setMood(id: String, mood: Int?, now: Long): Int
+
+    @Query("SELECT date, mood FROM diary_entries WHERE deleted_at IS NULL AND mood IS NOT NULL AND date >= :from AND date <= :to")
+    fun observeMoods(from: String, to: String): Flow<List<DayMood>>
 
     @Query("UPDATE diary_entries SET weather_rev = weather_rev + 1 WHERE id = :id") suspend fun bumpWeatherRev(id: String)
     @Query(

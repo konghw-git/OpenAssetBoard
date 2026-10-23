@@ -71,6 +71,7 @@ import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.HeaderAction
+import com.assetboard.ui.components.SettingsAction
 import com.assetboard.ui.components.PullToCreateBox
 import com.assetboard.ui.components.rememberPullToCreate
 import com.assetboard.ui.components.TabHeader
@@ -302,7 +303,7 @@ fun NotesScreen(
                     TabHeader("笔记", subtitle(notes.size, topics.size)) {
                         HeaderAction(Icons.Outlined.Search, "搜索笔记", onSearch)
                         SortAction(sort, vm::setSort)
-                        HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
+                        SettingsAction(onSettings)
                     }
                 },
             ) { padding ->

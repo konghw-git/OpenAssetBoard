@@ -100,6 +100,7 @@ import com.assetboard.data.Weeks
 import com.assetboard.domain.Dates
 import com.assetboard.domain.Habit
 import com.assetboard.domain.Money
+import com.assetboard.domain.Mood
 import com.assetboard.domain.WeekStats
 import com.assetboard.domain.health.Health
 import com.assetboard.domain.todo.Recurrence
@@ -360,7 +361,10 @@ private fun WeekHero(start: LocalDate, stats: WeekStats?, onPrev: () -> Unit, on
         if (s != null) {
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                s.habits.forEach { (h, n) -> HabitCount(h, n, s.diaryOf.coerceAtLeast(1), compact = s.habits.size > 6) }
+                s.habits.forEach { (h, n) ->
+                    val rest = s.habitRestDays[h] ?: 0
+                    HabitCount(h, n, (s.diaryOf - rest).coerceAtLeast(1), rest, compact = s.habits.size > 6)
+                }
             }
         }
     }
@@ -380,9 +384,9 @@ private fun RowScope.Tile(label: String, value: String, unit: String) {
     }
 }
 
-/** A habit's icon over how many days it was ticked; a full week glows. */
+/** A habit's icon over how many days it was ticked, and its rest days; a full week glows. */
 @Composable
-private fun HabitCount(h: Habit, n: Int, of: Int, compact: Boolean) {
+private fun HabitCount(h: Habit, n: Int, of: Int, rest: Int, compact: Boolean) {
     val extra = AppTheme.extra
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
@@ -393,6 +397,7 @@ private fun HabitCount(h: Habit, n: Int, of: Int, compact: Boolean) {
         }
         Spacer(Modifier.height(4.dp))
         Text("$n 天", style = MaterialTheme.typography.labelSmall, color = extra.onHeroMuted)
+        if (rest > 0) Text("休 $rest", style = MaterialTheme.typography.labelSmall, color = extra.onHeroMuted.copy(alpha = 0.7f))
     }
 }
 
@@ -404,7 +409,9 @@ private fun DayList(start: LocalDate, today: LocalDate, entries: List<DiaryEntry
     val shape = RoundedCornerShape(22.dp)
     Column(Modifier.fillMaxWidth().glass(shape, glass).clip(shape).padding(vertical = 6.dp)) {
         Weeks.days(start).forEach { d ->
-            val body = entries.firstOrNull { it.date == d.toString() }?.body?.takeIf { it.isNotBlank() }
+            val entry = entries.firstOrNull { it.date == d.toString() }
+            val body = entry?.body?.takeIf { it.isNotBlank() }
+            val mood = Mood.of(entry?.mood)
             val future = d.isAfter(today)
             val expanded = open == d.toString() && body != null
             Column(
@@ -423,6 +430,7 @@ private fun DayList(start: LocalDate, today: LocalDate, entries: List<DiaryEntry
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
+                    mood?.let { Text(it.emoji, fontSize = 16.sp, modifier = Modifier.padding(start = 6.dp)) }
                     if (body == null && !future) Text("去写", style = MaterialTheme.typography.labelMedium, color = cs.primary)
                 }
                 AnimatedVisibility(expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {

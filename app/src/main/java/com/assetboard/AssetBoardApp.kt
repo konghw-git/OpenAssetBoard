@@ -2,6 +2,8 @@ package com.assetboard
 
 import android.app.Application
 import android.content.Context
+import android.os.StrictMode
+import com.assetboard.data.CrashLog
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -109,7 +111,10 @@ class AssetBoardApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
+        if (BuildConfig.DEBUG) strictMode()
         container = AppContainer(this)
+        container.appScope.launch { runCatching { CrashLog.recordExitReasons(this@AssetBoardApp, container.settings) } }
         val work = WorkManager.getInstance(this)
         work.enqueueUniquePeriodicWork(
             "daily-backup",
@@ -126,6 +131,17 @@ class AssetBoardApp : Application() {
             runCatching { container.holidays.init() }
             runCatching { container.reminders.onAppStart() }
         }
+    }
+
+    /**
+     * Debug builds only: disk and network on the main thread, and SQLite cursors or streams left
+     * open, show up in logcat. Logged, never fatal, so it only tells.
+     */
+    private fun strictMode() {
+        StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build())
+        StrictMode.setVmPolicy(
+            StrictMode.VmPolicy.Builder().detectLeakedSqlLiteObjects().detectLeakedClosableObjects().detectActivityLeaks().penaltyLog().build(),
+        )
     }
 }
 

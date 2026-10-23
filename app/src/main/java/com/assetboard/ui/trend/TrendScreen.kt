@@ -64,6 +64,7 @@ import com.assetboard.ui.components.MoneyText
 import com.assetboard.ui.components.RowDivider
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
+import com.assetboard.ui.components.amount
 import com.assetboard.ui.components.animatedCents
 import com.assetboard.ui.components.appear
 import com.assetboard.ui.components.pressScale
@@ -159,7 +160,7 @@ private fun Headline(p: NetWorthTrend.Period, range: ChartRange) {
         Text("净资产 · ${Dates.date(p.end.snapshot.at)} 盘点", color = extra.onHeroMuted, style = MaterialTheme.typography.labelLarge)
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 6.dp)) {
             Text("¥", color = extra.onHero, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 4.dp, end = 4.dp))
-            Text(Money.format(net), color = extra.onHero, style = MaterialTheme.typography.displaySmall, maxLines = 1)
+            Text(amount(Money.format(net)), color = extra.onHero, style = MaterialTheme.typography.displaySmall, maxLines = 1)
         }
         Spacer(Modifier.height(10.dp))
         if (p.points.size < 2) {
@@ -177,7 +178,7 @@ private fun Headline(p: NetWorthTrend.Period, range: ChartRange) {
                     Icon(if (c >= 0) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, null, tint = extra.onHero, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
                     val ratio = p.changeRatio?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.US, "%.2f", it * 100) + "%)" }.orEmpty()
-                    Text(Money.format(c, signed = true) + ratio, color = extra.onHero, style = MaterialTheme.typography.labelLarge.merge(NumberStyle))
+                    Text(amount(Money.format(c, signed = true)) + ratio, color = extra.onHero, style = MaterialTheme.typography.labelLarge.merge(NumberStyle))
                 }
                 Spacer(Modifier.width(8.dp))
                 Text("较 ${Dates.date(p.start.snapshot.at)}", color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium)
@@ -207,7 +208,7 @@ private fun HeadStat(label: String, p: NetWorthPoint, modifier: Modifier) {
     val extra = AppTheme.extra
     Column(modifier) {
         Text("$label · ${Dates.short(p.snapshot.at)}", color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall)
-        Text(Money.short(p.netWorth), color = extra.onHero, style = MaterialTheme.typography.titleSmall.merge(NumberStyle))
+        Text(amount(Money.short(p.netWorth)), color = extra.onHero, style = MaterialTheme.typography.titleSmall.merge(NumberStyle))
     }
 }
 
@@ -259,7 +260,7 @@ private fun Legend(label: String, cents: Long, color: Color, modifier: Modifier)
             Spacer(Modifier.width(6.dp))
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text(Money.short(cents), style = MaterialTheme.typography.titleSmall.merge(NumberStyle), maxLines = 1)
+        Text(amount(Money.short(cents)), style = MaterialTheme.typography.titleSmall.merge(NumberStyle), maxLines = 1)
     }
 }
 
@@ -297,7 +298,7 @@ private fun ChangeCard(p: NetWorthTrend.Period, ledger: LedgerData?) {
                             Box(Modifier.fillMaxWidth(abs(g.effect).toFloat() / biggest).height(5.dp).clip(RoundedCornerShape(50)).background(extra.signed(g.effect).copy(alpha = 0.7f)))
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text("${Money.short(g.start)} → ${Money.short(g.end)}", style = MaterialTheme.typography.labelSmall.merge(NumberStyle), color = cs.onSurfaceVariant)
+                        Text(amount(Money.short(g.start)) + " → " + amount(Money.short(g.end)), style = MaterialTheme.typography.labelSmall.merge(NumberStyle), color = cs.onSurfaceVariant)
                     }
                 }
             }
@@ -332,7 +333,7 @@ private fun Stocktakes(all: List<NetWorthPoint>, onOpen: (String) -> Unit) {
             val prev = desc.getOrNull(i + 1)
             ListRow(
                 title = Dates.date(p.snapshot.at),
-                subtitle = "资产 ${Money.short(p.assets)} · 负债 ${Money.short(p.liabilities)}",
+                subtitle = "资产 " + amount(Money.short(p.assets)) + " · 负债 " + amount(Money.short(p.liabilities)),
                 onClick = { onOpen(p.snapshot.id) },
                 trailing = {
                     Column(horizontalAlignment = Alignment.End) {

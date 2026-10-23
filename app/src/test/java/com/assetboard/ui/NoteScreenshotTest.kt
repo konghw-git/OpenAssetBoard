@@ -38,7 +38,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
 
-/** The notes tab and its pages with realistic data, into build/screenshots/ for visual review. Not an assertion suite. */
+/** The notes tab and its pages with realistic data, into screenshots/ (the baselines the tests are checked against). Not an assertion suite. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
@@ -98,7 +98,7 @@ class NoteScreenshotTest {
     private fun capture(name: String) {
         compose.mainClock.advanceTimeBy(1_500)
         compose.waitForIdle()
-        compose.onRoot().captureRoboImage("build/screenshots/$name.png")
+        compose.onRoot().captureRoboImage("screenshots/$name.png", roborazziOptions = SHOT_OPTIONS)
     }
 
     private fun openTab() {

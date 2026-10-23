@@ -54,7 +54,22 @@ data class Habit(
     }
 }
 
-/** A day's habits and which of them were checked. */
-data class HabitDay(val shown: List<Habit>, val checked: Set<String>) {
+/** A day's habits, which of them were checked and which had the day off. */
+data class HabitDay(val shown: List<Habit>, val checked: Set<String>, val skipped: Set<String> = emptySet()) {
     val done: Int get() = shown.count { it.key in checked }
+    /** The habits the day asked for: a rest day takes one out. */
+    val due: Int get() = shown.count { it.key !in skipped }
+}
+
+/** A day's mood: five faces, stored as 1 to 5. Shown only; nothing counts it. */
+enum class Mood(val value: Int, val emoji: String, val label: String) {
+    AWFUL(1, "😣", "难受"),
+    LOW(2, "😔", "低落"),
+    CALM(3, "🙂", "平静"),
+    HAPPY(4, "😊", "开心"),
+    GREAT(5, "🥰", "超开心");
+
+    companion object {
+        fun of(value: Int?): Mood? = entries.firstOrNull { it.value == value }
+    }
 }

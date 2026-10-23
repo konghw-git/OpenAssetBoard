@@ -88,6 +88,16 @@ data class TodoDraft(
     val important: Boolean = false,
 )
 
+/** A checklist line as an edit in place left it: [id] for an item that was there, null for a new one. */
+data class InlineItem(val id: String?, val text: String)
+
+/** What a reschedule does to the time of day: keeps it, clears it or sets it. */
+sealed interface TimeChange {
+    data object Keep : TimeChange
+    data object Clear : TimeChange
+    data class At(val time: LocalTime) : TimeChange
+}
+
 /**
  * Every todo write: validated against [TodoInvariants], one transaction under the [WriteGate],
  * then [onChanged] gets the ids whose reminders may have changed.
@@ -268,8 +278,11 @@ class TodoRepository(
         save(t.copy(listId = listId, sectionId = section?.id, sortOrder = dao.maxTodoOrder() + 1).bump(seq = false))
     }
 
-    /** Batch reschedule from multi-select or the swipe sheet. */
-    suspend fun reschedule(ids: List<String>, date: LocalDate?, someday: Boolean) = tx {
+    /**
+     * Batch reschedule from multi-select or the swipe sheet: the day, and with it the time of day
+     * per [time]. Without a day there is no time.
+     */
+    suspend fun reschedule(ids: List<String>, date: LocalDate?, someday: Boolean, time: TimeChange = TimeChange.Keep) = tx {
         for (id in ids) {
             val t = dao.todo(id)?.takeIf { TodoViews.isOpen(it) } ?: continue
             if (someday) {
@@ -277,7 +290,13 @@ class TodoRepository(
                 if (!t.someday) save(t.copy(someday = true, planDate = null, remindTime = null, snoozeAt = null).bump())
             } else {
                 if (t.kind == TodoKind.REPEAT_SOURCE && date == null) continue
-                val next = t.copy(planDate = date?.toString(), remindTime = t.remindTime.takeIf { date != null }, someday = false)
+                val remind = when (time) {
+                    TimeChange.Keep -> t.remindTime
+                    TimeChange.Clear -> null
+                    is TimeChange.At -> time.time.toString()
+                }
+                val next = t.copy(planDate = date?.toString(), remindTime = remind.takeIf { date != null }, someday = false)
+                if (next.planDate == t.planDate && next.remindTime == t.remindTime && !t.someday) continue
                 save(ReminderState.afterManualEdit(next, now, zone()).bump())
             }
         }
@@ -517,6 +536,82 @@ class TodoRepository(
     }
 
     // ------------------------------------------------------------ checklist
+
+    /**
+     * What an edit in place on the list leaves behind, written at once when it ends: the title (a
+     * blank one keeps the old), and the checklist as [items] in their order. An item with an id
+     * keeps its tick and takes the text; one without is new; a blank one, or one no longer listed,
+     * goes. Nothing is written when nothing changed.
+     */
+    suspend fun editInline(id: String, title: String, items: List<InlineItem>) = tx {
+        // Gone while it was being edited (an undo took it): nothing left to write to.
+        val t = dao.todo(id)?.takeIf { it.deletedAt == null } ?: return@tx
+        ensure(t.kind != TodoKind.COMPLETION) { "完成记录不能修改" }
+        val existing = dao.checklistOf(id).associateBy { it.id }
+        val kept = items.map { it.copy(text = it.text.trim()) }.filter { it.text.isNotEmpty() }
+        var changed = false
+        for (gone in existing.keys - kept.mapNotNull { it.id }.toSet()) {
+            dao.deleteChecklistItem(gone)
+            changed = true
+        }
+        kept.forEachIndexed { i, item ->
+            val old = item.id?.let(existing::get)
+            if (old == null) {
+                dao.insertChecklistItem(ChecklistItem(newId(), id, item.text, sortOrder = i))
+                changed = true
+            } else if (old.text != item.text || old.sortOrder != i) {
+                dao.updateChecklistItem(old.copy(text = item.text, sortOrder = i))
+                changed = true
+            }
+        }
+        val name = title.trim().ifEmpty { t.title }
+        if (changed || name != t.title) save(t.copy(title = name).bump(seq = false))
+    }
+
+    /**
+     * [ids] become the checklist of one new todo titled [title], in the order given, and go to
+     * the trash as one batch. The new todo sits where the first of them did and shows wherever
+     * all of them showed: their list and section when they share one, the earliest plan date and
+     * deadline among them, 以后再说 when all were, important when any was. A repeating todo would
+     * stop repeating, so it cannot be gathered. Returns the new todo's id and the batch, for
+     * [ungather].
+     */
+    suspend fun gather(ids: List<String>, title: String): Pair<String, String> = tx {
+        ensure(title.isNotBlank()) { "标题不能为空" }
+        val todos = ids.distinct().map { live(it) }
+        ensure(todos.isNotEmpty()) { "没有选中待办" }
+        ensure(todos.none { it.kind != TodoKind.ORDINARY || it.completedAt != null }) { "重复待办和已完成的待办不能变成检查项" }
+        val list = todos.map { it.listId }.distinct().singleOrNull()
+        val section = todos.map { it.sectionId }.distinct().singleOrNull().takeIf { list != null }
+        val someday = todos.all { it.someday }
+        val t = Todo(
+            id = newId(),
+            title = title.trim(),
+            listId = list,
+            sectionId = section,
+            planDate = if (someday) null else todos.mapNotNull { it.planDate }.minOrNull(),
+            someday = someday,
+            deadline = todos.mapNotNull { it.deadline }.minOrNull(),
+            important = todos.any { it.important },
+            sortOrder = todos.first().sortOrder,
+            createdAt = now,
+        )
+        insert(ReminderState.afterManualEdit(t, now, zone()))
+        todos.forEachIndexed { i, x -> dao.insertChecklistItem(ChecklistItem(newId(), t.id, x.title, sortOrder = i)) }
+        val batch = newId()
+        todos.forEach { trashTodo(it, batch) }
+        t.id to batch
+    }
+
+    /** Undoes [gather]: the gathered todo goes for good and the ones in [batch] come back. */
+    suspend fun ungather(id: String, batch: String) = tx {
+        dao.todo(id)?.takeIf { it.deletedAt == null }?.let { t ->
+            val gone = newId()
+            trashTodo(t, gone)
+            purge(gone)
+        }
+        for (t in dao.todosInBatch(batch)) if (t.deletedAt != null) reviveTodo(t)
+    }
 
     suspend fun addChecklistItem(todoId: String, text: String): String = tx {
         val t = live(todoId)

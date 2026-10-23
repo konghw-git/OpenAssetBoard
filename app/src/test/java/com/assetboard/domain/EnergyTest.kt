@@ -119,7 +119,6 @@ class EnergyTest {
         val burn = Energy.burn(profile, records, LocalDate.parse("2026-10-18"))!!
         assertEquals("a", burn.weight.id)
         assertEquals(1_938_500L, burn.restingCal)
-        assertEquals(2_326_200L, burn.totalCal)
     }
 
     @Test fun theDaysWeightIsTheLastOneUpToIt() {
@@ -142,9 +141,11 @@ class EnergyTest {
         val d = Energy.day(LocalDate.parse("2026-10-20"), all, profile, records)
         assertEquals(listOf("早饭", "晚饭"), d.entries.map { it.name })
         assertEquals(408_700L, d.intakeCal)
-        // 91.8 kg that day: 10·91.8 + 1137.5 − 125 + 5 = 1935.5, × 1.2 = 2322.6.
-        assertEquals(2_322_600L, d.burn!!.totalCal)
-        assertEquals(2_322_600L - 408_700L, d.deficitCal)
+        // 91.8 kg that day: 10·91.8 + 1137.5 − 125 + 5 = 1935.5, the baseline with no exercise.
+        assertEquals(1_935_500L, d.burn!!.restingCal)
+        assertEquals(1_935_500L - 408_700L, d.deficitCal)
+        // 408.7 / 1935.5 = 21.1%.
+        assertEquals(21, d.percentOfResting)
         assertNull(Energy.day(LocalDate.parse("2026-10-20"), all, null, records).deficitCal)
     }
 
@@ -165,7 +166,8 @@ class EnergyTest {
         )
         val (avg, days) = Energy.averageDeficit(today, 7, all, profile, records)!!
         assertEquals(2, days)
-        assertEquals((1_326_200L + 826_200L) / 2, avg)
+        // 1938.5 − 1500 and 1938.5 − 1000 (92.1 kg on both days).
+        assertEquals((438_500L + 938_500L) / 2, avg)
         assertNull(Energy.averageDeficit(today, 7, all.take(1), profile, records))
         assertNull(Energy.averageDeficit(today, 7, all, null, records))
     }

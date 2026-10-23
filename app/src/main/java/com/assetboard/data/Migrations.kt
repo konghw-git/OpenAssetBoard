@@ -63,6 +63,17 @@ object Migrations {
         }
     }
 
+    /** A diary day can carry a mood; a habit can be skipped for a day as well as checked. Nothing else changes. */
+    val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `diary_entries` ADD COLUMN `mood` INTEGER")
+            db.execSQL("ALTER TABLE `habit_checks` ADD COLUMN `skipped` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    /** Every step, in order, for [AppDatabase.build] and the tests that open an old file. */
+    val ALL = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+
     private val V8_TABLES = listOf(
         "CREATE TABLE IF NOT EXISTS `food_entries` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `eaten_at` INTEGER NOT NULL, `name` TEXT, `per` INTEGER, `amount` INTEGER, `unit` TEXT, `energy_cal` INTEGER NOT NULL, `in_kj` INTEGER NOT NULL, `protein_mg` INTEGER, `fat_mg` INTEGER, `carb_mg` INTEGER, `sodium_mg` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "CREATE INDEX IF NOT EXISTS `index_food_entries_date` ON `food_entries` (`date`)",

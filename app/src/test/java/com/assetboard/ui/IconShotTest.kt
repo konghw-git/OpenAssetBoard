@@ -54,6 +54,6 @@ class IconShotTest {
             }
         }
         compose.waitForIdle()
-        compose.onRoot().captureRoboImage("build/screenshots/00-launcher-icon.png")
+        compose.onRoot().captureRoboImage("screenshots/00-launcher-icon.png", roborazziOptions = SHOT_OPTIONS)
     }
 }

@@ -49,7 +49,7 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Account management**: groups, icons (built-in marks for common banks, payment apps and funds), an include-in-net-worth switch, suspend, "locked until" dates, moving the baseline earlier. In an open group, swipe an account left to dissolve it (an account with records is suspended instead; both undo), right to change its balance right in the row.
 - **Cash at hand**: the counted accounts minus investments and locked balances, shown in the net worth card with a bar splitting assets into cash / locked / invested; tapping it lists every cash account.
 - **Health as an asset**: weigh in once a day, record weight (body fat optional), and follow weight, body fat and BMI with a 7-day average; BMI and body-fat grades, fat and lean mass, progress to a target and a nine-cell body type. A day without a weigh-in simply stays empty — no interpolation, no streaks.
-- **Food and energy**: most food needs only a guessed kcal, with every nutrient optional; with a label, copy it (energy and the rest per 100 g/ml, then how much you had) and kJ turns into kcal by itself. Anything eaten before refills in one tap. The day's burn is estimated from the profile and weight, so each day shows its deficit, and the last seven days their intake. It records; it sets no targets.
+- **Food and energy**: most food needs only a guessed kcal, with every nutrient optional; with a label, copy it (energy and the rest per 100 g/ml, then how much you had) and kJ turns into kcal by itself. Anything eaten before refills in one tap. The resting rate (BMR) is estimated from the profile and weight, so each day shows the share of it eaten and the deficit with no exercise, and the last seven days their intake. It records; it sets no targets.
 - **Home-screen widget**: net worth plus a one-tap stocktake.
 
 <img src="docs/images/01-overview.webp" width="24%" alt="Asset overview"> <img src="docs/images/28-health.webp" width="24%" alt="Health"> <img src="docs/images/04-trend.webp" width="24%" alt="Net worth trend"> <img src="docs/images/07-account-investment.webp" width="24%" alt="Investment account">
@@ -160,10 +160,12 @@ The screenshots are rendered on the JVM by Roborazzi against the real Compose UI
 
 ```bash
 ./gradlew testDebugUnitTest --tests '*ScreenshotTest*' -Proborazzi.test.record=true
-# written to app/build/screenshots/
+# written to app/screenshots/, the baselines later runs are checked against
+./gradlew testDebugUnitTest -Proborazzi.test.verify=true
+# compared pixel by pixel; a difference fails, with diff images in app/build/outputs/roborazzi/
 ```
 
-The images in `docs/images/` are those PNGs scaled down and converted to WebP.
+Record again after an intended UI change. `scripts/publish-release.sh` checks against the baselines before a release whenever they exist. The images in `docs/images/` are those PNGs scaled down and converted to WebP.
 
 ## Stack
 

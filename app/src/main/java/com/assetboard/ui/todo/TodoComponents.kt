@@ -78,6 +78,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.assetboard.data.ChecklistItem
+import com.assetboard.data.TimeChange
 import com.assetboard.data.Todo
 import com.assetboard.data.TodoKind
 import com.assetboard.domain.todo.DateBadge
@@ -462,54 +463,122 @@ private fun MetaChip(icon: ImageVector, text: String?, color: Color) {
 }
 
 @Composable
-fun TimePickDialog(initial: LocalTime?, onDismiss: () -> Unit, onPick: (LocalTime) -> Unit, onClear: (() -> Unit)? = null) {
+fun TimePickDialog(
+    initial: LocalTime?,
+    onDismiss: () -> Unit,
+    onPick: (LocalTime) -> Unit,
+    onClear: (() -> Unit)? = null,
+    title: String = "提醒时刻",
+    clearLabel: String = "不提醒",
+) {
     val t = initial ?: LocalTime.of(9, 0)
     val state = rememberTimePickerState(t.hour, t.minute, is24Hour = true)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("提醒时刻") },
+        title = { Text(title) },
         text = { TimePicker(state) },
         confirmButton = { TextButton(onClick = { onPick(LocalTime.of(state.hour, state.minute)) }) { Text("确定") } },
         dismissButton = {
             Row {
-                if (onClear != null) TextButton(onClick = onClear) { Text("不提醒", color = MaterialTheme.colorScheme.error) }
+                if (onClear != null) TextButton(onClick = onClear) { Text(clearLabel, color = MaterialTheme.colorScheme.error) }
                 TextButton(onClick = onDismiss) { Text("取消") }
             }
         },
     )
 }
 
+/** The times offered as one tap; any other goes through the clock face. */
+internal val QuickTimes = listOf(LocalTime.of(9, 0), LocalTime.of(12, 0), LocalTime.of(18, 0), LocalTime.of(21, 0))
+
+/** "09:30". */
+fun timeLabel(t: LocalTime): String = "%02d:%02d".format(t.hour, t.minute)
+
+/** Where [RescheduleDialog] puts the todos: a day, someday, or no day at all. */
+private sealed interface DayChoice {
+    data class On(val date: LocalDate) : DayChoice
+    data object Someday : DayChoice
+    data object Clear : DayChoice
+}
+
 /**
- * The reschedule sheet content: quick dates, a date picker, someday, and clearing the date.
- * [allowSomeday] is false for repeat sources.
+ * 安排时间: the day (quick ones, a date picker, someday, no day) and, once there is a day, the
+ * time of day, which is when the reminder goes off. Nothing changes until 确定. [current] and
+ * [currentTime] are the todo's own when there is one; for several at once ([batch]) the time
+ * starts as 保持原时间. [allowSomeday] and [allowClear] are false for repeat sources.
  */
 @Composable
 fun RescheduleDialog(
     today: LocalDate,
     allowSomeday: Boolean,
     allowClear: Boolean,
-    onPick: (date: LocalDate?, someday: Boolean) -> Unit,
+    onPick: (date: LocalDate?, someday: Boolean, time: TimeChange) -> Unit,
     onDismiss: () -> Unit,
+    current: LocalDate? = null,
+    currentTime: LocalTime? = null,
+    batch: Boolean = false,
 ) {
-    var picking by remember { mutableStateOf(false) }
+    var day by remember { mutableStateOf<DayChoice?>(current?.let { DayChoice.On(it) }) }
+    var time by remember { mutableStateOf(if (batch) TimeChange.Keep else currentTime?.let { TimeChange.At(it) } ?: TimeChange.Clear) }
+    var picking by remember { mutableStateOf<String?>(null) }
+    val date = (day as? DayChoice.On)?.date
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("改到哪天") },
+        title = { Text("安排时间") },
         text = {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                QuickDate.entries.forEach { q ->
-                    FilterChip(selected = false, onClick = { onPick(q.resolve(today), false) }, label = { Text(q.label) })
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("哪天", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    QuickDate.entries.forEach { q ->
+                        val d = q.resolve(today)
+                        FilterChip(selected = date == d, onClick = { day = DayChoice.On(d) }, label = { Text(q.label) })
+                    }
+                    val custom = date != null && QuickDate.entries.none { it.resolve(today) == date }
+                    FilterChip(selected = custom, onClick = { picking = "date" }, label = { Text(if (custom) TodoViews.shortDate(date!!, today) else "选日期…") })
+                    if (allowSomeday) FilterChip(selected = day == DayChoice.Someday, onClick = { day = DayChoice.Someday }, label = { Text("以后再说") })
+                    if (allowClear) FilterChip(selected = day == DayChoice.Clear, onClick = { day = DayChoice.Clear }, label = { Text("不定日期") })
                 }
-                FilterChip(selected = false, onClick = { picking = true }, label = { Text("选日期…") })
-                if (allowSomeday) FilterChip(selected = false, onClick = { onPick(null, true) }, label = { Text("以后再说") })
-                if (allowClear) FilterChip(selected = false, onClick = { onPick(null, false) }, label = { Text("清除日期") })
+                // A time needs a day: picking one first puts the todo on today.
+                Text("几点 · 到点提醒", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    fun choose(t: TimeChange) {
+                        time = t
+                        if (t is TimeChange.At && date == null) day = DayChoice.On(today)
+                    }
+                    if (batch) FilterChip(selected = time == TimeChange.Keep, onClick = { choose(TimeChange.Keep) }, label = { Text("保持原时间") })
+                    FilterChip(selected = time == TimeChange.Clear, onClick = { choose(TimeChange.Clear) }, label = { Text("不定时") })
+                    QuickTimes.forEach { t -> FilterChip(selected = time == TimeChange.At(t), onClick = { choose(TimeChange.At(t)) }, label = { Text(timeLabel(t)) }) }
+                    val other = (time as? TimeChange.At)?.time?.takeIf { it !in QuickTimes }
+                    FilterChip(selected = other != null, onClick = { picking = "time" }, label = { Text(other?.let(::timeLabel) ?: "其他时间…") })
+                }
             }
         },
-        confirmButton = {},
+        confirmButton = {
+            TextButton(
+                enabled = day != null,
+                onClick = {
+                    when (val d = day) {
+                        is DayChoice.On -> onPick(d.date, false, time)
+                        DayChoice.Someday -> onPick(null, true, TimeChange.Clear)
+                        DayChoice.Clear -> onPick(null, false, TimeChange.Clear)
+                        null -> Unit
+                    }
+                },
+            ) { Text("确定") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
-    if (picking) {
-        DatePickDialog(initial = today, maxDate = null, onDismiss = { picking = false }, onPick = { picking = false; onPick(it, false) })
+    when (picking) {
+        "date" -> DatePickDialog(initial = date ?: today, maxDate = null, onDismiss = { picking = null }, onPick = { picking = null; day = DayChoice.On(it) })
+        "time" -> TimePickDialog(
+            initial = (time as? TimeChange.At)?.time ?: currentTime,
+            title = "几点",
+            onDismiss = { picking = null },
+            onPick = {
+                picking = null
+                time = TimeChange.At(it)
+                if (date == null) day = DayChoice.On(today)
+            },
+        )
     }
 }
 

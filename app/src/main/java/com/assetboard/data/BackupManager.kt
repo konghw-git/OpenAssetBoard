@@ -26,7 +26,8 @@ import java.io.File
  * Format 2 adds the todo and diary tables, format 3 the daily habit checks, format 4 the health
  * profile and weigh-ins, format 5 the notes, format 6 the notes' order and the weekly reviews,
  * format 7 the net worth goal, format 8 the habits themselves (a file without them reads as the
- * five built in), format 9 what was eaten; older files read with the newer tables empty. Device-local
+ * five built in), format 9 what was eaten, format 10 the diary's mood and the habits' rest days;
+ * older files read with the newer tables empty and the newer fields unset. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -180,10 +181,23 @@ class BackupManager(
      */
     private val backupLock = Mutex()
 
-    /** Returns the written file's display name. */
+    /**
+     * Returns the written file's display name. A failed automatic or manual backup leaves its
+     * reason in [SettingsStore.backupError] until one works again, so it never fails unseen.
+     */
     suspend fun backupNow(kind: BackupKind): String = backupLock.withLock {
         withContext(Dispatchers.IO) {
-            writeBackup(kind)
+            try {
+                writeBackup(kind)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (kind != BackupKind.PRE_RESTORE) {
+                    val reason = (e as? LedgerException)?.message ?: e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+                    settings.setBackupError(reason, clock())
+                }
+                throw e
+            }
         }
     }
 
@@ -311,6 +325,7 @@ class BackupManager(
         unique(file.snapshots, { it.at }, "同一时刻的盘点")
         unique(file.valuations, { it.accountId to it.at }, "同一账户同一时刻的估值")
         unique(file.habitChecks, { it.date to it.habit }, "每日指标")
+        for (e in file.diaryEntries) ensure(e.mood == null || com.assetboard.domain.Mood.of(e.mood) != null) { "备份里有无效的心情" }
         unique(file.habits, { it.key }, "每日打卡")
         checkHabits(file.habits)
         val habitKeys = file.habits.ifEmpty { com.assetboard.domain.Habit.DEFAULTS }.map { it.key }.toSet()
@@ -680,7 +695,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 9
+        const val FORMAT_VERSION = 10
 
         /**
          * [file] with each account's current balance as its only valuation at [now], and one

@@ -43,11 +43,14 @@ class NetWorthWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Responsive(setOf(NARROW, WIDE))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val ledger = (context.applicationContext as AssetBoardApp).container.repository.loadOnce()
+        val container = (context.applicationContext as AssetBoardApp).container
+        val ledger = container.repository.loadOnce()
         val totals = ledger.currentTotals()
         val lastAt = ledger.snapshots.maxOfOrNull { it.at }
+        // The overview's eye: hidden there, hidden on the home screen too.
+        val hide = container.settings.hideAmounts.value
         provideContent {
-            GlanceTheme { Content(totals, lastAt) }
+            GlanceTheme { Content(totals, lastAt, hide) }
         }
     }
 
@@ -63,7 +66,8 @@ class NetWorthWidget : GlanceAppWidget() {
 }
 
 @Composable
-private fun Content(totals: Ledger.Totals, lastAt: Long?) {
+private fun Content(totals: Ledger.Totals, lastAt: Long?, hide: Boolean) {
+    fun amount(text: String) = if (hide) com.assetboard.ui.components.MASKED else text
     val colors = GlanceTheme.colors
     val wide = LocalSize.current.width >= 240.dp
     Row(
@@ -78,13 +82,13 @@ private fun Content(totals: Ledger.Totals, lastAt: Long?) {
         Column(GlanceModifier.defaultWeight()) {
             Text("净资产", style = TextStyle(color = colors.onPrimaryContainer, fontSize = 12.sp))
             Text(
-                "¥" + Money.format(totals.netWorth),
+                amount("¥" + Money.format(totals.netWorth)),
                 style = TextStyle(color = colors.onPrimaryContainer, fontSize = if (wide) 24.sp else 20.sp, fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
             if (wide) {
                 Text(
-                    "资产 ${Money.short(totals.assets)} · 负债 ${Money.short(-totals.liabilities)}",
+                    "资产 ${amount(Money.short(totals.assets))} · 负债 ${amount(Money.short(-totals.liabilities))}",
                     style = TextStyle(color = colors.onPrimaryContainer, fontSize = 11.sp),
                     maxLines = 1,
                 )

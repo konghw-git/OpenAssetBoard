@@ -49,7 +49,7 @@
 - **账户管理**：分组、图标（内置常见银行 / 支付 / 基金品牌图标）、计入净资产开关、停用、「锁定至」日期、期初前移。展开分组后，账户左滑化成粒子删除（已有记录的改为停用，都可撤销），右滑在这一行上直接改余额。
 - **可用现金**：从计入净资产的账户里排除基金投资和锁定资金，得出随时能用的钱，在净资产卡里用一条分段条显示现金 / 锁定 / 投资的占比，点开列出每个现金账户。
 - **健康资产**：每天称一次，记体重（体脂率可选），看体重 / 体脂率 / BMI 三条曲线与 7 天平均；BMI、体脂分级、脂肪量、去脂体重、目标进度与九格身体类型。没称的日子就空着，不补点、不断签。
-- **饮食与热量**：大多数食物估个大概的 kcal 就能记，营养素都是可选的；有包装时照着营养成分表填（每 100 g/ml 的能量等，再填吃了多少），kJ 自动换算成 kcal。最近吃过的点一下就填好。按档案和体重估算每天消耗，显示当天的缺口和近 7 天的摄入；只记录，不设目标。
+- **饮食与热量**：大多数食物估个大概的 kcal 就能记，营养素都是可选的；有包装时照着营养成分表填（每 100 g/ml 的能量等，再填吃了多少），kJ 自动换算成 kcal。最近吃过的点一下就填好。按档案和体重估算基础代谢，显示摄入占基础代谢的百分比、不运动时的缺口和近 7 天的摄入；只记录，不设目标。
 - **桌面小组件**：净资产 + 一键盘点。
 
 <img src="docs/images/01-overview.webp" width="24%" alt="资产总览"> <img src="docs/images/28-health.webp" width="24%" alt="健康资产"> <img src="docs/images/04-trend.webp" width="24%" alt="净值趋势"> <img src="docs/images/07-account-investment.webp" width="24%" alt="投资账户">
@@ -160,10 +160,12 @@ scripts/create-keystore.sh    # 生成到你自己的目录，务必另存一份
 
 ```bash
 ./gradlew testDebugUnitTest --tests '*ScreenshotTest*' -Proborazzi.test.record=true
-# 输出到 app/build/screenshots/
+# 输出到 app/screenshots/，作为之后比对的基准图
+./gradlew testDebugUnitTest -Proborazzi.test.verify=true
+# 与基准图逐像素比对，有差异就失败，差异图在 app/build/outputs/roborazzi/
 ```
 
-`docs/images/` 里的图是这些 PNG 缩放、转成 WebP 后的版本。
+界面有意改动后重新录一次基准图。`scripts/publish-release.sh` 发布前会在基准图存在时自动比对。`docs/images/` 里的图是这些 PNG 缩放、转成 WebP 后的版本。
 
 ## 技术栈
 

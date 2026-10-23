@@ -50,7 +50,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
- * The README's banner and icon, into build/screenshots/ (converted to WebP for docs/images/ by
+ * The README's banner and icon, into screenshots/ (converted to WebP for docs/images/ by
  * hand). The banner shows the screens rendered by the other screenshot tests, so run those first.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -70,13 +70,16 @@ class BrandShotTest {
             }
         }
         compose.waitForIdle()
-        compose.onRoot().captureRoboImage("build/screenshots/brand-icon.png")
+        compose.onRoot().captureRoboImage("screenshots/brand-icon.png", roborazziOptions = SHOT_OPTIONS)
     }
 
     @Test @Config(sdk = [35], application = Application::class, qualifiers = "w1280dp-h640dp-xhdpi")
     fun banner() {
-        val shots = listOf("01-overview", "20-todo-home", "50-notes").map { File("build/screenshots/$it.png") }
+        val shots = listOf("01-overview", "20-todo-home", "50-notes").map { File("screenshots/$it.png") }
         assumeTrue("render the screenshot tests first", shots.all { it.exists() })
+        // Made of the other screens, which are checked themselves; a fresh record may also run it
+        // before them, leaving no baseline to check it against.
+        assumeTrue("the banner is not checked", System.getProperty("roborazzi.test.verify") != "true")
         val images = shots.map { BitmapFactory.decodeFile(it.path).asImageBitmap() }
         compose.setContent {
             Box(
@@ -125,7 +128,7 @@ class BrandShotTest {
             }
         }
         compose.waitForIdle()
-        compose.onRoot().captureRoboImage("build/screenshots/brand-banner.png")
+        compose.onRoot().captureRoboImage("screenshots/brand-banner.png", roborazziOptions = SHOT_OPTIONS)
     }
 
     @androidx.compose.runtime.Composable

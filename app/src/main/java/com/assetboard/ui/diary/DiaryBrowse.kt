@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.assetboard.data.DiaryEntry
+import com.assetboard.domain.Mood
 import com.assetboard.domain.calendar.ChineseCalendar
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.AmbientPage
@@ -94,6 +95,8 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
     val today = LocalDate.now()
     val written by remember(month) { container.diary.observeDatesWithText(ym.atDay(1), ym.atEndOfMonth()) }
         .collectAsStateWithLifecycle(emptyList())
+    val moods by remember(month) { container.diary.observeMoods(ym.atDay(1), ym.atEndOfMonth()) }
+        .collectAsStateWithLifecycle(emptyMap())
     // Weeks that reach into this month from either side, so a week shared by two months shows its mark in both.
     val reviewed by remember(month) { container.weeks.observeWeeksWithText(Weeks.start(ym.atDay(1)), ym.atEndOfMonth()) }
         .collectAsStateWithLifecycle(emptyList())
@@ -160,7 +163,7 @@ fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate
                             Row(Modifier.fillMaxWidth()) {
                                 week.forEach { d ->
                                     Box(Modifier.weight(1f).aspectRatio(0.8f).padding(2.dp)) {
-                                        if (d != null) DayCell(d, d == today, d.toString() in writtenSet, holidays.mark(d), enabled = !d.isAfter(today)) { onPick(d) }
+                                        if (d != null) DayCell(d, d == today, d.toString() in writtenSet, holidays.mark(d), enabled = !d.isAfter(today), mood = Mood.of(moods[d.toString()])) { onPick(d) }
                                     }
                                 }
                                 repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
@@ -250,6 +253,7 @@ private fun DayCell(
     written: Boolean,
     mark: com.assetboard.domain.calendar.HolidayTable.DayMark?,
     enabled: Boolean,
+    mood: Mood? = null,
     onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -288,14 +292,19 @@ private fun DayCell(
                 )
             }
         }
-        Text(
-            label, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Clip,
-            color = when {
-                written -> cs.onPrimary.copy(alpha = 0.8f)
-                festival -> cs.secondary
-                else -> cs.onSurfaceVariant
-            },
-        )
+        // The day's mood takes the lunar line: on the diary's own calendar it says more.
+        if (mood != null) {
+            Text(mood.emoji, fontSize = 13.sp, maxLines = 1)
+        } else {
+            Text(
+                label, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Clip,
+                color = when {
+                    written -> cs.onPrimary.copy(alpha = 0.8f)
+                    festival -> cs.secondary
+                    else -> cs.onSurfaceVariant
+                },
+            )
+        }
     }
 }
 

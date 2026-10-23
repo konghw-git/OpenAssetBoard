@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -86,6 +87,7 @@ import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.GlassScaffold
 import com.assetboard.ui.components.GlassSnackbarHost
 import com.assetboard.ui.components.SectionCard
+import com.assetboard.ui.components.SwipeAction
 import com.assetboard.ui.components.SwipeActionsBox
 import com.assetboard.ui.components.UndoEvent
 import com.assetboard.ui.components.UndoMessages
@@ -125,6 +127,14 @@ class FoodViewModel(private val container: AppContainer) : ActionViewModel(conta
     fun delete(id: String) = action {
         val gone = repo.delete(id) ?: return@action
         _events.tryEmit(UndoEvent("已删除「${foodName(gone).take(12)}」") { repo.restore(gone) })
+    }
+
+    /** Eaten again: the same entry, today, with an undo. A right swipe on any day's entry. */
+    fun eatAgain(e: FoodEntry) = action {
+        val today = repo.today()
+        val id = repo.save(FoodDraft(null, today, e.name, e.per, e.amount, e.unit, e.energyCal, e.inKj, e.proteinMg, e.fatMg, e.carbMg, e.sodiumMg))
+        val where = if (e.date == today.toString()) "又记了一份" else "已记到今天"
+        _events.tryEmit(UndoEvent("$where「${foodName(e).take(12)}」") { repo.delete(id) })
     }
 
     fun undo(e: UndoEvent) {
@@ -190,6 +200,7 @@ fun FoodScreen(onBack: () -> Unit, startRecording: Boolean = false, onWeigh: () 
             onRecord = { editing = NEW },
             onOpen = { editing = it.id },
             onDelete = { vm.delete(it.id) },
+            onAgain = vm::eatAgain,
             onProfile = { profileOpen = true },
             onWeigh = onWeigh,
         )
@@ -242,6 +253,7 @@ private fun FoodContent(
     onRecord: () -> Unit,
     onOpen: (FoodEntry) -> Unit,
     onDelete: (FoodEntry) -> Unit,
+    onAgain: (FoodEntry) -> Unit,
     onProfile: () -> Unit,
     onWeigh: () -> Unit,
 ) {
@@ -253,12 +265,12 @@ private fun FoodContent(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item { Box(Modifier.appear(0)) { DayHero(s, day, today, onRecord, onToday = { onSelect(today) }, onProfile, onWeigh) } }
-        item { Box(Modifier.appear(1)) { EntriesCard(day, onOpen, onDelete) } }
+        item { Box(Modifier.appear(1)) { EntriesCard(day, today, onOpen, onDelete, onAgain) } }
         if (day.totals.hasMacros) item { Box(Modifier.appear(2)) { NutrientsCard(day) } }
         item { Box(Modifier.appear(3)) { WeekCard(s, today, date, onSelect) } }
         item {
             Text(
-                "每天消耗按 Mifflin-St Jeor 公式算出基础代谢，再乘 1.2 估算不运动时的日常消耗；体重取当天或之前最近的一次称重。只是估算，供记录时对照。",
+                "基础代谢按 Mifflin-St Jeor 公式估算，体重取当天或之前最近的一次称重。缺口 = 基础代谢 − 摄入，是完全不运动时的缺口，动了只会更大。只是估算，供记录时对照。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 textAlign = TextAlign.Center,
@@ -276,9 +288,9 @@ private fun dayTitle(d: LocalDate, today: LocalDate): String = when (d) {
 }
 
 /**
- * The day on the hero gradient: what was eaten counting up, the deficit against the day's burn
- * (words, not a colour: eating more is not a loss), a bar of intake against burn, and where the
- * burn comes from. Without a profile or a weigh-in, a quiet way to add them.
+ * The day on the hero gradient: what was eaten counting up, the deficit against the day's resting
+ * rate (words, not a colour: eating more is not a loss), the share of the resting rate eaten so far
+ * over a bar of the two, and where the resting rate comes from. Without a profile or a weigh-in, a quiet way to add them.
  */
 @Composable
 private fun DayHero(
@@ -332,7 +344,7 @@ private fun DayHero(
                 val deficit = day.deficitCal
                 if (deficit != null && day.entries.isNotEmpty()) {
                     HeroChip(
-                        (if (deficit >= 0) "缺口 ${Energy.kcal(deficit)} kcal" else "超出消耗 ${Energy.kcal(-deficit)} kcal") +
+                        (if (deficit >= 0) "缺口 ${Energy.kcal(deficit)} kcal" else "超出基础代谢 ${Energy.kcal(-deficit)} kcal") +
                             if (isToday) " · 截至现在" else "",
                     )
                 }
@@ -340,18 +352,26 @@ private fun DayHero(
             }
             Spacer(Modifier.height(18.dp))
             if (burn != null) {
-                IntakeBar(day.intakeCal, burn.totalCal)
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("吃到基础代谢的", color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f).padding(bottom = 3.dp))
+                    // Counts up with the kcal above it.
+                    Text(
+                        "${(intake * 100 + burn.restingCal / 2) / burn.restingCal}%",
+                        color = extra.onHero, style = MaterialTheme.typography.titleLarge.merge(NumberStyle), fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                IntakeBar(day.intakeCal, burn.restingCal)
                 Spacer(Modifier.height(16.dp))
                 Row {
-                    HeroFigure("日常消耗", Energy.kcal(burn.totalCal), null, Modifier.weight(1f))
-                    HeroFigure("基础代谢", Energy.kcal(burn.restingCal), null, Modifier.weight(1f))
+                    HeroFigure("基础代谢", Energy.kcal(burn.restingCal) + " kcal", null, Modifier.weight(1f))
                     HeroFigure("按体重", Health.kg(burn.weight.weightG) + " kg", null, Modifier.weight(1f))
                 }
             } else {
                 val (text, action) = when {
-                    s.profile == null -> "填写健康档案后估算每天消耗" to onProfile
-                    s.records.isEmpty() -> "称一次体重后估算每天消耗" to onWeigh
-                    else -> "18 岁以下不估算消耗" to null
+                    s.profile == null -> "填写健康档案后估算基础代谢" to onProfile
+                    s.records.isEmpty() -> "称一次体重后估算基础代谢" to onWeigh
+                    else -> "18 岁以下不估算基础代谢" to null
                 }
                 HeroChip(text, outlined = true, onClick = action)
             }
@@ -400,8 +420,8 @@ private fun HeroChip(text: String, outlined: Boolean = false, onClick: (() -> Un
 }
 
 /**
- * Intake against the day's burn on one track. The track is whichever is larger, so eating past
- * the burn grows the bar and leaves a tick where the burn sits.
+ * Intake against the day's resting rate on one track. The track is whichever is larger, so eating
+ * past it grows the bar and leaves a tick where the resting rate sits.
  */
 @Composable
 private fun IntakeBar(intakeCal: Long, burnCal: Long) {
@@ -435,15 +455,19 @@ private fun pane(): Color {
 
 private val PaneShape = RoundedCornerShape(14.dp)
 
-/** The day's entries in the order they were eaten. Tap edits; a left swipe deletes, with an undo. */
+/**
+ * The day's entries in the order they were eaten. Tap edits; a left swipe deletes, a right swipe
+ * records it again today (再来一份, or 记到今天 from another day); both with an undo.
+ */
 @Composable
-private fun EntriesCard(day: Energy.Day, onOpen: (FoodEntry) -> Unit, onDelete: (FoodEntry) -> Unit) {
+private fun EntriesCard(day: Energy.Day, today: LocalDate, onOpen: (FoodEntry) -> Unit, onDelete: (FoodEntry) -> Unit, onAgain: (FoodEntry) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val swipe = rememberSwipeGroup()
+    val again = if (day.date == today) "再来一份" else "记到今天"
     SectionCard(contentPadding = PaddingValues(10.dp)) {
         Row(Modifier.padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("吃了什么", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (day.entries.isNotEmpty()) Text("${day.entries.size} 笔 · 左滑删除", style = MaterialTheme.typography.labelSmall, color = cs.outline)
+            if (day.entries.isNotEmpty()) Text("${day.entries.size} 笔 · 右滑$again · 左滑删除", style = MaterialTheme.typography.labelSmall, color = cs.outline)
         }
         if (day.entries.isEmpty()) {
             Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -455,7 +479,10 @@ private fun EntriesCard(day: Energy.Day, onOpen: (FoodEntry) -> Unit, onDelete: 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             day.entries.forEach { e ->
                 key(e.id) {
-                    SwipeActionsBox(key = "food:${e.id}", group = swipe, shape = PaneShape, onDelete = { onDelete(e) }) {
+                    SwipeActionsBox(
+                        key = "food:${e.id}", group = swipe, shape = PaneShape, onDelete = { onDelete(e) },
+                        actions = listOf(SwipeAction(again, Icons.Outlined.ContentCopy, cs.secondary) { onAgain(e) }),
+                    ) {
                         Box(Modifier.fillMaxWidth().clip(PaneShape).background(pane())) { EntryRow(e) { onOpen(e) } }
                     }
                 }
@@ -547,7 +574,7 @@ private fun NutrientsCard(day: Energy.Day) {
 }
 
 /**
- * The last seven days ending today: a bar of each day's intake with its burn as a dashed level,
+ * The last seven days ending today: a bar of each day's intake with its resting rate as a dashed level,
  * nothing at all on a day without entries. Tapping a day shows it above. The average deficit
  * counts only recorded days before today, which is not over yet.
  */
@@ -556,7 +583,7 @@ private fun WeekCard(s: FoodState, today: LocalDate, selected: LocalDate, onSele
     val cs = MaterialTheme.colorScheme
     val days = remember(s, today) { (6 downTo 0).map { s.day(today.minusDays(it.toLong())) } }
     val average = remember(s, today) { Energy.averageDeficit(today, 7, s.entries, s.profile, s.records) }
-    val top = days.maxOf { maxOf(it.intakeCal, if (it.entries.isEmpty()) 0 else it.burn?.totalCal ?: 0) }.coerceAtLeast(1)
+    val top = days.maxOf { maxOf(it.intakeCal, if (it.entries.isEmpty()) 0 else it.burn?.restingCal ?: 0) }.coerceAtLeast(1)
     val reveal = remember { Animatable(0f) }
     LaunchedEffect(Unit) { reveal.animateTo(1f, tween(900, delayMillis = 150, easing = FastOutSlowInEasing)) }
     val bar = cs.secondary
@@ -567,7 +594,7 @@ private fun WeekCard(s: FoodState, today: LocalDate, selected: LocalDate, onSele
             when {
                 average == null -> "前 7 天还没有可比较的记录"
                 average.first >= 0 -> "前 7 天记了 ${average.second} 天，平均每天缺口 ${Energy.kcal(average.first)} kcal"
-                else -> "前 7 天记了 ${average.second} 天，平均每天超出消耗 ${Energy.kcal(-average.first)} kcal"
+                else -> "前 7 天记了 ${average.second} 天，平均每天超出基础代谢 ${Energy.kcal(-average.first)} kcal"
             },
             style = MaterialTheme.typography.bodySmall.merge(NumberStyle), color = cs.onSurfaceVariant,
         )
@@ -599,7 +626,7 @@ private fun WeekCard(s: FoodState, today: LocalDate, selected: LocalDate, onSele
                                 cornerRadius = CornerRadius(w / 2),
                             )
                             d.burn?.let { b ->
-                                val y = size.height - size.height * b.totalCal / top
+                                val y = size.height - size.height * b.restingCal / top
                                 drawLine(
                                     level, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.5.dp.toPx(),
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())),
@@ -629,7 +656,7 @@ private fun WeekCard(s: FoodState, today: LocalDate, selected: LocalDate, onSele
                     drawLine(level, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), strokeWidth = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 3f)))
                 }
                 Spacer(Modifier.width(5.dp))
-                Text("日常消耗", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                Text("基础代谢", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
             }
         }
     }

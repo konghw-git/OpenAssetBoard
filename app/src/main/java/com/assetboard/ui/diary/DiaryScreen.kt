@@ -15,6 +15,15 @@ import androidx.compose.ui.text.TextStyle
 import com.assetboard.ui.components.tint
 import com.assetboard.domain.Habit
 import com.assetboard.domain.HabitDay
+import com.assetboard.domain.Mood
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.material.icons.outlined.AutoFixHigh
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -23,6 +32,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.HeaderAction
+import com.assetboard.ui.components.SettingsAction
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.AnimatedContent
 import kotlin.math.abs
@@ -208,6 +218,11 @@ fun DiaryScreen(
     ErrorDialog(error) { vm.error.value = null }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
     LaunchedEffect(vm) {
+        vm.tidied.collect { t ->
+            if (snackbar.showSnackbar("已排版：首行缩进、标点和空行都理好了", actionLabel = "撤销", withDismissAction = true) == SnackbarResult.ActionPerformed) vm.undoTidy(t)
+        }
+    }
+    LaunchedEffect(vm) {
         vm.extracted.collect { r ->
             val res = snackbar.showSnackbar(r.message, actionLabel = if (r.noteId != null) "打开" else null, withDismissAction = r.noteId == null)
             if (res == SnackbarResult.ActionPerformed && r.noteId != null) onOpenNote(r.noteId)
@@ -284,22 +299,26 @@ fun DiaryScreen(
             TabHeader("日记", streakText(streak)) {
                 AnimatedContent(editing, transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.9f)) togetherWith fadeOut() }, label = "actions") { on ->
                     if (on) {
-                        Row(
-                            Modifier.height(42.dp).clip(RoundedCornerShape(50)).background(Brush.linearGradient(listOf(AppTheme.extra.heroEnd, AppTheme.extra.heroStart))).clickable(onClick = done).padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(Icons.Default.Check, null, tint = AppTheme.extra.onHero, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("完成", color = AppTheme.extra.onHero, style = MaterialTheme.typography.labelLarge)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (body.isNotBlank()) HeaderAction(Icons.Outlined.AutoFixHigh, "一键排版", vm::tidy)
+                            Row(
+                                Modifier.height(42.dp).clip(RoundedCornerShape(50)).background(Brush.linearGradient(listOf(AppTheme.extra.heroEnd, AppTheme.extra.heroStart))).clickable(onClick = done).padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(Icons.Default.Check, null, tint = AppTheme.extra.onHero, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("完成", color = AppTheme.extra.onHero, style = MaterialTheme.typography.labelLarge)
+                            }
                         }
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             HeaderAction(Icons.Outlined.Search, "搜索", onSearch)
+                            if (body.isNotBlank() && sessionStatus == DiarySession.Status.READY) HeaderAction(Icons.Outlined.AutoFixHigh, "一键排版", vm::tidy)
                             // From the session, not the entry: a save started by 完成 may not have landed yet.
                             if (entry != null && body.isNotBlank()) HeaderAction(Icons.Outlined.Lightbulb, "提炼到笔记", { extractingSelection = false; extracting = date to body })
                             // Nothing to delete while the text cannot be saved: the trash would keep the old body.
                             if (entry != null && sessionStatus != DiarySession.Status.UNSAVED) HeaderAction(Icons.Outlined.Delete, "删除这篇", { askDelete = true })
-                            HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
+                            SettingsAction(onSettings)
                         }
                     }
                 }
@@ -344,6 +363,9 @@ fun DiaryScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // Part of the page, above the text, so it scrolls away with it.
+                if (!editing && !date.isAfter(today)) {
+                    MoodRow(Mood.of(entry?.mood), today = date == today) { vm.setMood(it) }
+                }
                 StocktakeStrip(vm, date, today, onStocktake)
                 drafts.forEach { d ->
                     Box(Modifier.fillMaxWidth().glass(MaterialTheme.shapes.large, glass, cs.tertiary.copy(alpha = 0.12f))) {
@@ -424,13 +446,14 @@ private fun HabitRecord(day: HabitDay, live: Boolean) {
             Icon(Icons.Outlined.Lock, null, tint = cs.outline, modifier = Modifier.size(12.dp))
             Spacer(Modifier.width(4.dp))
             Text(
-                "每日指标 ${day.done}/${day.shown.size}" + if (live) " · 在待办页打勾，零点后定格" else "",
+                "每日指标 ${day.done}/${day.due}" + if (live) " · 在待办页打勾，零点后定格" else "",
                 style = face.copy(fontSize = 12.sp, color = cs.onSurfaceVariant),
             )
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
             day.shown.forEach { h ->
                 val on = h.key in day.checked
+                val rest = !on && h.key in day.skipped
                 Row(
                     Modifier
                         .clip(RoundedCornerShape(50))
@@ -439,7 +462,11 @@ private fun HabitRecord(day: HabitDay, live: Boolean) {
                         .padding(start = 5.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(if (on) Icons.Default.Check else Icons.Default.Remove, null, tint = if (on) h.tint else cs.outline, modifier = Modifier.size(12.dp))
+                    if (rest) {
+                        Text("休", style = face.copy(fontSize = 11.sp, color = cs.outline), modifier = Modifier.padding(horizontal = 1.dp))
+                    } else {
+                        Icon(if (on) Icons.Default.Check else Icons.Default.Remove, null, tint = if (on) h.tint else cs.outline, modifier = Modifier.size(12.dp))
+                    }
                     Spacer(Modifier.width(2.dp))
                     Text(h.label, style = face.copy(fontSize = 12.sp, color = if (on) h.tint else cs.outline, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal))
                 }
@@ -450,6 +477,51 @@ private fun HabitRecord(day: HabitDay, live: Boolean) {
                 drawLine(cs.outlineVariant, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
             },
         )
+    }
+}
+
+/**
+ * The day's mood as five faces on a strip of glass; tapping the chosen one again clears it. Only
+ * shown here, in the calendar and on the week's page: nothing adds it up.
+ */
+@Composable
+private fun MoodRow(mood: Mood?, today: Boolean, onPick: (Mood?) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        Modifier.fillMaxWidth().glass(shape, glass).clip(shape).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(if (today) "今天心情" else "这天心情", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            AnimatedContent(mood, transitionSpec = { (fadeIn() + slideInVertically { it / 2 }) togetherWith fadeOut() }, label = "moodLabel") { m ->
+                Text(m?.label ?: "点一下记下来", style = MaterialTheme.typography.titleSmall, color = if (m == null) cs.outline else cs.onSurface, maxLines = 1)
+            }
+        }
+        Mood.entries.forEach { m ->
+            val chosen = m == mood
+            val scale by animateFloatAsState(if (chosen) 1.22f else 1f, spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessMediumLow), label = "moodScale")
+            val fade by animateFloatAsState(if (mood == null || chosen) 1f else 0.4f, tween(220), label = "moodFade")
+            val ring by animateColorAsState(if (chosen) cs.primary.copy(alpha = 0.16f) else Color.Transparent, tween(220), label = "moodRing")
+            Box(
+                Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(ring)
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                        onPick(if (chosen) null else m)
+                    }
+                    .semantics {
+                        contentDescription = "心情：" + m.label
+                        selected = chosen
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(m.emoji, fontSize = 22.sp, modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale; alpha = fade })
+            }
+        }
     }
 }
 

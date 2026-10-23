@@ -48,6 +48,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -80,6 +81,8 @@ import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.EventRepeat
 import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Inbox
@@ -171,6 +174,7 @@ import com.assetboard.ui.components.rememberBackdrop
 import com.assetboard.ui.components.rememberSwipeGroup
 import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.HeaderAction
+import com.assetboard.ui.components.SettingsAction
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.ListPickerDialog
 import com.assetboard.ui.components.ListRow
@@ -243,6 +247,11 @@ fun TodoHomeScreen(
     var composer by rememberSaveable { mutableStateOf(false) }
     var detailId by rememberSaveable { mutableStateOf<String?>(null) }
     var selection by remember(selected) { mutableStateOf(setOf<String>()) }
+    // The todo being edited in place; switching views ends the edit, which saves it.
+    var editingId by rememberSaveable(selected) { mutableStateOf<String?>(null) }
+    // A todo just gathered from the selection: its edit starts with the title blank, to be named.
+    var gatheredId by rememberSaveable(selected) { mutableStateOf<String?>(null) }
+    LaunchedEffect(selection.isEmpty()) { if (selection.isNotEmpty()) editingId = null }
     var rescheduleFor by remember { mutableStateOf<List<String>?>(null) }
     var moveFor by remember { mutableStateOf<List<String>?>(null) }
     var listDialog by remember { mutableStateOf<String?>(null) }
@@ -260,6 +269,7 @@ fun TodoHomeScreen(
     ErrorDialog(error) { vm.error.value = null }
     TodoSnackbars(vm, snackbar)
     fun openComposer() {
+        editingId = null
         composer = true
         // Bring the dial back so the field sits just under it.
         if (listState.firstVisibleItemIndex > DIAL_ITEM) scope.launch { listState.animateScrollToItem(DIAL_ITEM) }
@@ -323,6 +333,7 @@ fun TodoHomeScreen(
     }
     val pullTop = with(LocalDensity.current) { pull.pulled.toDp() }
     val checkedHabits by remember(today) { vm.habitsOn(today) }.collectAsStateWithLifecycle(emptySet())
+    val restingHabits by remember(today) { vm.habitsSkippedOn(today) }.collectAsStateWithLifecycle(emptySet())
     val habits by vm.activeHabits.collectAsStateWithLifecycle(emptyList())
     var customizing by rememberSaveable { mutableStateOf(false) }
     if (customizing) HabitEditorSheet(habits, vm, onDismiss = { customizing = false })
@@ -334,6 +345,8 @@ fun TodoHomeScreen(
             onHabit = vm::toggleHabit,
             onCustomize = { customizing = true },
             modifier = m,
+            skipped = restingHabits,
+            onSkipHabit = vm::toggleHabitRest,
         )
     }
     val composerField: @Composable () -> Unit = {
@@ -350,7 +363,23 @@ fun TodoHomeScreen(
         data = d, view = view, list = list, today = today, lines = order,
         selection = selection,
         onSelection = { selection = it },
-        onOpen = { detailId = it },
+        onOpen = { editingId = null; detailId = it },
+        editing = editingId,
+        onEdit = { id ->
+            swipe.closeAll()
+            if (id != null && composer) closeComposer()
+            editingId = id
+            if (id != gatheredId) gatheredId = null
+        },
+        gathered = gatheredId,
+        onGather = { ids ->
+            vm.gather(ids) { id ->
+                selection = emptySet()
+                if (composer) closeComposer()
+                gatheredId = id
+                editingId = id
+            }
+        },
         onReschedule = { rescheduleFor = it },
         onMove = { moveFor = it },
         onListMenu = { listDialog = it },
@@ -391,7 +420,7 @@ fun TodoHomeScreen(
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
                             PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize().statusBarsPadding(), icon = Icons.Default.Add) {
-                                LazyColumn(Modifier.fillMaxSize().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
+                                LazyColumn(Modifier.fillMaxSize().imePadding().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
                                     viewContent(ctx)
                                 }
                             }
@@ -403,7 +432,7 @@ fun TodoHomeScreen(
                 Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
                     PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize().statusBarsPadding(), icon = Icons.Default.Add) {
                     // Keep DIAL_ITEM in step with the item order here.
-                    LazyColumn(Modifier.fillMaxSize().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
+                    LazyColumn(Modifier.fillMaxSize().imePadding().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(top = pullTop, bottom = 32.dp)) {
                         item("title") { HomeTitle(today, doneToday, todayRows.size, onSettings) }
                         item("banners") { Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) { ReminderBanners(vm, onGuide) } }
                         item("views") { dial(Modifier.padding(top = 2.dp, bottom = 6.dp)) }
@@ -424,10 +453,14 @@ fun TodoHomeScreen(
     }
     rescheduleFor?.let { ids ->
         val anyRepeat = ids.any { id -> d?.todoById?.get(id)?.kind == TodoKind.REPEAT_SOURCE }
+        val one = ids.singleOrNull()?.let { d?.todoById?.get(it) }
         RescheduleDialog(
             today, allowSomeday = !anyRepeat, allowClear = !anyRepeat,
-            onPick = { date, someday -> vm.reschedule(ids, date, someday); rescheduleFor = null; selection = emptySet() },
+            onPick = { date, someday, time -> vm.reschedule(ids, date, someday, time); rescheduleFor = null; selection = emptySet() },
             onDismiss = { rescheduleFor = null },
+            current = one?.planDate?.let(TodoViews::parse),
+            currentTime = one?.remindTime?.let(java.time.LocalTime::parse),
+            batch = one == null,
         )
     }
     moveFor?.let { ids ->
@@ -483,7 +516,7 @@ private fun HomeTitle(today: LocalDate, done: Int, total: Int, onSettings: () ->
         else -> "今天完成 $done/$total"
     }
     TabHeader("待办", dayTitle(today, today).removePrefix("今天 · ") + " · " + progress, statusBar = false) {
-        HeaderAction(Icons.Outlined.Settings, "设置", onSettings)
+        SettingsAction(onSettings)
     }
 }
 
@@ -701,6 +734,14 @@ private class ViewContext(
     val selection: Set<String>,
     val onSelection: (Set<String>) -> Unit,
     val onOpen: (String) -> Unit,
+    /** The todo being edited in place, if any. */
+    val editing: String?,
+    /** Starts editing a todo in place, or (null) ends the edit, which saves it. */
+    val onEdit: (String?) -> Unit,
+    /** The todo just made from the selection, whose edit starts with a blank title. */
+    val gathered: String?,
+    /** Makes the selected todos, in the order given, the checklist of a new todo and edits it in place. */
+    val onGather: (List<String>) -> Unit,
     val onReschedule: (List<String>) -> Unit,
     val onMove: (List<String>) -> Unit,
     val onListMenu: (String) -> Unit,
@@ -733,7 +774,8 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                 val t = line.row.todo
                 val selecting = c.selection.isNotEmpty()
                 val logbook = c.view == TodoView.LOGBOOK
-                val movable = line.band != null
+                val editing = c.editing == t.id
+                val movable = line.band != null && c.editing == null
                 val dragged = c.reorder.dragging == t.id
                 Box(
                     Modifier
@@ -746,11 +788,20 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                         key = todoKey(t.id),
                         group = c.swipe,
                         shape = TodoCardShape,
-                        enabled = !selecting && !logbook && c.reorder.dragging == null,
+                        enabled = !selecting && !logbook && !editing && c.reorder.dragging == null,
                         actions = todoActions(t, line.row.done, c),
                         onDelete = { c.vm.delete(listOf(t.id)) },
                     ) {
                         val items = d.checklistByTodo[t.id].orEmpty()
+                        if (editing) {
+                            TodoInlineEditor(
+                                t, items,
+                                onCommit = { title, lines -> c.vm.saveInline(t.id, title, lines) },
+                                onDone = { if (c.editing == t.id) c.onEdit(null) },
+                                blankTitle = c.gathered == t.id,
+                            )
+                            return@SwipeActionsBox
+                        }
                         val showList = listId == null && c.view != TodoView.INBOX
                         val extras = RowExtras(
                             listName = if (showList) t.listId?.let { d.listById[it]?.name } else null,
@@ -765,8 +816,23 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             done = line.row.done || logbook,
                             today = c.today,
                             extras = extras,
-                            onToggle = { if (selecting) c.onSelection(c.selection.toggle(t.id)) else c.vm.toggle(t) },
-                            onClick = { if (selecting) c.onSelection(c.selection.toggle(t.id)) else c.onOpen(t.id) },
+                            onToggle = {
+                                when {
+                                    c.reorder.ownsClick(t.id) -> {}
+                                    selecting -> c.onSelection(c.selection.toggle(t.id))
+                                    else -> c.vm.toggle(t)
+                                }
+                            },
+                            // A tap edits in place; what cannot be edited (done, a record) opens its page.
+                            onClick = {
+                                when {
+                                    // The lift after a long press that picked the row up (and selected it, held still).
+                                    c.reorder.ownsClick(t.id) -> {}
+                                    selecting -> c.onSelection(c.selection.toggle(t.id))
+                                    logbook || line.row.done || t.kind == TodoKind.COMPLETION -> c.onOpen(t.id)
+                                    else -> c.onEdit(t.id)
+                                }
+                            },
                             // A movable row is picked up by a long press; held still, that selects it.
                             onLongClick = if (logbook || line.row.done || movable) null else ({ c.onSelection(c.selection.toggle(t.id)) }),
                             modifier = Modifier.reorderable(c.reorder, t.id, enabled = movable),
@@ -774,7 +840,7 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             selected = t.id in c.selection,
                             inUpcoming = c.view == TodoView.UPCOMING,
                             checklist = if (logbook) emptyList() else items.sortedBy { it.sortOrder },
-                            onToggleItem = if (selecting) null else c.vm::toggleChecklist,
+                            onToggleItem = if (selecting) null else ({ id -> if (!c.reorder.ownsClick(t.id)) c.vm.toggleChecklist(id) }),
                             onDeleteItem = if (selecting || c.reorder.dragging != null) null else c.vm::deleteChecklistItem,
                             swipe = c.swipe,
                         )
@@ -788,13 +854,16 @@ private fun LazyListScope.viewContent(c: ViewContext) {
 /** The dust and swipe key of a todo's card. */
 private fun todoKey(id: String) = "todo:$id"
 
-/** What a right swipe offers: done or not, the date and the flag; a full swipe completes. */
+/**
+ * What a right swipe offers: the full editor, the date and the flag; a full swipe opens the
+ * editor. Completing is the check box's, a tap away already.
+ */
 @Composable
 private fun todoActions(t: Todo, done: Boolean, c: ViewContext): List<SwipeAction> {
     val cs = MaterialTheme.colorScheme
     if (done) return listOf(SwipeAction("未完成", Icons.AutoMirrored.Outlined.Undo, cs.onSurfaceVariant) { c.vm.toggle(t) })
     return listOf(
-        SwipeAction("完成", Icons.Default.Check, cs.primary) { c.vm.complete(t) },
+        SwipeAction("编辑", Icons.Outlined.EditNote, cs.primary) { c.onOpen(t.id) },
         SwipeAction("改期", Icons.Outlined.CalendarMonth, cs.tertiary) { c.onReschedule(listOf(t.id)) },
         if (t.important) SwipeAction("取消重要", Icons.Outlined.OutlinedFlag, cs.secondary) { c.vm.setImportant(t, false) }
         else SwipeAction("重要", Icons.Default.Flag, Color(0xFFD08A2E)) { c.vm.setImportant(t, true) },
@@ -816,6 +885,9 @@ private fun ViewHeader(c: ViewContext) {
                 ) {
                     IconButton(onClick = { c.onSelection(emptySet()) }) { Icon(Icons.Default.Close, "取消选择") }
                     Text("已选 ${c.selection.size} 条", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { c.onGather(c.lines.mapNotNull { (it as? Line.Item)?.key?.takeIf(c.selection::contains) }) }) {
+                        Icon(Icons.Outlined.Checklist, "作为检查项创建新待办")
+                    }
                     IconButton(onClick = { c.onReschedule(c.selection.toList()) }) { Icon(Icons.Outlined.EventRepeat, "改期") }
                     IconButton(onClick = { c.onMove(c.selection.toList()) }) { Icon(Icons.Outlined.DriveFileMove, "移动") }
                     IconButton(onClick = { c.onDelete(c.selection.toList()); c.onSelection(emptySet()) }) { Icon(Icons.Outlined.Delete, "删除", tint = cs.error) }

@@ -11,6 +11,8 @@ import com.assetboard.data.Place
 import com.assetboard.data.SourceRef
 import com.assetboard.data.Todo
 import com.assetboard.data.WeatherResult
+import com.assetboard.domain.DiaryFormat
+import com.assetboard.domain.Mood
 import com.assetboard.domain.NetWorthPoint
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.ActionViewModel
@@ -236,6 +238,41 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     }
 
     fun discardDraft(draft: DiaryDraft) = action { diary.discardDraft(draft.id) }
+
+    // ------------------------------------------------------------ mood and 排版
+
+    /** The open day's mood; null clears it. */
+    fun setMood(mood: Mood?) {
+        val d = _date.value
+        action { diary.setMood(d, mood?.value) }
+    }
+
+    /** A 排版 that changed the text: what it was before, for the snackbar's 撤销. */
+    val tidied = MutableSharedFlow<Tidied>(extraBufferCapacity = 1)
+
+    /** 一键排版: the whole text through [DiaryFormat.tidy], saved at once like any typing. */
+    fun tidy() {
+        val s = _session.value ?: return
+        if (s.status.value != DiarySession.Status.READY) return
+        val before = s.text.value
+        val after = DiaryFormat.tidy(before)
+        if (after == before) {
+            messages.tryEmit("已经很整齐了")
+            return
+        }
+        s.onInput(after)
+        saveScope.launch { s.saveNow() }
+        tidied.tryEmit(Tidied(s, before, after))
+    }
+
+    /** Puts the text back as it was before [t], unless it was typed on since. */
+    fun undoTidy(t: Tidied) {
+        val s = _session.value?.takeIf { it === t.session && it.text.value == t.after } ?: return
+        s.onInput(t.before)
+        saveScope.launch { s.saveNow() }
+    }
+
+    data class Tidied(val session: DiarySession, val before: String, val after: String)
 
     // ------------------------------------------------------------ extract into notes
 

@@ -14,7 +14,8 @@ import java.time.temporal.ChronoUnit
  * A week at a glance, worked out when the review page opens and never stored. Rules:
  *
  * - diary: days with a live, non-empty entry, out of the week's days so far (7 once it is over);
- * - habits: days each one was ticked;
+ * - habits: days each one was ticked, and the rest days each one took ([habitRestDays]), which
+ *   come off the days it is measured against;
  * - todos: completed in the week, live, ordinary ones and repeat completions;
  * - weight: the week's last 7-day average point minus the previous week's; null when either
  *   is missing ([hasWeights] tells "no records yet" from "not enough");
@@ -30,6 +31,8 @@ data class WeekStats(
     val weightChangeG: Long?,
     val netWorthNow: Long?,
     val netWorthChange: Long?,
+    /** Habits with at least one rest day in the week, and how many. */
+    val habitRestDays: Map<Habit, Int> = emptyMap(),
 ) {
     companion object {
         fun of(
@@ -51,7 +54,9 @@ data class WeekStats(
                 today.isAfter(end) -> 7
                 else -> ChronoUnit.DAYS.between(start, today).toInt() + 1
             }
-            val days = habitChecks.filter { inWeek(LocalDate.parse(it.date)) }.groupBy { it.habit }.mapValues { (_, c) -> c.map { it.date }.toSet().size }
+            val (skips, ticks) = habitChecks.filter { inWeek(LocalDate.parse(it.date)) }.partition { it.skipped }
+            val days = ticks.groupBy { it.habit }.mapValues { (_, c) -> c.map { it.date }.toSet().size }
+            val rest = skips.groupBy { it.habit }.mapValues { (_, c) -> c.map { it.date }.toSet().size }
             val habits = allHabits.sortedBy { it.position }
                 .filter { h -> (days[h.key] ?: 0) > 0 || (0L..6L).any { h.on(start.plusDays(it)) } }
                 .associateWith { h -> days[h.key] ?: 0 }
@@ -71,6 +76,7 @@ data class WeekStats(
                 diaryDays = diaryDates.count { inWeek(it) && !it.isAfter(today) },
                 diaryOf = of,
                 habits = habits,
+                habitRestDays = habits.keys.associateWith { h -> rest[h.key] ?: 0 }.filterValues { it > 0 },
                 todosDone = done,
                 hasWeights = weights.isNotEmpty(),
                 weightChangeG = if (thisWeek != null && lastWeek != null) thisWeek - lastWeek else null,

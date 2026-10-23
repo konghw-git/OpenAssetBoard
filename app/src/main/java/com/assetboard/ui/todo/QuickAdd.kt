@@ -32,8 +32,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import com.assetboard.domain.todo.TodoDateParser
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.FormatListBulleted
@@ -101,6 +108,10 @@ fun QuickAddForm(
     var dialog by remember { mutableStateOf<String?>(null) }
     var added by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
+    // A day or time written into the title (明天下午3点): read until the user picks one by hand
+    // or says 不识别, which leaves the words as they are.
+    var reading by rememberSaveable { mutableStateOf(true) }
+    val found = remember(title, today, reading) { if (reading) TodoDateParser.parse(title, today, LocalTime.now()) else null }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) {
@@ -108,31 +119,49 @@ fun QuickAddForm(
         keyboard?.show()
     }
     LaunchedEffect(added) { if (added != null) { delay(1_600); added = null } }
-    val planDate = plan?.let(LocalDate::parse)
+    // What the chips show and the save uses: the words read from the title over the chips' own.
+    val planDate = found?.date ?: plan?.let(LocalDate::parse)
+    val remindAt = found?.time?.let(::timeLabel) ?: remind
+    val isSomeday = someday && found?.date == null
     val context = androidx.compose.ui.platform.LocalContext.current
     val askNotifications = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {}
     val cs = MaterialTheme.colorScheme
 
+    /** A chip touched by hand: the title's words stay words from here on. */
+    fun byHand() {
+        if (found != null) {
+            plan = found.date?.toString() ?: plan
+            remind = found.time?.let(::timeLabel) ?: remind
+            if (found.date != null) someday = false
+        }
+        reading = false
+    }
+
     fun save() {
         if (title.isBlank() || saving) return
         val submitted = title
+        val name = (found?.rest ?: submitted).trim()
         saving = true
         onSave(
             TodoDraft(
-                title = submitted.trim(),
+                title = name,
                 listId = listId,
                 planDate = planDate,
-                remindTime = remind?.let(LocalTime::parse),
-                someday = someday,
+                remindTime = remindAt?.let(LocalTime::parse),
+                someday = isSomeday,
                 deadline = deadline?.let(LocalDate::parse),
                 important = important,
             ),
         ) { saved ->
             saving = false
             if (saved) {
-                added = submitted.trim()
+                added = name
                 // Typing went on while saving: keep the new text.
-                if (title == submitted) title = ""
+                if (title == submitted) {
+                    title = ""
+                    reading = true
+                }
+                if (remindAt != null) askForNotifications(context, askNotifications)
             }
         }
     }
@@ -143,12 +172,23 @@ fun QuickAddForm(
         Row(Modifier.padding(start = side, end = if (inline) 8.dp else side), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
                 if (title.isEmpty()) Text("准备做什么？", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Normal), color = cs.outline)
+                val mark = SpanStyle(color = cs.primary, background = cs.primary.copy(alpha = 0.12f))
                 BasicTextField(
                     value = title,
                     onValueChange = { title = it.replace("\n", "") },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.titleMedium.copy(color = cs.onSurface, fontWeight = FontWeight.Medium),
                     cursorBrush = SolidColor(cs.primary),
+                    // The words read as a day or time, marked where they stand.
+                    visualTransformation = found?.let { f ->
+                        VisualTransformation { text ->
+                            val shown = buildAnnotatedString {
+                                append(text.text)
+                                f.spans.filter { it.last < text.length }.forEach { addStyle(mark, it.first, it.last + 1) }
+                            }
+                            TransformedText(shown, OffsetMapping.Identity)
+                        }
+                    } ?: VisualTransformation.None,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { if (title.isBlank()) onEmptyDone() else save() }),
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
@@ -169,6 +209,22 @@ fun QuickAddForm(
                 Icon(Icons.Default.ArrowUpward, "保存", tint = if (ready) AppTheme.extra.onHero else cs.outline, modifier = Modifier.size(22.dp))
             }
         }
+        AnimatedVisibility(found != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+            val f = found
+            Row(Modifier.padding(start = side, end = if (inline) 8.dp else side - 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.AutoAwesome, null, tint = cs.primary, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "识别为 " + listOfNotNull(f?.date?.let { TodoDayLabel(it, today) }, f?.time?.let(::timeLabel)).joinToString(" ") + "，标题存为「${f?.rest.orEmpty()}」",
+                    style = MaterialTheme.typography.labelMedium, color = cs.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "不识别", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable { reading = false }.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
         AnimatedVisibility(added != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
             Row(Modifier.padding(horizontal = side), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Check, null, tint = cs.primary, modifier = Modifier.size(14.dp))
@@ -179,13 +235,15 @@ fun QuickAddForm(
         val dates: @Composable () -> Unit = {
             QuickDate.entries.forEach { q ->
                 val d = q.resolve(today)
-                Choice(q.label, selected = !someday && planDate == d) {
+                Choice(q.label, selected = !isSomeday && planDate == d) {
+                    byHand()
                     if (!someday && planDate == d) plan = null else { plan = d.toString(); someday = false }
                 }
             }
             val custom = planDate != null && QuickDate.entries.none { it.resolve(today) == planDate }
-            Choice(if (custom) TodoDayLabel(planDate!!, today) else "选日期", selected = custom, icon = Icons.Outlined.CalendarMonth) { dialog = "plan" }
-            Choice("以后再说", selected = someday, icon = Icons.Outlined.Archive) {
+            Choice(if (custom) TodoDayLabel(planDate!!, today) else "选日期", selected = custom, icon = Icons.Outlined.CalendarMonth) { byHand(); dialog = "plan" }
+            Choice("以后再说", selected = isSomeday, icon = Icons.Outlined.Archive) {
+                byHand()
                 someday = !someday
                 if (someday) { plan = null; remind = null }
             }
@@ -194,7 +252,9 @@ fun QuickAddForm(
             Choice(deadline?.let { "截止 " + TodoDayLabel(LocalDate.parse(it), today) } ?: "截止", selected = deadline != null, icon = Icons.Outlined.Event) {
                 if (deadline != null) deadline = null else dialog = "deadline"
             }
-            Choice(remind?.let { "提醒 $it" } ?: "提醒", selected = remind != null, icon = Icons.Outlined.Alarm) {
+            // The time of day, which is also when the reminder goes off.
+            Choice(remindAt ?: "几点", selected = remindAt != null, icon = Icons.Outlined.Schedule) {
+                byHand()
                 if (remind != null) remind = null else dialog = "remind"
             }
             Choice(lists.firstOrNull { it.id == listId }?.name ?: "清单", selected = listId != null, icon = Icons.Outlined.FormatListBulleted) { dialog = "list" }
@@ -214,15 +274,14 @@ fun QuickAddForm(
         "deadline" -> DatePickDialog(initial = today, maxDate = null, onDismiss = { dialog = null }, onPick = { deadline = it.toString(); dialog = null })
         "remind" -> TimePickDialog(
             initial = null,
+            title = "几点",
             onDismiss = { dialog = null },
             onPick = {
-                remind = it.toString()
-                // A reminder hangs on the plan date; none yet means today.
+                remind = timeLabel(it)
+                // A time hangs on the plan date; none yet means today.
                 if (plan == null) { plan = today.toString(); someday = false }
                 dialog = null
-                if (android.os.Build.VERSION.SDK_INT >= 33 && !com.assetboard.reminder.ReminderScheduler.hasNotificationPermission(context)) {
-                    askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                }
+                askForNotifications(context, askNotifications)
             },
         )
         "list" -> ListPickerDialog(
@@ -236,6 +295,13 @@ fun QuickAddForm(
 }
 
 fun TodoDayLabel(d: LocalDate, today: LocalDate): String = com.assetboard.domain.todo.TodoViews.shortDate(d, today)
+
+/** The first time of day set is the moment to ask for the notification permission. */
+private fun askForNotifications(context: android.content.Context, launcher: androidx.activity.result.ActivityResultLauncher<String>) {
+    if (android.os.Build.VERSION.SDK_INT >= 33 && !com.assetboard.reminder.ReminderScheduler.hasNotificationPermission(context)) {
+        launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+}
 
 /** A pill choice: tonal when off, filled when on. */
 @Composable

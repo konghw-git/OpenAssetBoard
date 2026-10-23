@@ -57,6 +57,7 @@ import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.SegmentedControl
 import com.assetboard.ui.components.AccountAvatar
+import com.assetboard.ui.components.CalcKeys
 import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.DateField
 import com.assetboard.ui.components.ErrorDialog
@@ -247,6 +248,7 @@ fun FlowEditScreen(accountId: String?, flowId: String?, initialKind: String?, on
                     shape = FieldShape,
                     colors = glassFieldColors(),
                 )
+                CalcKeys(vm.amountInput, { vm.amountInput = it }, Modifier.padding(top = 8.dp))
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     vm.feeInput, { vm.feeInput = it },

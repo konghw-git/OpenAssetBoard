@@ -129,6 +129,8 @@ data class DiaryEntry(
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
     @ColumnInfo(name = "delete_batch") val deleteBatch: String? = null,
+    /** [com.assetboard.domain.Mood] 1 to 5, null for none; shown only, never counted. */
+    val mood: Int? = null,
 )
 
 /** Text that could not be saved into its entry; user data, backed up, removed only once handled. */

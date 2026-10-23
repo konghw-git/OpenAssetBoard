@@ -108,7 +108,7 @@ class MigrationTest {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7, Migrations.MIGRATION_7_8)
+            .addMigrations(*Migrations.ALL)
             .allowMainThreadQueries()
             .build()
         try {
@@ -254,11 +254,35 @@ class MigrationTest {
         }
     }
 
+    @Test fun migrationEightToNineAddsMoodAndRestDaysAndKeepsWhatWasThere() {
+        helper.createDatabase(name, 8).use { db ->
+            db.put(
+                "diary_entries", "id" to "d1", "date" to "2026-10-22", "body" to "写了几行", "body_rev" to 3L, "weather_code" to null,
+                "temp_min" to null, "temp_max" to null, "city" to null, "lat" to null, "lon" to null, "weather_at" to null, "weather_rev" to 0L,
+                "created_at" to 1L, "updated_at" to 2L, "deleted_at" to null, "delete_batch" to null,
+            )
+            db.put("habit_checks", "date" to "2026-10-22", "habit" to "workout", "checked_at" to 1L)
+        }
+        helper.runMigrationsAndValidate(name, 9, true, Migrations.MIGRATION_8_9).use { db ->
+            // A dumped row is its values followed by the column names.
+            fun List<Any?>.col(name: String) = this[indexOf(name) - size / 2]
+            val entry = db.dump("diary_entries").single()
+            // The old row has no mood, and its text and revision are untouched.
+            assertEquals(null, entry.col("mood"))
+            assertEquals("写了几行", entry.col("body"))
+            assertEquals(3L, entry.col("body_rev"))
+            // An old check is a check, not a rest day.
+            assertEquals(0L, db.dump("habit_checks").single().col("skipped"))
+            db.put("habit_checks", "date" to "2026-10-23", "habit" to "workout", "checked_at" to 2L, "skipped" to true)
+            assertEquals(2, db.dump("habit_checks").size)
+        }
+    }
+
     @Test fun databaseAtThreeOpensWithRoomAfterTheHealthMigration() = runBlocking {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, context.getDatabasePath(name).absolutePath)
-            .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4, Migrations.MIGRATION_4_5, Migrations.MIGRATION_5_6, Migrations.MIGRATION_6_7, Migrations.MIGRATION_7_8)
+            .addMigrations(*Migrations.ALL)
             .allowMainThreadQueries()
             .build()
         try {
