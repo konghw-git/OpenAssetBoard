@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.8] - 2026-10-23
+
 ### Added
 
 - **Selected todos move as one.** Long-pressing one of several selected todos and dragging it
