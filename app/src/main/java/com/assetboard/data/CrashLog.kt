@@ -41,10 +41,18 @@ object CrashLog {
         val am = context.getSystemService(ActivityManager::class.java) ?: return
         val infos = runCatching { am.getHistoricalProcessExitReasons(context.packageName, 0, 10) }.getOrNull() ?: return
         val seen = settings.long(KEY_EXIT_SEEN)
-        infos.filter { it.timestamp > seen && it.reason in Exits.NOTED }.sortedBy { it.timestamp }.forEach { info ->
+        val fresh = infos.filter { it.timestamp > seen && it.reason in Exits.NOTED }.sortedBy { it.timestamp }
+        // Marked seen on disk before they are written: a crash on start comes back before an
+        // asynchronous save lands, and wrote the same exits again on every start.
+        infos.maxOfOrNull { it.timestamp }?.let { settings.putLong(KEY_EXIT_SEEN, it, now = true) }
+        fresh.forEach { info ->
             append(context, "退出 · ${Exits.name(info.reason)}" + info.description?.let { " · $it" }.orEmpty(), info.timestamp)
         }
-        infos.maxOfOrNull { it.timestamp }?.let { settings.putLong(KEY_EXIT_SEEN, it) }
+    }
+
+    /** A line of its own, such as an update that failed and why. */
+    fun note(context: Context, text: String) {
+        runCatching { append(context.applicationContext, text) }
     }
 
     fun read(context: Context): String = runCatching { file(context).readText() }.getOrDefault("")

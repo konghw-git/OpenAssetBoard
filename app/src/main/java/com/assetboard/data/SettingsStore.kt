@@ -89,7 +89,8 @@ class SettingsStore(context: Context) {
     fun string(key: String): String? = prefs.getString(key, null)
     fun putString(key: String, value: String?) = prefs.edit { putString(key, value) }
     fun long(key: String): Long = prefs.getLong(key, 0L)
-    fun putLong(key: String, value: Long) = prefs.edit { putLong(key, value) }
+    /** [now] writes it to disk before returning, for what must survive the process ending right after. */
+    fun putLong(key: String, value: Long, now: Boolean = false) = prefs.edit(commit = now) { putLong(key, value) }
 
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit { putString(KEY_THEME, mode.name) }

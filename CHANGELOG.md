@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.13] - 2026-10-25
+
+### Fixed
+
+- 检查更新 no longer rests on GitHub's API alone, which allows 60 requests an hour per network and
+  is often spent on mobile data, where many phones share one address: when it refuses or fails,
+  the release page gives the version and the changelog its notes. "Too many requests" is now said
+  only of GitHub's own quota, with the time it comes back; a mirror or server turning a request
+  down is named with its code. A download that fails through the mirror is tried straight from
+  GitHub, and its progress shows even when the size was not known beforehand.
+- The diagnostics no longer write the same exits again after the app crashed on start, and they
+  now record a failed update check or download with its reason.
+
 ## [0.9.12] - 2026-10-25
 
 ### Added

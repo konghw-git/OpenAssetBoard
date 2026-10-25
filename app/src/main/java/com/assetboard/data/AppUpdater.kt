@@ -65,6 +65,49 @@ private data class GhRelease(
     val assets: List<GhAsset> = emptyList(),
 )
 
+/**
+ * A release read from github.com instead of its API, which allows 60 requests an hour per address:
+ * a phone on mobile data shares its address with many others and often finds the hour spent.
+ * releases/latest redirects to the newest tag (drafts and pre-releases left out, as the API does),
+ * scripts/publish-release.sh names the APK after the version, and the notes are the tag's
+ * CHANGELOG section, which is what the release's own notes are made of.
+ */
+internal object ReleasePage {
+    fun latestUrl(repo: String) = "https://github.com/$repo/releases/latest"
+
+    /** The tag a releases/latest redirect points at; null when there is no release to point at. */
+    fun tagOf(location: String?): String? =
+        location?.substringAfter("/releases/tag/", "")?.substringBefore('?')?.substringBefore('#')?.takeIf { it.isNotBlank() }
+
+    fun apkUrl(repo: String, tag: String) = "https://github.com/$repo/releases/download/$tag/OpenAssetBoard-${tag.removePrefix("v")}.apk"
+
+    fun changelogUrl(repo: String, tag: String) = "https://raw.githubusercontent.com/$repo/$tag/CHANGELOG.md"
+
+    fun page(repo: String, tag: String) = "https://github.com/$repo/releases/tag/$tag"
+
+    /** [version]'s section of the changelog without its heading; empty when it has none. */
+    fun notes(changelog: String, version: String): String {
+        val lines = changelog.lines()
+        val start = lines.indexOfFirst { it.startsWith("## [$version]") }
+        if (start < 0) return ""
+        val end = (start + 1 until lines.size).firstOrNull { lines[it].startsWith("## [") } ?: lines.size
+        return lines.subList(start + 1, end).joinToString("\n").trim()
+    }
+}
+
+/**
+ * A server that answered with [code]: GitHub's hourly quota spent when [resetAt] (epoch seconds)
+ * is known, otherwise [host] turning the request down, which is a mirror's doing as often as not.
+ */
+class RefusedException(val code: Int, val host: String, val resetAt: Long?) : IOException(refusal(code, host, resetAt))
+
+internal fun refusal(code: Int, host: String, resetAt: Long?, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String = when {
+    resetAt != null -> "GitHub 接口每个网络每小时只给 60 次，这个网络已经用完，" +
+        java.time.Instant.ofEpochSecond(resetAt).atZone(zone).toLocalTime().withSecond(0).withNano(0) + " 后恢复"
+    code == 403 || code == 429 -> "$host 拒绝了请求（$code）"
+    else -> "$host 返回 $code"
+}
+
 /** Version names as "0.8.0" or "v0.8.0"; a missing part counts as zero, a suffix is ignored. */
 object Versions {
     private fun parts(v: String): List<Int> =
@@ -134,6 +177,7 @@ class AppUpdater(
                 val r = latest()
                 if (r != null && Versions.isNewer(r.version, currentVersion)) UpdateState.Available(r) else UpdateState.UpToDate
             } catch (e: Exception) {
+                CrashLog.note(context, "更新 · 检查失败 · ${reason(e)}")
                 UpdateState.Failed("检查失败：${reason(e)}")
             }
             _state.value = next
@@ -141,12 +185,49 @@ class AppUpdater(
         }
     }
 
+    /** From the API, or when it refuses or fails, from the release page; the API's reason if both fail. */
     private suspend fun latest(): Release? = withContext(Dispatchers.IO) {
-        val text = get(URL("https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/latest")) { it.readBytes().decodeToString() }
+        try {
+            fromApi()
+        } catch (e: IOException) {
+            try {
+                fromPage()
+            } catch (page: Exception) {
+                throw e
+            }
+        }
+    }
+
+    private fun fromApi(): Release? {
+        val text = get(URL("https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/latest")) { input, _ -> input.readBytes().decodeToString() }
         val r = json.decodeFromString(GhRelease.serializer(), text)
-        if (r.draft || r.prerelease) return@withContext null
-        val apk = r.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) } ?: return@withContext null
-        Release(r.tag.removePrefix("v"), r.body.orEmpty().trim(), apk.url, apk.size, r.page)
+        if (r.draft || r.prerelease) return null
+        val apk = r.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) } ?: return null
+        return Release(r.tag.removePrefix("v"), r.body.orEmpty().trim(), apk.url, apk.size, r.page)
+    }
+
+    /** See [ReleasePage]. The size is not known here; the download reads it from the response. */
+    private fun fromPage(): Release? {
+        val repo = BuildConfig.UPDATE_REPO
+        val url = URL(ReleasePage.latestUrl(repo))
+        val c = url.openConnection() as HttpURLConnection
+        val location = try {
+            c.connectTimeout = 15_000
+            c.readTimeout = 15_000
+            c.instanceFollowRedirects = false
+            c.setRequestProperty("User-Agent", "OpenAssetBoard/$currentVersion")
+            val code = c.responseCode
+            if (code !in 300..399) throw refused(c, code)
+            c.getHeaderField("Location")
+        } finally {
+            c.disconnect()
+        }
+        val tag = ReleasePage.tagOf(location) ?: return null
+        val version = tag.removePrefix("v")
+        val notes = runCatching {
+            ReleasePage.notes(get(URL(ReleasePage.changelogUrl(repo, tag))) { input, _ -> input.readBytes().decodeToString() }, version)
+        }.getOrDefault("")
+        return Release(version, notes, ReleasePage.apkUrl(repo, tag), 0, ReleasePage.page(repo, tag))
     }
 
     fun ignore(r: Release) {
@@ -175,6 +256,7 @@ class AppUpdater(
                 // The user cancelled: cancel() already put the state back.
                 throw e
             } catch (e: Exception) {
+                CrashLog.note(context, "更新 · 下载 ${r.version} 失败 · ${reason(e)}")
                 UpdateState.Failed("下载失败：${reason(e)}", r)
             }
         }
@@ -187,12 +269,39 @@ class AppUpdater(
         prompt.value = false
     }
 
+    /**
+     * Through the mirror when one is set, and straight from GitHub when that fails: the signature
+     * check, not the source, is what makes a file safe to install.
+     */
     private suspend fun fetch(r: Release): File = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, DIR).apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
         val part = File(dir, "OpenAssetBoard-${r.version}.apk.part")
         val mirror = normalizeMirror(settings.string(KEY_MIRROR).orEmpty())
-        get(URL(mirror + r.apkUrl), timeoutMs = 30_000) { input ->
+        if (mirror.isEmpty()) {
+            fetchFrom(r.apkUrl, r, part)
+        } else {
+            try {
+                fetchFrom(mirror + r.apkUrl, r, part)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (viaMirror: Exception) {
+                try {
+                    fetchFrom(r.apkUrl, r, part)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (direct: Exception) {
+                    throw IOException("镜像 ${mirrorName(mirror)}：${reason(viaMirror)}；直连 GitHub：${reason(direct)}")
+                }
+            }
+        }
+        File(dir, part.name.removeSuffix(".part")).also { if (!part.renameTo(it)) throw IOException("无法保存安装包") }
+    }
+
+    private suspend fun fetchFrom(url: String, r: Release, part: File) = withContext(Dispatchers.IO) {
+        get(URL(url), timeoutMs = 30_000) { input, length ->
+            // The release page knows no size; the response does.
+            val size = if (r.size > 0) r.size else length
             part.outputStream().use { out ->
                 val buf = ByteArray(64 * 1024)
                 var total = 0L
@@ -202,16 +311,15 @@ class AppUpdater(
                     if (n < 0) break
                     out.write(buf, 0, n)
                     total += n
-                    val pct = if (r.size > 0) (total * 100 / r.size).toInt() else -1
+                    val pct = if (size > 0) (total * 100 / size).toInt() else -1
                     if (pct != shown) {
                         shown = pct
                         _state.value = UpdateState.Downloading(r, if (pct < 0) -1f else pct / 100f)
                     }
                 }
-                if (r.size > 0 && total != r.size) throw IOException("文件不完整")
+                if (size > 0 && total != size) throw IOException("文件不完整")
             }
         }
-        File(dir, part.name.removeSuffix(".part")).also { if (!part.renameTo(it)) throw IOException("无法保存安装包") }
     }
 
     /** This app, newer than what runs, and signed with the same key: anything else is not installed. */
@@ -366,7 +474,8 @@ class AppUpdater(
         }
     }
 
-    private inline fun <T> get(url: URL, timeoutMs: Int = 15_000, read: (java.io.InputStream) -> T): T {
+    /** [read] gets the body and its length, or -1 when the server does not say. */
+    private inline fun <T> get(url: URL, timeoutMs: Int = 15_000, read: (java.io.InputStream, Long) -> T): T {
         val c = url.openConnection() as HttpURLConnection
         try {
             c.connectTimeout = timeoutMs
@@ -375,11 +484,17 @@ class AppUpdater(
             c.setRequestProperty("Accept", "application/vnd.github+json")
             c.setRequestProperty("User-Agent", "OpenAssetBoard/$currentVersion")
             val code = c.responseCode
-            if (code !in 200..299) throw IOException(if (code == 403 || code == 429) "请求太频繁，稍后再试" else "服务器返回 $code")
-            return c.inputStream.use(read)
+            if (code !in 200..299) throw refused(c, code)
+            return c.inputStream.use { read(it, c.contentLengthLong) }
         } finally {
             c.disconnect()
         }
+    }
+
+    /** GitHub says when its quota is spent (none remaining, and when it resets); anyone else just refuses. */
+    private fun refused(c: HttpURLConnection, code: Int): RefusedException {
+        val spent = (code == 403 || code == 429) && c.getHeaderField("X-RateLimit-Remaining") == "0"
+        return RefusedException(code, c.url.host, if (spent) c.getHeaderField("X-RateLimit-Reset")?.toLongOrNull() else null)
     }
 
     /** A prefix for the release URL: https only, and ending in a slash so it simply replaces the host. */
