@@ -1,6 +1,11 @@
 package com.assetboard.ui.todo
 
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.outlined.DragHandle
 
 import androidx.compose.foundation.layout.Arrangement
@@ -556,7 +561,8 @@ private fun Checklist(todoId: String, items: List<ChecklistItem>, editable: Bool
                     value = text,
                     onValueChange = { text = it.replace("\n", "") },
                     readOnly = !editable,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    textStyle = todoTitleStyle.copy(
+                        fontWeight = FontWeight.Normal,
                         color = if (item.done) cs.onSurfaceVariant else cs.onSurface,
                         textDecoration = if (item.done) TextDecoration.LineThrough else null,
                     ),
@@ -569,7 +575,8 @@ private fun Checklist(todoId: String, items: List<ChecklistItem>, editable: Bool
                     },
                 )
                 if (editable) {
-                    Icon(Icons.Outlined.DragHandle, "拖动检查项：${item.text}", Modifier.size(32.dp).checklistHandle(item.id), tint = cs.outline)
+                    // Quiet controls, so the items' words carry the row.
+                    Icon(Icons.Outlined.DragHandle, "拖动检查项：${item.text}", Modifier.size(32.dp).checklistHandle(item.id).padding(4.dp), tint = cs.outline.copy(alpha = 0.6f))
                     IconButton(
                         onClick = {
                             // The item alone turns to dust, as a swiped todo does.
@@ -579,22 +586,26 @@ private fun Checklist(todoId: String, items: List<ChecklistItem>, editable: Bool
                             }
                         },
                         modifier = Modifier.size(36.dp),
-                    ) { Icon(Icons.Default.Close, "删除检查项", Modifier.size(16.dp), tint = cs.outline) }
+                    ) { Icon(Icons.Default.Close, "删除检查项", Modifier.size(15.dp), tint = cs.outline.copy(alpha = 0.6f)) }
                 }
             }
             }
         }
         if (editable) {
             var draft by remember { mutableStateOf("") }
-            Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("+", color = cs.primary, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.width(14.dp))
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                // A plus where the check circles stand, so a new item lands in their column.
+                Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(22.dp).clip(CircleShape).background(cs.primary.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Add, null, tint = cs.primary, modifier = Modifier.size(15.dp))
+                    }
+                }
                 Box(Modifier.weight(1f).padding(vertical = 10.dp)) {
-                    if (draft.isEmpty()) Text("添加检查项", color = cs.outline, style = MaterialTheme.typography.bodyLarge)
+                    if (draft.isEmpty()) Text("添加检查项", color = cs.outline, style = todoTitleStyle.copy(fontWeight = FontWeight.Normal))
                     BasicTextField(
                         value = draft,
                         onValueChange = { draft = it.replace("\n", "") },
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = cs.onSurface),
+                        textStyle = todoTitleStyle.copy(fontWeight = FontWeight.Normal, color = cs.onSurface),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { vm.addItem(draft); draft = "" }),
                         cursorBrush = SolidColor(cs.primary),

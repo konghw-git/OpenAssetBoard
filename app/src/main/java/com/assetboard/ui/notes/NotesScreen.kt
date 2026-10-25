@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -371,7 +372,8 @@ fun NotesScreen(
                     Modifier.fillMaxSize().scrollIndicator(listState),
                     state = listState,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = with(LocalDensity.current) { pull.pulled.toDp() }, bottom = 32.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    // No gaps: a section's notes meet edge to edge as one panel; the other items keep their own room below.
+                    verticalArrangement = Arrangement.Top,
                 ) {
                     item(key = "topics") {
                         TopicBar(
@@ -383,7 +385,7 @@ fun NotesScreen(
                         )
                     }
                     if (drafts.isNotEmpty()) {
-                        item(key = "drafts") { DraftBanner(drafts.size, Modifier.animateItem()) { draftsOpen = true } }
+                        item(key = "drafts") { DraftBanner(drafts.size, Modifier.animateItem().padding(bottom = 12.dp)) { draftsOpen = true } }
                     }
                     review?.takeIf { filter == NotesViewModel.ALL }?.let { r ->
                         item(key = "review") {
@@ -391,7 +393,7 @@ fun NotesScreen(
                                 r, topics, today,
                                 onOpen = { vm.openReview(r); onOpen(r.id) },
                                 onDismiss = { vm.dismissReview(r, today) },
-                                modifier = Modifier.animateItem(),
+                                modifier = Modifier.animateItem().padding(bottom = 12.dp),
                             )
                         }
                     }
@@ -411,7 +413,7 @@ fun NotesScreen(
                             val showTopic = filter == NotesViewModel.ALL
                             val selecting = selection.isNotEmpty()
                             val stackColor = cs.primary
-                            val card: @Composable LazyItemScope.(Note) -> Unit = { n ->
+                            val card: @Composable LazyItemScope.(Note, PanelPlace) -> Unit = { n, place ->
                                 val key = noteKey(n.id)
                                 val dragged = reorder.dragging == key
                                 val stack = if (dragged) carried.size else 0
@@ -452,6 +454,7 @@ fun NotesScreen(
                                             // Where a long press cannot pick the card up, it only selects.
                                             onLongClick = if (custom) null else ({ toggle() }),
                                             selected = n.id in selection,
+                                            place = place,
                                         )
                                     }
                                     if (stack > 0) CarryBadge("${stack + 1} 篇", Modifier.align(Alignment.TopEnd).padding(end = 10.dp).graphicsLayer { translationY = -6.dp.toPx() })
@@ -459,10 +462,10 @@ fun NotesScreen(
                             }
                             if (pinned.isNotEmpty()) {
                                 item(key = "pinnedLabel") { Label("置顶", Modifier.animateItem()) }
-                                items(pinned, key = { noteKey(it.id) }) { card(it) }
-                                if (rest.isNotEmpty()) item(key = "restLabel") { Label(if (custom) "笔记" else sort.label, Modifier.animateItem()) }
+                                itemsIndexed(pinned, key = { _, n -> noteKey(n.id) }) { i, n -> card(n, PanelPlace.of(i, pinned.size)) }
+                                if (rest.isNotEmpty()) item(key = "restLabel") { Label(if (custom) "笔记" else sort.label, Modifier.animateItem().padding(top = 10.dp)) }
                             }
-                            items(rest, key = { noteKey(it.id) }) { card(it) }
+                            itemsIndexed(rest, key = { _, n -> noteKey(n.id) }) { i, n -> card(n, PanelPlace.of(i, rest.size)) }
                         }
                     }
                 }
@@ -542,7 +545,7 @@ private fun Label(text: String, modifier: Modifier = Modifier) {
         text,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(start = 6.dp, top = 6.dp),
+        modifier = modifier.padding(start = 8.dp, top = 4.dp, bottom = 8.dp),
     )
 }
 
@@ -715,17 +718,19 @@ private fun ReviewCard(note: Note, topics: List<NoteTopic>, today: LocalDate, on
 @Composable
 private fun DraftBanner(count: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Surface(color = cs.tertiaryContainer, shape = RoundedCornerShape(20.dp), modifier = modifier.fillMaxWidth()) {
-        Row(Modifier.clickable(onClick = onClick).padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(34.dp).clip(CircleShape).background(cs.onTertiaryContainer.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.Drafts, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(18.dp))
+    val shape = RoundedCornerShape(20.dp)
+    // Glass washed in the tertiary blue, like the page's other notices, not a solid slab.
+    Box(modifier.fillMaxWidth().glass(shape, glass, cs.tertiary.copy(alpha = 0.10f), elevation = 6.dp).clip(shape)) {
+        Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 14.dp, end = 10.dp, top = 11.dp, bottom = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(34.dp).clip(CircleShape).background(cs.tertiary.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Drafts, null, tint = cs.tertiary, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("有 $count 份草稿未处理", style = MaterialTheme.typography.titleSmall, color = cs.onTertiaryContainer)
-                Text("保存冲突时留下的文字，点开处理", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer.copy(alpha = 0.75f))
+                Text("有 $count 份草稿未处理", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                Text("保存冲突时留下的文字，点开处理", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = cs.onTertiaryContainer)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = cs.onSurfaceVariant)
         }
     }
 }

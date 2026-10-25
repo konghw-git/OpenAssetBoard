@@ -63,6 +63,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -209,6 +211,21 @@ data class RowExtras(
 
 val TodoCardShape = RoundedCornerShape(18.dp)
 
+/**
+ * A todo's title wherever it is a row: on the card, being edited in place, a list's name. One
+ * style, so text never shifts between showing and editing.
+ */
+val todoTitleStyle: TextStyle
+    @Composable @ReadOnlyComposable get() = MaterialTheme.typography.bodyLarge.copy(
+        fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.15.sp,
+    )
+
+/** A checklist item's text, under its todo and while being edited there. */
+val checkItemStyle: TextStyle
+    @Composable @ReadOnlyComposable get() = MaterialTheme.typography.bodyMedium.copy(
+        fontSize = 14.5.sp, lineHeight = 20.sp, letterSpacing = 0.15.sp,
+    )
+
 /** One todo as a card: check box, title, a line of small chips and the date badge. */
 @Composable
 fun TodoRow(
@@ -265,7 +282,7 @@ fun TodoRow(
     ) {
         CheckCircle(done, todo.important, onToggle, repeat = todo.kind == TodoKind.REPEAT_SOURCE, box = CircleBox)
         // With check points, the title line is centred on the circle; otherwise the row centres it.
-        Column(Modifier.weight(1f).padding(top = if (points.isEmpty()) 5.dp else 9.dp, bottom = 5.dp).graphicsLayer { alpha = content }) {
+        Column(Modifier.weight(1f).padding(start = 2.dp, top = if (points.isEmpty()) 6.dp else 9.dp, bottom = 6.dp).graphicsLayer { alpha = content }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (todo.important && !done) {
                     Icon(Icons.Default.Flag, null, tint = cs.error, modifier = Modifier.size(14.dp))
@@ -273,8 +290,7 @@ fun TodoRow(
                 }
                 Text(
                     todo.title,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 21.sp),
-                    fontWeight = FontWeight.Medium,
+                    style = todoTitleStyle,
                     color = if (done) cs.onSurfaceVariant else cs.onSurface,
                     textDecoration = if (done) TextDecoration.LineThrough else null,
                     maxLines = 2,
@@ -292,9 +308,9 @@ fun TodoRow(
             if (hasMeta) {
                 // The date tag first, then the reminder: one line of tags under the title.
                 FlowRow(
-                    Modifier.padding(top = 3.dp),
+                    Modifier.padding(top = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     itemVerticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (badge != null) DateChip(badge)
@@ -391,7 +407,7 @@ private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> U
     }
 }
 
-private val ChecklistGap = 4.dp
+private val ChecklistGap = 0.dp
 
 /** The dust and swipe key of a checklist item, in the list and in the detail. */
 internal fun checklistKey(id: String) = "check:$id"
@@ -446,27 +462,27 @@ private fun CheckNode(item: ChecklistItem, above: Dp, last: Boolean, onToggle: (
     }
 }
 
-/** An item's text on its strip; the tick is on the node beside it, [onTap] is the strip's own. */
+/**
+ * An item's text beside its node, straight on the card: no strip of its own, so the thread and
+ * the words read as one list rather than a stack of boxes. The tick is on the node; [onTap] is
+ * the text's own, its press shown as a soft wash.
+ */
 @Composable
 private fun CheckPoint(item: ChecklistItem, onTap: ((String) -> Unit)?) {
     val cs = MaterialTheme.colorScheme
-    val text by animateColorAsState(if (item.done) cs.outline else cs.onSurface.copy(alpha = 0.88f), tween(200), label = "pointText")
-    // A strip a shade off the card: light on glass, dimmer once done.
-    val strip by animateColorAsState(cs.onSurface.copy(alpha = if (item.done) 0.03f else 0.055f), tween(200), label = "strip")
-    val shape = CheckPointShape
+    val text by animateColorAsState(if (item.done) cs.outline else cs.onSurface.copy(alpha = 0.9f), tween(200), label = "pointText")
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(strip)
+            .clip(CheckPointShape)
             .then(if (onTap != null) Modifier.clickable { onTap(item.id) } else Modifier)
-            .heightIn(min = 32.dp)
-            .padding(horizontal = 12.dp, vertical = 5.dp),
+            .heightIn(min = 34.dp)
+            .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             item.text,
-            style = MaterialTheme.typography.bodyMedium,
+            style = checkItemStyle,
             color = text,
             textDecoration = if (item.done) TextDecoration.LineThrough else null,
         )
@@ -479,8 +495,8 @@ internal fun MetaChip(icon: ImageVector, text: String?, color: Color, bold: Bool
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
-            .background(color.copy(alpha = 0.10f))
-            .padding(horizontal = if (text == null) 4.dp else 7.dp, vertical = 1.dp),
+            .background(color.copy(alpha = 0.11f))
+            .padding(horizontal = if (text == null) 5.dp else 8.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = color, modifier = Modifier.size(12.dp))

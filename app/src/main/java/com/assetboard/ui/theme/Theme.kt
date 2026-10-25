@@ -12,10 +12,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.assetboard.data.ThemeMode
@@ -80,7 +82,7 @@ private val DarkColors = darkColorScheme(
     surfaceContainer = Color(0xFF17241F),
     surfaceContainerHigh = Color(0xFF1F2F29),
     surfaceContainerHighest = Color(0xFF283B33),
-    outline = Color(0xFF4B5853),
+    outline = Color(0xFF7D8C85),
     outlineVariant = Color(0xFF2C3833),
     error = Color(0xFFF2B8B5),
     onError = Color(0xFF601410),
@@ -106,6 +108,8 @@ data class ExtraColors(
     val onHeroAccent: Color,
     val groupPalette: List<Color>,
     val chartGrid: Color,
+    /** The net worth card: clear glass lit from within by drifting fields of these warm colours. */
+    val aurora: Aurora,
 ) {
     fun group(index: Int): Color = groupPalette[((index % groupPalette.size) + groupPalette.size) % groupPalette.size]
     fun signed(cents: Long): Color = if (cents >= 0) gain else loss
@@ -118,6 +122,62 @@ private val LightPalette = listOf(
 private val DarkPalette = listOf(
     Color(0xFF6CC9B0), Color(0xFF8FACE6), Color(0xFFEBC06A), Color(0xFFE8907E),
     Color(0xFFB7A0E2), Color(0xFF74CBDA), Color(0xFFE09FB9), Color(0xFFB2BE80),
+)
+
+/**
+ * The warm glass of the net worth card: a translucent [wash] over the page, [fields] of amber,
+ * coral, persimmon and rose drifting under it, ink dark enough to read on all of them, and a
+ * [flame] gradient for the figure's currency sign and the card's one button.
+ */
+@Immutable
+data class Aurora(
+    val wash: List<Color>,
+    val fields: List<Color>,
+    val fieldAlpha: Float,
+    val ink: Color,
+    val inkMuted: Color,
+    val accent: Color,
+    val flame: List<Color>,
+    val onFlame: Color,
+    /** The big figure's ink, deepening toward the warm end. */
+    val figure: List<Color>,
+    /** The small panes on the card and their lit edge. */
+    val pane: Color,
+    val paneRim: Color,
+    val rim: Color,
+    val shadow: Color,
+)
+
+private val LightAurora = Aurora(
+    wash = listOf(Color(0xB3FFF6EF), Color(0x99FFEDE4), Color(0xA6FFF1EA)),
+    fields = listOf(Color(0xFFFF9A3C), Color(0xFFFF5E4D), Color(0xFFFFC15A), Color(0xFFF2557A)),
+    fieldAlpha = 0.42f,
+    ink = Color(0xFF2E1A14),
+    inkMuted = Color(0xFF7D5A4C),
+    accent = Color(0xFFE8572A),
+    flame = listOf(Color(0xFFFF8A3D), Color(0xFFF2453D)),
+    onFlame = Color.White,
+    figure = listOf(Color(0xFF2E1A14), Color(0xFF8E3016)),
+    pane = Color(0x7AFFFFFF),
+    paneRim = Color(0xE6FFFFFF),
+    rim = Color(0xFFFFFFFF),
+    shadow = Color(0x47E2603A),
+)
+
+private val DarkAurora = Aurora(
+    wash = listOf(Color(0x8C2A1712), Color(0x80231014), Color(0x8C2B1A10)),
+    fields = listOf(Color(0xFFFF8A3D), Color(0xFFE5483E), Color(0xFFFFB347), Color(0xFFD94A78)),
+    fieldAlpha = 0.34f,
+    ink = Color(0xFFFFF4EC),
+    inkMuted = Color(0xFFE6C3B1),
+    accent = Color(0xFFFFB27A),
+    flame = listOf(Color(0xFFFF9A4D), Color(0xFFF0503F)),
+    onFlame = Color.White,
+    figure = listOf(Color(0xFFFFF6EF), Color(0xFFFFC7A0)),
+    pane = Color(0x17FFFFFF),
+    paneRim = Color(0x40FFE2CF),
+    rim = Color(0x80FFD9C2),
+    shadow = Color(0x73000000),
 )
 
 private fun extraColors(dark: Boolean, upIsRed: Boolean): ExtraColors {
@@ -135,6 +195,7 @@ private fun extraColors(dark: Boolean, upIsRed: Boolean): ExtraColors {
         onHeroAccent = Color(0xFFEBD197),
         groupPalette = if (dark) DarkPalette else LightPalette,
         chartGrid = if (dark) Color(0xFF283B33) else Color(0xFFD7E1DB),
+        aurora = if (dark) DarkAurora else LightAurora,
     )
 }
 
@@ -142,6 +203,31 @@ private val LocalExtraColors = staticCompositionLocalOf { extraColors(dark = fal
 
 /** Tabular figures keep columns of amounts aligned. */
 val NumberStyle = TextStyle(fontFeatureSettings = "tnum")
+
+/**
+ * Every line's glyphs centred in its line height, the space above and below kept. The default
+ * splits the extra space by the font's ascent and descent, so with a system font whose metrics
+ * differ from the emulator's Chinese text can sit off the middle of its row.
+ */
+private val CenteredLines = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
+
+private fun Typography.centered(): Typography = copy(
+    displayLarge = displayLarge.copy(lineHeightStyle = CenteredLines),
+    displayMedium = displayMedium.copy(lineHeightStyle = CenteredLines),
+    displaySmall = displaySmall.copy(lineHeightStyle = CenteredLines),
+    headlineLarge = headlineLarge.copy(lineHeightStyle = CenteredLines),
+    headlineMedium = headlineMedium.copy(lineHeightStyle = CenteredLines),
+    headlineSmall = headlineSmall.copy(lineHeightStyle = CenteredLines),
+    titleLarge = titleLarge.copy(lineHeightStyle = CenteredLines),
+    titleMedium = titleMedium.copy(lineHeightStyle = CenteredLines),
+    titleSmall = titleSmall.copy(lineHeightStyle = CenteredLines),
+    bodyLarge = bodyLarge.copy(lineHeightStyle = CenteredLines),
+    bodyMedium = bodyMedium.copy(lineHeightStyle = CenteredLines),
+    bodySmall = bodySmall.copy(lineHeightStyle = CenteredLines),
+    labelLarge = labelLarge.copy(lineHeightStyle = CenteredLines),
+    labelMedium = labelMedium.copy(lineHeightStyle = CenteredLines),
+    labelSmall = labelSmall.copy(lineHeightStyle = CenteredLines),
+)
 
 // Headlines sit tight and heavy, labels firm; body stays airy. Big figures are tabular throughout.
 private val AppTypography = Typography().let { t ->
@@ -159,7 +245,7 @@ private val AppTypography = Typography().let { t ->
         labelLarge = t.labelLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp),
         labelMedium = t.labelMedium.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp),
         labelSmall = t.labelSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp),
-    )
+    ).centered()
 }
 
 private val AppShapes = Shapes(
@@ -192,4 +278,16 @@ fun AssetBoardTheme(themeMode: ThemeMode, upIsRed: Boolean, content: @Composable
 object AppTheme {
     val extra: ExtraColors
         @Composable @ReadOnlyComposable get() = LocalExtraColors.current
+}
+
+/**
+ * Content laid on the warm glass card ([Aurora]): the hero's ink colours become the card's, so
+ * the shared hero pieces inside read dark on light glass and light on dark.
+ */
+@Composable
+fun OnAurora(content: @Composable () -> Unit) {
+    val extra = LocalExtraColors.current
+    val a = extra.aurora
+    val on = remember(extra) { extra.copy(onHero = a.ink, onHeroMuted = a.inkMuted, onHeroAccent = a.accent, heroStart = a.flame.last()) }
+    CompositionLocalProvider(LocalExtraColors provides on, LocalContentColor provides a.ink, content = content)
 }

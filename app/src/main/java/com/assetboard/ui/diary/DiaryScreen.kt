@@ -13,13 +13,8 @@ import com.assetboard.ui.components.LocalAmbient
 import com.assetboard.ui.components.ambient
 import com.assetboard.ui.components.glass
 import com.assetboard.ui.components.rememberAmbient
-import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.TextStyle
 import com.assetboard.ui.components.tint
 import com.assetboard.domain.Habit
 import com.assetboard.domain.HabitDay
@@ -57,6 +52,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import com.assetboard.ui.components.Motion
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -505,23 +501,27 @@ private fun DayCard(
     val fromDay by vm.fromDay.collectAsStateWithLifecycle()
     var open by rememberSaveable(date) { mutableStateOf<DayFold?>(null) }
     fun toggle(f: DayFold) { open = if (open == f) null else f }
-    val shape = RoundedCornerShape(26.dp)
+    val shape = RoundedCornerShape(24.dp)
     Column(
         Modifier
             .fillMaxWidth()
-            .glass(shape, glass, cs.surface.copy(alpha = 0.10f))
+            .glass(shape, glass, cs.surface.copy(alpha = 0.06f), elevation = 8.dp)
             .clip(shape)
             .animateContentSize()
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        if (!date.isAfter(today)) MoodLine(Mood.of(entry?.mood), today = date == today) { vm.setMood(it) }
+        val mood = !date.isAfter(today)
+        if (mood) MoodLine(Mood.of(entry?.mood), today = date == today) { vm.setMood(it) }
         habits?.let {
-            CardRule()
-            HabitGrid(it, live = date == today)
+            if (mood) CardRule()
+            HabitGrid(it)
         }
-        CardRule()
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (mood || habits != null) CardRule()
+        // Three figures side by side, parted by hairlines rather than boxed one by one.
+        val divider = cs.outlineVariant.copy(alpha = 0.6f)
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
             val tile = Modifier.weight(1f).fillMaxHeight()
+            val rule = @Composable { Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(28.dp).background(divider)) }
             val last = stocktakes.lastOrNull()
             DayTile(
                 Icons.Outlined.Checklist,
@@ -533,6 +533,7 @@ private fun DayCard(
                 modifier = tile,
                 onClick = if (last != null || date == today) onStocktake else null,
             )
+            rule()
             val first = review?.body?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
             DayTile(
                 Icons.Outlined.ViewWeek,
@@ -544,6 +545,7 @@ private fun DayCard(
                 modifier = tile,
                 onClick = onOpenWeek,
             )
+            rule()
             DayTile(
                 Icons.Outlined.TaskAlt,
                 "完成待办",
@@ -557,7 +559,7 @@ private fun DayCard(
             )
         }
         if (fromDay.isNotEmpty() || onThisDay.isNotEmpty()) {
-            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (fromDay.isNotEmpty()) FoldChip(Icons.Outlined.AutoStories, "提炼的笔记 ${fromDay.size}", open == DayFold.NOTES) { toggle(DayFold.NOTES) }
                 if (onThisDay.isNotEmpty()) FoldChip(Icons.Outlined.History, "那年今日 ${onThisDay.size}", open == DayFold.YEARS) { toggle(DayFold.YEARS) }
             }
@@ -597,18 +599,22 @@ private fun DayCard(
     }
 }
 
-/** A faint dashed line between the day card's parts. */
+/** A hairline between the day card's parts, fading out toward both ends. */
 @Composable
 private fun CardRule() {
     val color = MaterialTheme.colorScheme.outlineVariant
     Box(
-        Modifier.padding(vertical = 10.dp).fillMaxWidth().height(1.dp).drawBehind {
-            drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
+        Modifier.padding(vertical = 8.dp).fillMaxWidth().height(1.dp).drawBehind {
+            drawRect(Brush.horizontalGradient(listOf(Color.Transparent, color, color, Color.Transparent)))
         },
     )
 }
 
-/** One of the day card's three tiles: what it is, its figure, and a quiet line under it. */
+/**
+ * One of the day card's three figures: an icon and what it is on the first line, the figure
+ * and a quiet word after it on the second. No box of its own; a tap shows a soft wash, and the
+ * one whose list is unfolded keeps it.
+ */
 @Composable
 private fun DayTile(
     icon: ImageVector,
@@ -622,28 +628,35 @@ private fun DayTile(
     onClick: (() -> Unit)?,
 ) {
     val cs = MaterialTheme.colorScheme
-    val bg by animateColorAsState(tint.copy(alpha = if (active) 0.20f else 0.09f), tween(200), label = "tile")
+    val bg by animateColorAsState(tint.copy(alpha = if (active) 0.14f else 0f), tween(200), label = "tile")
     Column(
         modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(bg)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 10.dp, vertical = 9.dp),
+            .padding(horizontal = 6.dp, vertical = 5.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = tint, modifier = Modifier.size(14.dp))
+            Icon(icon, null, tint = tint, modifier = Modifier.size(13.dp))
             Spacer(Modifier.width(4.dp))
             Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(
-            value,
-            style = MaterialTheme.typography.titleSmall.merge(com.assetboard.ui.theme.NumberStyle),
-            fontWeight = FontWeight.SemiBold,
-            color = if (muted) tint else cs.onSurface,
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = cs.outline, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.Bottom) {
+            Text(
+                value,
+                style = MaterialTheme.typography.titleSmall.merge(com.assetboard.ui.theme.NumberStyle),
+                fontWeight = FontWeight.SemiBold,
+                color = if (muted) tint else cs.onSurface,
+                maxLines = 1,
+            )
+            note?.let {
+                Text(
+                    it, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 5.dp, bottom = 1.dp),
+                )
+            }
+        }
     }
 }
 
@@ -672,62 +685,54 @@ private fun FoldList(content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 10.dp, start = 2.dp)) { content() }
 }
 
-/** Habits to a row in the day card: as many as fit a label of [Habit.MAX_LABEL] characters. */
-private const val HABIT_COLUMNS = 3
-
 private const val TIDIED_TEXT = "已排版：首行缩进、标点和空行都理好了"
 /** How long the 撤销 of a 排版, or a note just extracted into, stays offered: long enough to read and reach. */
 private const val NOTICE_MS = 4_000L
 
 /**
- * The day's habits, read from the todo tab's battery: set in a different face, not editable here,
- * and never counted as writing. Laid out in rows of equal cells, so the names line up in columns
- * however long each is. A day shows the habits it had (see [Habit.shownOn]), so changing them
- * later leaves past days as they were.
+ * The day's habits, read from the todo tab's battery: not editable here (the lock says so) and
+ * never counted as writing. The count leads, then the habits flow as small tags: a done one in
+ * its colour with a tick, a rest day marked 休, the rest quiet. A day shows the habits it had
+ * (see [Habit.shownOn]), so changing them later leaves past days as they were.
  */
 @Composable
-private fun HabitGrid(day: HabitDay, live: Boolean) {
+private fun HabitGrid(day: HabitDay) {
     val cs = MaterialTheme.colorScheme
-    val face = TextStyle(fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, letterSpacing = 0.5.sp)
-    Column(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Lock, null, tint = cs.outline, modifier = Modifier.size(12.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(
-                "每日指标 ${day.done}/${day.due}" + if (live) " · 在待办页打勾，零点后定格" else "",
-                style = face.copy(fontSize = 12.sp, color = cs.onSurfaceVariant),
-            )
+    FlowRow(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(Modifier.padding(end = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Lock, "每日指标在待办页打勾，零点后定格", tint = cs.outline, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(3.dp))
+            Text("每日指标", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Text(" ${day.done}/${day.due}", style = MaterialTheme.typography.labelMedium.merge(com.assetboard.ui.theme.NumberStyle), color = cs.onSurface, fontWeight = FontWeight.SemiBold)
         }
-        Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            day.shown.chunked(HABIT_COLUMNS).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.forEach { h ->
-                        val on = h.key in day.checked
-                        val rest = !on && h.key in day.skipped
-                        Row(
-                            Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(50))
-                                .background(if (on) h.tint.copy(alpha = 0.14f) else Color.Transparent)
-                                .border(1.dp, if (on) Color.Transparent else cs.outlineVariant, RoundedCornerShape(50))
-                                .padding(start = 7.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (rest) {
-                                Text("休", style = face.copy(fontSize = 11.sp, color = cs.outline), modifier = Modifier.width(12.dp))
-                            } else {
-                                Icon(if (on) Icons.Default.Check else Icons.Default.Remove, null, tint = if (on) h.tint else cs.outline, modifier = Modifier.size(12.dp))
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                h.label,
-                                style = face.copy(fontSize = 12.sp, color = if (on) h.tint else cs.outline, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal),
-                                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                    repeat(HABIT_COLUMNS - row.size) { Spacer(Modifier.weight(1f)) }
+        day.shown.forEach { h ->
+            val on = h.key in day.checked
+            val rest = !on && h.key in day.skipped
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (on) h.tint.copy(alpha = 0.15f) else cs.onSurface.copy(alpha = 0.04f))
+                    .padding(start = 6.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (rest) {
+                    Text("休", style = MaterialTheme.typography.labelSmall, color = cs.outline)
+                } else {
+                    Icon(if (on) Icons.Default.Check else Icons.Default.Remove, null, tint = if (on) h.tint else cs.outline.copy(alpha = 0.7f), modifier = Modifier.size(12.dp))
                 }
+                Spacer(Modifier.width(3.dp))
+                Text(
+                    h.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (on) h.tint else cs.outline,
+                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -755,7 +760,7 @@ private fun MoodLine(mood: Mood?, today: Boolean, onPick: (Mood?) -> Unit) {
             val ring by animateColorAsState(if (chosen) cs.primary.copy(alpha = 0.16f) else Color.Transparent, tween(220), label = "moodRing")
             Box(
                 Modifier
-                    .size(42.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(ring)
                     .clickable {
@@ -768,7 +773,7 @@ private fun MoodLine(mood: Mood?, today: Boolean, onPick: (Mood?) -> Unit) {
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(m.emoji, fontSize = 22.sp, modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale; alpha = fade })
+                Text(m.emoji, fontSize = 20.sp, modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale; alpha = fade })
             }
         }
     }
@@ -843,29 +848,32 @@ private fun Editor(
             }
         }
     }
-    val lineHeight = 30.sp
-    val rule = cs.outlineVariant.copy(alpha = 0.7f)
-    val border by animateColorAsState(if (focused) cs.primary.copy(alpha = 0.5f) else Color.Transparent, tween(220), label = "editor")
-    val shape = RoundedCornerShape(26.dp)
-    // The page's glass, a shade denser so the ruled lines and the text stay calm over the colour.
-    Box(Modifier.fillMaxWidth().glass(shape, glass, cs.surface.copy(alpha = 0.18f)).border(1.dp, border, shape)) {
-        Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 12.dp)) {
+    val lineHeight = 31.sp
+    // Writing straight on the page, as in a paper journal: no box around it. While typing, a
+    // slim bar of the accent grows down the margin to say where the keyboard goes.
+    val mark by animateFloatAsState(if (focused) 1f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "editor")
+    val accent = cs.primary
+    Box(
+        Modifier.fillMaxWidth().drawBehind {
+            if (mark > 0f) {
+                val x = 1.5.dp.toPx()
+                drawLine(
+                    Brush.verticalGradient(listOf(accent.copy(alpha = 0.7f), accent.copy(alpha = 0f)), endY = size.height * mark),
+                    Offset(x, 6.dp.toPx()), Offset(x, 6.dp.toPx() + (size.height - 12.dp.toPx()) * mark),
+                    strokeWidth = 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                )
+            }
+        },
+    ) {
+        Column(Modifier.padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
             val style = MaterialTheme.typography.bodyLarge.copy(
                 color = cs.onSurface,
+                fontSize = 17.sp,
                 lineHeight = lineHeight,
+                letterSpacing = 0.3.sp,
                 lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
             )
-            Box(
-                Modifier.fillMaxWidth().heightIn(min = 270.dp).drawBehind {
-                    // Faint ruled lines under the text, one per line of writing.
-                    val step = lineHeight.toPx()
-                    var y = step - 1.dp.toPx()
-                    while (y < size.height) {
-                        drawLine(rule, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
-                        y += step
-                    }
-                },
-            ) {
+            Box(Modifier.fillMaxWidth().heightIn(min = 270.dp)) {
                 if (value.text.isEmpty()) Text("今天过得怎么样？", style = style.copy(color = cs.outline))
                 BasicTextField(
                     value = value,
@@ -896,10 +904,10 @@ private fun Editor(
                         },
                 )
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val count = value.text.count { !it.isWhitespace() }
-                Text("$count 字", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                Text("$count 字", style = MaterialTheme.typography.labelMedium.merge(com.assetboard.ui.theme.NumberStyle), color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
                 val label = when {
                     status != DiarySession.Status.READY -> null
                     session.dirty -> "正在保存…"

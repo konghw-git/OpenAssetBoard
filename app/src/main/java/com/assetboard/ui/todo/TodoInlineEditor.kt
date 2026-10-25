@@ -3,6 +3,8 @@ package com.assetboard.ui.todo
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,11 +43,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -160,8 +160,8 @@ fun TodoInlineEditor(
             Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
                 Box(Modifier.size(22.dp).clip(CircleShape).border(1.8.dp, if (todo.important) cs.error else cs.outline, CircleShape))
             }
-            val titleStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = cs.onSurface)
-            Box(Modifier.weight(1f).padding(vertical = 8.dp)) {
+            val titleStyle = todoTitleStyle.copy(color = cs.onSurface)
+            Box(Modifier.weight(1f).padding(start = 2.dp, top = 6.dp, bottom = 6.dp)) {
                 if (blankTitle && title.text.isEmpty()) Text("给新待办起个标题", style = titleStyle, color = cs.outline)
                 BasicTextField(
                     value = title,
@@ -193,15 +193,18 @@ fun TodoInlineEditor(
                         if (line.done) Icon(Icons.Default.Check, null, tint = cs.onPrimary, modifier = Modifier.size(10.dp))
                     }
                     Spacer(Modifier.width(13.dp))
+                    // Straight on the card, as the items read when not being edited; a hairline under the text marks the field.
+                    val rule = cs.outlineVariant
                     Box(
-                        Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(cs.onSurface.copy(alpha = 0.055f))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        Modifier.weight(1f)
+                            .drawBehind { drawLine(rule, Offset(0f, size.height - 1.dp.toPx()), Offset(size.width, size.height - 1.dp.toPx()), strokeWidth = 1.dp.toPx()) }
+                            .padding(horizontal = 6.dp, vertical = 7.dp),
                     ) {
-                        if (line.value.text.length <= 1) Text("检查项", style = MaterialTheme.typography.bodyMedium, color = cs.outline)
+                        if (line.value.text.length <= 1) Text("检查项", style = checkItemStyle, color = cs.outline)
                         BasicTextField(
                             value = line.value,
                             onValueChange = { v -> onItemChange(lines, i, v, ::joinUp, ::insertItems, onEmptyEnter = { lines.removeAt(i); onDone() }) },
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            textStyle = checkItemStyle.copy(
                                 color = if (line.done) cs.outline else cs.onSurface,
                                 textDecoration = if (line.done) TextDecoration.LineThrough else null,
                             ),

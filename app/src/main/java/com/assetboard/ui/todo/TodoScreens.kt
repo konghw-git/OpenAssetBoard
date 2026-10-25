@@ -140,6 +140,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -759,25 +760,37 @@ private fun ListCard(l: TodoList, color: Color, count: Int, selected: Boolean, t
             .clip(ListCardShape)
             .background(bg)
             .clickable(onClick = onClick)
-            .heightIn(min = 56.dp)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .heightIn(min = 58.dp)
+            .padding(start = 12.dp, end = 14.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(32.dp).clip(CircleShape).background(if (selected) Color.White.copy(alpha = 0.22f) else color.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.FormatListBulleted, null, tint = if (selected) Color.White else color, modifier = Modifier.size(16.dp))
+        // The list's colour as a small gem: a rounded square lit from the top left.
+        Box(
+            Modifier.size(34.dp).clip(RoundedCornerShape(11.dp))
+                .background(if (selected) SolidColor(Color.White.copy(alpha = 0.22f)) else Brush.linearGradient(listOf(color.copy(alpha = 0.22f), color.copy(alpha = 0.10f)))),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Outlined.FormatListBulleted, null, tint = if (selected) Color.White else color, modifier = Modifier.size(17.dp))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(l.name, style = MaterialTheme.typography.bodyLarge, color = if (selected) Color.White else cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(l.name, style = todoTitleStyle, color = if (selected) Color.White else cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (badge != null) {
-                Box(Modifier.padding(top = 3.dp)) {
+                Box(Modifier.padding(top = 4.dp)) {
                     MetaChip(Icons.Outlined.Event, badge.text, if (selected) Color.White else badgeColor(badge.tone), bold = badge.tone == com.assetboard.domain.todo.DateBadge.Tone.ALERT)
                 }
             }
         }
         if (count > 0) {
             Spacer(Modifier.width(8.dp))
-            Text(count.toString(), style = MaterialTheme.typography.labelLarge, color = if (selected) Color.White.copy(alpha = 0.8f) else cs.onSurfaceVariant)
+            Text(
+                count.toString(),
+                style = MaterialTheme.typography.labelLarge.merge(com.assetboard.ui.theme.NumberStyle),
+                color = if (selected) Color.White else color,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(if (selected) Color.White.copy(alpha = 0.2f) else color.copy(alpha = 0.12f))
+                    .widthIn(min = 28.dp).padding(horizontal = 8.dp, vertical = 3.dp),
+            )
         }
     }
 }

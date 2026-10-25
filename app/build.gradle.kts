@@ -24,8 +24,8 @@ android {
         applicationId = "com.assetboard"
         minSdk = 29
         targetSdk = 36
-        versionCode = 23
-        versionName = "0.9.13"
+        versionCode = 24
+        versionName = "1.0.0"
         // Where the in-app updater looks for releases; a fork points this at its own repository.
         buildConfigField("String", "UPDATE_REPO", "\"konghw-git/OpenAssetBoard\"")
         // The commit a build came from, for 导出诊断 and for reading a release's crash stacks

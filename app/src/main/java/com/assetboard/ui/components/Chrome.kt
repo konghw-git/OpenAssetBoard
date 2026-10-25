@@ -55,6 +55,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.assetboard.ui.theme.AppTheme
+import com.assetboard.ui.theme.Aurora
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.composed
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.luminance
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.sin
 
 /**
  * The top of each tab: a large title, one line of context under it, and round
@@ -217,6 +232,72 @@ fun Modifier.heroSurface(shape: Shape, extra: ExtraColors, elevation: Dp = 14.dp
         drawPath(path, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.38f), Color.Transparent), endY = 30.dp.toPx()), style = Stroke(2.dp.toPx()))
     }
     .shine()
+
+/** One lap of the warm fields under the net worth card; slow enough to read as light, not motion. */
+private const val AURORA_MS = 16_000
+/** One lap of the light running round the card's edge. */
+private const val RIM_MS = 7_000
+/** Where each warm field rests, as fractions of the card, and how many laps it makes per cycle, so the loop closes without a seam. */
+private val FieldHomes = listOf(Offset(0.12f, 0.18f), Offset(0.92f, 0.22f), Offset(0.30f, 0.98f), Offset(0.88f, 0.86f))
+private val FieldLaps = intArrayOf(1, -1, 2, -2)
+
+/**
+ * The net worth card's surface: warm clear glass over the page, lit from inside by four soft
+ * fields of amber, coral, persimmon and rose, each drifting on its own loop; a frosted sheen over
+ * the top, a lit rim with a spark of light running round it, and one pass of light as the page
+ * settles. Everything moving is read in the draw phase, so the card's content never recomposes
+ * for it.
+ */
+fun Modifier.auroraSurface(shape: Shape, a: Aurora, elevation: Dp = 18.dp): Modifier = composed {
+    val clock = rememberInfiniteTransition(label = "aurora")
+    val drift = clock.animateFloat(0f, 1f, infiniteRepeatable(tween(AURORA_MS, easing = LinearEasing)), label = "drift")
+    val spark = clock.animateFloat(0f, 360f, infiniteRepeatable(tween(RIM_MS, easing = LinearEasing)), label = "spark")
+    val dark = a.ink.luminance() > 0.5f
+    drawBehind {
+        val w = size.width
+        val h = size.height
+        val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
+        softShadow(path, a.shadow, elevation)
+        clipPath(path) {
+            drawRect(Brush.linearGradient(a.wash, Offset.Zero, Offset(w, h)))
+            val turn = drift.value * 2f * PI.toFloat()
+            a.fields.forEachIndexed { i, c ->
+                val home = FieldHomes[i % FieldHomes.size]
+                val phase = turn * FieldLaps[i % FieldLaps.size] + i * 1.7f
+                val center = Offset(w * home.x + cos(phase) * w * 0.10f, h * home.y + sin(phase) * h * 0.16f)
+                val r = w * (0.58f + 0.06f * sin(turn + i))
+                drawCircle(
+                    Brush.radialGradient(0f to c.copy(alpha = a.fieldAlpha), 0.5f to c.copy(alpha = a.fieldAlpha * 0.5f), 1f to Color.Transparent, center = center, radius = r),
+                    r, center,
+                )
+            }
+            // Frost over the top, so the colour reads as under glass rather than painted on.
+            drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.07f else 0.30f), Color.Transparent), endY = h * 0.5f))
+        }
+        drawPath(path, Brush.linearGradient(listOf(a.rim, a.rim.copy(alpha = a.rim.alpha * 0.25f), a.rim.copy(alpha = a.rim.alpha * 0.6f)), Offset.Zero, Offset(w, h)), style = Stroke(1.3.dp.toPx()))
+        // The spark: a bright arc of a sweep gradient, seen only through a thin ring at the edge.
+        val inset = 2.dp.toPx()
+        val inner = Path().apply {
+            addOutline(shape.createOutline(Size(w - inset * 2, h - inset * 2), layoutDirection, this@drawBehind))
+            translate(Offset(inset, inset))
+        }
+        clipPath(path) {
+            clipPath(inner, ClipOp.Difference) {
+                rotate(spark.value) {
+                    val glow = a.flame.first()
+                    drawCircle(
+                        Brush.sweepGradient(
+                            0f to Color.Transparent, 0.36f to Color.Transparent, 0.47f to glow.copy(alpha = 0.55f),
+                            0.5f to Color.White.copy(alpha = 0.95f), 0.53f to glow.copy(alpha = 0.55f), 0.64f to Color.Transparent, 1f to Color.Transparent,
+                            center = center,
+                        ),
+                        radius = hypot(w, h) / 2f, center = center,
+                    )
+                }
+            }
+        }
+    }.shine(alpha = 0.22f)
+}
 
 /** A tinted rounded square holding a row's icon, so each settings row has its own color. */
 @Composable

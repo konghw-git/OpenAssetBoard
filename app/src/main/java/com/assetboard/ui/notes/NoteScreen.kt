@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,7 +11,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,6 +67,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -207,7 +209,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
                 Editor(s, autoFocus = noteId == null, onInput = vm::onInput, onFocus = { editing = it })
             }
             if (sources.isNotEmpty()) {
-                Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("摘自", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         sources.forEach { src ->
@@ -225,7 +227,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
                 Text(
                     "创建于 ${Dates.date(n.createdAt)} · 更新于 ${whenLabel(n.updatedAt)}",
                     style = MaterialTheme.typography.labelMedium, color = cs.outline,
-                    modifier = Modifier.padding(horizontal = 6.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
         }
@@ -274,8 +276,8 @@ private fun TopicChip(topics: List<NoteTopic>, topicId: String?, onPick: (String
         Row(
             Modifier
                 .height(42.dp)
+                .glass(RoundedCornerShape(50), glass, if (topic != null) color.copy(alpha = 0.12f) else Color.Unspecified, elevation = 6.dp)
                 .clip(RoundedCornerShape(50))
-                .background(if (topic != null) color.copy(alpha = 0.12f) else cs.surfaceContainer)
                 .clickable { open = true }
                 .padding(start = 12.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -354,21 +356,35 @@ private fun Editor(session: NoteSession, autoFocus: Boolean, onInput: (String) -
             }
         }
     }
-    val border by animateColorAsState(if (focused) cs.primary.copy(alpha = 0.45f) else Color.Transparent, tween(220), label = "editor")
     val style = MaterialTheme.typography.bodyLarge.copy(
         color = cs.onSurface,
-        lineHeight = 29.sp,
+        fontSize = 17.sp,
+        lineHeight = 30.sp,
+        letterSpacing = 0.3.sp,
         lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
     )
-    val look = remember(cs.primary) { NoteBodyLook(21.sp, cs.primary) }
-    // A sheet of glass with a little more body than a card, so long text stays easy to read.
-    val paper = RoundedCornerShape(26.dp)
-    Box(Modifier.fillMaxWidth().glass(paper, glass, cs.surface.copy(alpha = 0.30f)).border(1.dp, border, paper)) {
-        Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 12.dp)) {
+    val look = remember(cs.primary) { NoteBodyLook(24.sp, cs.primary) }
+    // The words straight on the page, no sheet around them; while typing, a slim bar of the
+    // accent grows down the margin.
+    val mark by animateFloatAsState(if (focused) 1f else 0f, tween(com.assetboard.ui.components.Motion.MEDIUM, easing = com.assetboard.ui.components.Motion.Emphasized), label = "editor")
+    val accent = cs.primary
+    Box(
+        Modifier.fillMaxWidth().drawBehind {
+            if (mark > 0f) {
+                val x = 1.5.dp.toPx()
+                drawLine(
+                    Brush.verticalGradient(listOf(accent.copy(alpha = 0.7f), accent.copy(alpha = 0f)), endY = size.height * mark),
+                    Offset(x, 8.dp.toPx()), Offset(x, 8.dp.toPx() + (size.height - 16.dp.toPx()) * mark),
+                    strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round,
+                )
+            }
+        },
+    ) {
+        Column(Modifier.padding(start = 16.dp, end = 10.dp, top = 8.dp, bottom = 6.dp)) {
             Box(Modifier.fillMaxWidth().heightIn(min = 360.dp)) {
                 if (value.text.isEmpty()) {
                     Column {
-                        Text("标题", style = style.copy(color = cs.outline, fontSize = 21.sp, fontWeight = FontWeight.SemiBold))
+                        Text("标题", style = style.copy(color = cs.outline, fontSize = 24.sp, fontWeight = FontWeight.SemiBold))
                         Text("第一行是标题，接着写下你的想法。#标签 会高亮。", style = style.copy(color = cs.outline))
                     }
                 }

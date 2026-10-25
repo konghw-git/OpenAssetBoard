@@ -6,6 +6,42 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-26
+
+A release about how the app looks and reads rather than what it does: nothing new to learn, and
+the data, database and backup format are as they were.
+
+### Changed
+
+- The net worth card is warm clear glass instead of a dark green slab: amber, coral, persimmon
+  and rose fields drift slowly under it, a spark of light runs round its edge, the figure is set
+  in a deepening warm ink with a flame-coloured ¥, and 盘点 is a flame pill whose glow breathes.
+  Cash, the goal's bar and the change since the last stocktake take the same colours, the change
+  in the gain or loss colour. The trend page's figure sits on the same glass. Dark mode has its
+  own deeper version.
+- Todo entries read more evenly: titles, lists' names and checklist items share one size and
+  weight, chips have a little more room, and a list's card has a small gem for its icon and its
+  count in a pill. Checklist items under a todo lose the grey strip behind each one: the words sit
+  on the card beside the thread, and an item being edited in place is marked by a hairline. On a
+  todo's page the drag handle and delete are quieter and a new item is added where the circles
+  stand.
+- Text is centred in its line height everywhere, so Chinese no longer sits off the middle of a
+  row on phones whose system font measures differently from the emulator's.
+- The diary's day card is about a quarter shorter: the habits are small tags after the count, the
+  three figures share one row parted by hairlines with their note beside the figure, and the
+  dashed rules are gone.
+- The diary and a note are written straight on the page, no sheet around the text, in a slightly
+  larger face; while typing, a slim accent bar grows down the margin. A note's title line is larger.
+- The notes of a section form one pane of glass, rows parted by inset hairlines, instead of a
+  stack of separate cards; a note being dragged lifts out as a card of its own, and a selected one
+  is ringed inside the pane. The time and topic sit on one quiet line. The drafts notice and the
+  note page's topic button are glass too.
+
+### Fixed
+
+- Secondary text in dark mode (placeholders, an unticked habit, 已保存, a note's time) was in a
+  grey close to the background and hard to read; it is lighter now.
+
 ## [0.9.13] - 2026-10-25
 
 ### Fixed

@@ -67,7 +67,9 @@ import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
 import com.assetboard.ui.components.amount
 import com.assetboard.ui.components.animatedCents
-import com.assetboard.ui.components.heroSurface
+import com.assetboard.ui.components.auroraSurface
+import com.assetboard.ui.theme.OnAurora
+import androidx.compose.foundation.border
 import com.assetboard.ui.components.appear
 import com.assetboard.ui.components.pressScale
 import com.assetboard.ui.theme.AppTheme
@@ -149,18 +151,21 @@ private fun StocktakeAction(onClick: () -> Unit) {
 /** What the period amounts to: where net worth stands, how far it moved, its high and low. */
 @Composable
 private fun Headline(p: NetWorthTrend.Period, range: ChartRange) {
+    // The same warm glass as the net worth card on the assets tab: one figure, one look.
+    Box(Modifier.fillMaxWidth().auroraSurface(MaterialTheme.shapes.extraLarge, AppTheme.extra.aurora, elevation = 16.dp)) {
+        OnAurora { HeadlineContent(p, range) }
+    }
+}
+
+@Composable
+private fun HeadlineContent(p: NetWorthTrend.Period, range: ChartRange) {
     val extra = AppTheme.extra
     val net = animatedCents(p.end.netWorth)
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .heroSurface(MaterialTheme.shapes.extraLarge, extra, elevation = 16.dp)
-            .padding(22.dp),
-    ) {
+    Column(Modifier.fillMaxWidth().padding(22.dp)) {
         Text("净资产 · ${Dates.date(p.end.snapshot.at)} 盘点", color = extra.onHeroMuted, style = MaterialTheme.typography.labelLarge)
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 6.dp)) {
-            Text("¥", color = extra.onHero, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 4.dp, end = 4.dp))
-            Text(amount(Money.format(net)), color = extra.onHero, style = MaterialTheme.typography.displaySmall, maxLines = 1)
+            Text("¥", style = MaterialTheme.typography.titleLarge.copy(brush = Brush.linearGradient(extra.aurora.flame)), fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp, end = 4.dp))
+            Text(amount(Money.format(net)), style = MaterialTheme.typography.displaySmall.copy(brush = Brush.linearGradient(extra.aurora.figure)), maxLines = 1)
         }
         Spacer(Modifier.height(10.dp))
         if (p.points.size < 2) {
@@ -172,13 +177,14 @@ private fun Headline(p: NetWorthTrend.Period, range: ChartRange) {
             val c = p.change
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Row(
-                    Modifier.clip(RoundedCornerShape(50)).background(extra.onHero.copy(alpha = 0.16f)).padding(start = 6.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+                    Modifier.clip(RoundedCornerShape(50)).background(extra.aurora.pane).border(1.dp, extra.aurora.paneRim, RoundedCornerShape(50))
+                        .padding(start = 6.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(if (c >= 0) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, null, tint = extra.onHero, modifier = Modifier.size(14.dp))
+                    Icon(if (c >= 0) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, null, tint = extra.signed(c), modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
                     val ratio = p.changeRatio?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.US, "%.2f", it * 100) + "%)" }.orEmpty()
-                    Text(amount(Money.format(c, signed = true)) + ratio, color = extra.onHero, style = MaterialTheme.typography.labelLarge.merge(NumberStyle))
+                    Text(amount(Money.format(c, signed = true)) + ratio, color = extra.signed(c), style = MaterialTheme.typography.labelLarge.merge(NumberStyle))
                 }
                 Spacer(Modifier.width(8.dp))
                 Text("较 ${Dates.date(p.start.snapshot.at)}", color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium)
