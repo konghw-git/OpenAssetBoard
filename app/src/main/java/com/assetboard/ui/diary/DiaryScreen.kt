@@ -177,6 +177,12 @@ import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.theme.AppTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.withTimeoutOrNull
+import com.assetboard.ui.components.MESSAGE_MS
+import com.assetboard.ui.components.TimedVisuals
 import java.time.LocalDate
 import com.assetboard.ui.components.verticalScrollWithIndicator
 
@@ -224,15 +230,36 @@ fun DiaryScreen(
     // What is selected in the entry right now, for the extract button over the keyboard.
     var selected by remember { mutableStateOf<String?>(null) }
     ErrorDialog(error) { vm.error.value = null }
-    LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    // The 排版 whose 撤销 is on screen, if any.
+    var showingTidy by remember { mutableStateOf<DiaryViewModel.Tidied?>(null) }
+    // One notice at a time and none for long: the newest replaces the one on screen, and each goes
+    // by itself after a while (a snackbar with an action would otherwise stay until tapped).
     LaunchedEffect(vm) {
-        vm.tidied.collect { t ->
-            if (snackbar.showSnackbar("已排版：首行缩进、标点和空行都理好了", actionLabel = "撤销", withDismissAction = true) == SnackbarResult.ActionPerformed) vm.undoTidy(t)
+        merge(vm.messages.map { it to null }, vm.tidied.map { TIDIED_TEXT to it }).collectLatest { (text, t) ->
+            snackbar.currentSnackbarData?.dismiss()
+            // Typed on, or another day opened, before it got here: nothing left to undo.
+            if (t != null && (vm.session.value !== t.session || t.session.text.value != t.after)) return@collectLatest
+            val millis = if (t != null) NOTICE_MS else MESSAGE_MS
+            showingTidy = t
+            try {
+                val result = withTimeoutOrNull(millis) { snackbar.showSnackbar(TimedVisuals(text, if (t != null) "撤销" else null, millis)) }
+                if (result == null) snackbar.currentSnackbarData?.dismiss()
+                if (result == SnackbarResult.ActionPerformed && t != null) vm.undoTidy(t)
+            } finally {
+                if (showingTidy === t) showingTidy = null
+            }
         }
+    }
+    // The 撤销 goes as soon as it could no longer undo: typed on, another day, or the tab left.
+    LaunchedEffect(showingTidy, body, session, active) {
+        val t = showingTidy ?: return@LaunchedEffect
+        if (!active || session !== t.session || body != t.after) snackbar.currentSnackbarData?.dismiss()
     }
     LaunchedEffect(vm) {
         vm.extracted.collect { r ->
-            val res = snackbar.showSnackbar(r.message, actionLabel = if (r.noteId != null) "打开" else null, withDismissAction = r.noteId == null)
+            snackbar.currentSnackbarData?.dismiss()
+            val res = withTimeoutOrNull(NOTICE_MS) { snackbar.showSnackbar(TimedVisuals(r.message, if (r.noteId != null) "打开" else null, NOTICE_MS)) }
+            if (res == null) snackbar.currentSnackbarData?.dismiss()
             if (res == SnackbarResult.ActionPerformed && r.noteId != null) onOpenNote(r.noteId)
         }
     }
@@ -646,6 +673,10 @@ private fun FoldList(content: @Composable () -> Unit) {
 
 /** Habits to a row in the day card: as many as fit a label of [Habit.MAX_LABEL] characters. */
 private const val HABIT_COLUMNS = 3
+
+private const val TIDIED_TEXT = "已排版：首行缩进、标点和空行都理好了"
+/** How long the 撤销 of a 排版, or a note just extracted into, stays offered: long enough to read and reach. */
+private const val NOTICE_MS = 4_000L
 
 /**
  * The day's habits, read from the todo tab's battery: set in a different face, not editable here,

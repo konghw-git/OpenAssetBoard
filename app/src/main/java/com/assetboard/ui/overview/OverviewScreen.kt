@@ -127,6 +127,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ShowChart
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
+import com.assetboard.ui.bill.BillCard
+import com.assetboard.ui.bill.BillSheet
+import com.assetboard.ui.bill.billViewModel
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.ExpandLess
@@ -339,9 +343,12 @@ fun OverviewScreen(
     onAddAccount: (String?) -> Unit,
     onHealth: (record: Boolean) -> Unit = {},
     onFood: (record: Boolean) -> Unit = {},
+    onBills: () -> Unit = {},
 ) {
     val container = LocalContainer.current
     val vm: OverviewViewModel = viewModel { OverviewViewModel(container) }
+    val billVm = billViewModel("overview")
+    val ledger by container.repository.ledger.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val health by vm.health.collectAsStateWithLifecycle()
     val food by vm.food.collectAsStateWithLifecycle()
@@ -350,14 +357,23 @@ fun OverviewScreen(
     ErrorDialog(error) { vm.error.value = null }
     val snackbar = remember { SnackbarHostState() }
     UndoMessages(vm.events, snackbar, vm::undo)
+    UndoMessages(billVm.events, snackbar, billVm::undo)
     // Account rows: one open by a swipe at a time, one being edited in place at a time.
     val swipe = rememberSwipeGroup()
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     BackHandler(editing != null) { editing = null }
     val listState = rememberLazyListState()
     LaunchedEffect(listState.isScrollInProgress) { if (listState.isScrollInProgress) swipe.closeAll() }
-    // Pulling the list down past its top is the same as 新建账户 in the header.
-    val pull = rememberPullToCreate(enabled = editing == null) { swipe.closeAll(); onAddAccount(null) }
+    // 记一笔: a new bill (true), or the bill being edited from the card.
+    var recording by rememberSaveable { mutableStateOf(false) }
+    var billEditing by rememberSaveable { mutableStateOf<String?>(null) }
+    if (recording) BillSheet(null, billVm, onDismiss = { recording = false }, onAddAccount = { onAddAccount(null) })
+    billEditing?.let { id ->
+        val f = ledger?.flows?.firstOrNull { it.id == id }
+        if (f == null) billEditing = null else BillSheet(f, billVm, onDismiss = { billEditing = null })
+    }
+    // Pulling the list down past its top records a bill; 新建账户 stays in the header.
+    val pull = rememberPullToCreate(enabled = editing == null && !recording && billEditing == null) { swipe.closeAll(); editing = null; recording = true }
     val pullTop = with(LocalDensity.current) { pull.pulled.toDp() }
     val rows = RowActions(
         swipe = swipe,
@@ -404,7 +420,7 @@ fun OverviewScreen(
                 else -> BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                     if (maxWidth >= 600.dp) {
                         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.weight(1.1f), icon = Icons.Default.Add) {
+                            PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.weight(1.1f), icon = Icons.AutoMirrored.Outlined.ReceiptLong) {
                                 LazyColumn(Modifier.fillMaxSize().imePadding().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(start = 16.dp, top = pullTop, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                     item { Box(Modifier.appear(0)) { hero(s) } }
                                     item(key = "allocation") { Box(Modifier.appear(1)) { HeroAllocation(s.allocation) } }
@@ -418,10 +434,11 @@ fun OverviewScreen(
                                 TrendCard(s, onTrend)
                                 RecentStocktakes(s, onEditStocktake)
                                 Tiles(food, health, onFood, onHealth)
+                                ledger?.let { l -> BillCard(l, onBills, onRecord = { recording = true }, onEdit = { billEditing = it.id }) }
                             }
                         }
                     } else {
-                        PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize(), icon = Icons.Default.Add) {
+                        PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.fillMaxSize(), icon = Icons.AutoMirrored.Outlined.ReceiptLong) {
                             LazyColumn(
                                 Modifier.fillMaxSize().imePadding().scrollIndicator(listState),
                                 state = listState,
@@ -431,8 +448,10 @@ fun OverviewScreen(
                                 item { Box(Modifier.appear(0)) { hero(s) } }
                                 // Today's food and weight right under the figure, before the allocation.
                                 item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(food, health, onFood, onHealth) } }
-                                item(key = "allocation") { Box(Modifier.appear(2)) { HeroAllocation(s.allocation) } }
-                                accountSections(s, onOpenAccount, onAddAccount, rows, first = 3)
+                                // This month's 记账, which the pull above records into.
+                                ledger?.let { l -> item(key = "bills") { Box(Modifier.appear(2)) { BillCard(l, onBills, onRecord = { recording = true }, onEdit = { billEditing = it.id }) } } }
+                                item(key = "allocation") { Box(Modifier.appear(3)) { HeroAllocation(s.allocation) } }
+                                accountSections(s, onOpenAccount, onAddAccount, rows, first = 4)
                             }
                         }
                     }
@@ -443,8 +462,8 @@ fun OverviewScreen(
     }
 }
 
-private const val PULL_HINT = "下拉新建账户"
-private const val PULL_ARMED = "松手新建账户"
+private const val PULL_HINT = "下拉记一笔"
+private const val PULL_ARMED = "松手记一笔"
 
 private fun LazyListScope.accountSections(s: OverviewState, onOpenAccount: (String) -> Unit, onAddAccount: (String?) -> Unit, rows: RowActions, first: Int) {
     item(key = "accounts") { Box(Modifier.appear(first)) { AccountsCard(s, onOpenAccount, onAddAccount, rows) } }

@@ -124,7 +124,6 @@ import com.assetboard.ui.components.rememberSwipeGroup
 import com.assetboard.ui.components.reorderable
 import com.assetboard.ui.components.CarryBadge
 import com.assetboard.ui.components.foldedAway
-import com.assetboard.ui.components.heightAbove
 import com.assetboard.ui.components.stackUnder
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.outlined.Delete
@@ -325,11 +324,8 @@ fun NotesScreen(
         },
         onStart = start@{ key ->
             val me = order.firstOrNull { noteKey(it.id) == key }
-            if (me == null || me.id !in selection || selection.size < 2) return@start 0f
-            val ride = order.filter { it.id != me.id && it.id in selection && it.pinned == me.pinned }
-            if (ride.isEmpty()) return@start 0f
-            carried = ride
-            listState.heightAbove(key, ride.map { noteKey(it.id) })
+            if (me == null || me.id !in selection || selection.size < 2) return@start
+            carried = order.filter { it.id != me.id && it.id in selection && it.pinned == me.pinned }
         },
     )
     // Pull the list down to start a note, in the topic being looked at; not while selecting or dragging.
@@ -422,8 +418,8 @@ fun NotesScreen(
                                 Box(
                                     Modifier
                                         .then(if (n in carried) Modifier.foldedAway() else Modifier)
-                                        .zIndex(if (dragged) 1f else 0f)
-                                        .graphicsLayer { translationY = if (dragged) reorder.offset else 0f }
+                                        .zIndex(if (reorder.isLifted(key)) 1f else 0f)
+                                        .graphicsLayer { translationY = reorder.translationOf(key) }
                                         .then(if (dragged) Modifier else Modifier.animateItem())
                                         // The notes carried along peek out under the one held.
                                         .then(if (stack > 0) Modifier.drawBehind { stackUnder(stack, stackColor, side = 0f, top = 0f, corner = 22.dp.toPx()) } else Modifier),

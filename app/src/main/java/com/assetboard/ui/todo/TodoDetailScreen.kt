@@ -545,9 +545,10 @@ private fun Checklist(todoId: String, items: List<ChecklistItem>, editable: Bool
     val density = LocalDensity.current
     SectionCard(Modifier.checklistTarget(todoId)) {
         SectionHeader("检查项" + if (items.isNotEmpty()) "  ${items.count { it.done }}/${items.size}" else "")
-        items.forEach { item ->
+        // While an item is dragged, the list shows where it would land.
+        LocalChecklistDrag.current.preview(todoId, items).forEach { item ->
             key(item.id) {
-            Row(Modifier.fillMaxWidth().checklistRow(item, handle = false).dissolvable(checklistKey(item.id)).padding(start = 4.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().checklistRow(item, handle = false).slideToPlace().dissolvable(checklistKey(item.id)).padding(start = 4.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 CheckCircle(item.done, false, onToggle = { if (editable) vm.toggleItem(item.id) })
                 var text by remember(item.id) { mutableStateOf(item.text) }
                 var focused by remember(item.id) { mutableStateOf(false) }

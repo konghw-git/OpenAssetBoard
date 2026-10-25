@@ -76,39 +76,22 @@ object TodoViews {
         todos.filter { (isOpen(it) || doneOn(it, today, zone)) && predicate(it) }
             .map { ViewRow(it, done = !isOpen(it), overdue = isOpen(it) && isOverdue(it, today)) }
 
-    private fun earliest(t: Todo, today: LocalDate): LocalDate = listOfNotNull(parse(t.planDate), parse(t.deadline)).minOrNull() ?: today
-
     /**
-     * Today: the overdue group first, then today's. Within a group important first, then the
-     * hand-set order; the overdue group additionally earliest date first.
+     * Today: the hand-set order, finished rows last. Overdue and important rows only carry their
+     * tag and flag: any open row can be dragged above any other, as on a paper list.
      */
-    fun today(todos: List<Todo>, today: LocalDate, zone: ZoneId = ZoneId.systemDefault()): List<ViewRow> {
-        val cmp = compareBy<ViewRow>(
-            { if (it.done) 1 else 0 },
-            { if (isOverdue(it.todo, today)) 0 else 1 },
-            { if (it.todo.important) 0 else 1 },
-            { if (isOverdue(it.todo, today)) earliest(it.todo, today) else LocalDate.MIN },
-            { it.todo.sortOrder },
-        )
-        return rows(todos, today, zone) { inToday(it, today) }.sortedWith(cmp)
-    }
+    fun today(todos: List<Todo>, today: LocalDate, zone: ZoneId = ZoneId.systemDefault()): List<ViewRow> =
+        rows(todos, today, zone) { inToday(it, today) }.sortedWith(compareBy({ it.done }, { it.todo.sortOrder }))
 
-    /**
-     * Which rows of [today] may trade places by hand: open rows that agree on every key above the
-     * hand-set order. Null for a row that stays put (a finished one).
-     */
-    fun todayBand(r: ViewRow, today: LocalDate): String? {
-        if (r.done) return null
-        val t = r.todo
-        return if (isOverdue(t, today)) "overdue|${t.important}|${earliest(t, today)}" else "today|${t.important}"
-    }
+    /** Which rows of [today] may trade places by hand: every open one. Null for a finished row, which stays put. */
+    fun todayBand(r: ViewRow): String? = if (r.done) null else "today"
 
-    /** Upcoming, grouped by plan date, else by deadline. */
+    /** Upcoming, grouped by plan date, else by deadline; each day in the hand-set order. */
     fun upcoming(todos: List<Todo>, today: LocalDate, zone: ZoneId = ZoneId.systemDefault()): List<Pair<LocalDate, List<ViewRow>>> =
         rows(todos, today, zone) { inUpcoming(it, today) }
             .groupBy { r -> parse(r.todo.planDate)?.takeIf { it.isAfter(today) } ?: parse(r.todo.deadline)!! }
             .toSortedMap()
-            .map { (d, rs) -> d to rs.sortedWith(compareBy({ it.done }, { !it.todo.important }, { it.todo.sortOrder })) }
+            .map { (d, rs) -> d to rs.sortedWith(compareBy({ it.done }, { it.todo.sortOrder })) }
 
     /** Inbox, a list, or someday: manual order, finished rows last. */
     fun manual(todos: List<Todo>, today: LocalDate, zone: ZoneId = ZoneId.systemDefault(), predicate: (Todo) -> Boolean): List<ViewRow> =

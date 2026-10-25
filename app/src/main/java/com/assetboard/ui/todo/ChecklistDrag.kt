@@ -1,6 +1,30 @@
 package com.assetboard.ui.todo
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.round
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
@@ -183,29 +207,76 @@ internal fun Modifier.checklistDragHost(state: ChecklistDragState): Modifier =
 
 internal fun Modifier.checklistViewport(state: ChecklistDragState): Modifier = onGloballyPositioned { state.viewport = it.boundsInRoot() }
 
-/** Card bounds decide the destination; the line identifies the exact insertion position. */
+/** Card bounds decide the destination; the rows inside make room where the item would land. */
 internal fun Modifier.checklistTarget(todoId: String): Modifier = composed {
     val state = LocalChecklistDrag.current ?: return@composed this
-    val color = MaterialTheme.colorScheme.primary
     DisposableEffect(state, todoId) { onDispose { state.cards.remove(todoId) } }
-    onGloballyPositioned { state.cards[todoId] = it.boundsInRoot() }.drawBehind {
-        if (state.item != null && state.drop == ChecklistDrop(todoId, null)) {
-            drawLine(color, Offset(44.dp.toPx(), size.height - 3.dp.toPx()), Offset(size.width - 12.dp.toPx(), size.height - 3.dp.toPx()), 2.dp.toPx())
+    onGloballyPositioned { state.cards[todoId] = it.boundsInRoot() }
+}
+
+/**
+ * [items] of [todoId] as they would stand if the held item were let go now: gone from the card
+ * it left, and in at the drop, where its row shows as an empty slot. The other rows slide out of
+ * its way ([slideToPlace]), the way todo cards trade places. The drop is read from where rows are
+ * laid out, gap included, so the gap only moves on once the finger passes the next row's middle.
+ */
+internal fun ChecklistDragState?.preview(todoId: String, items: List<ChecklistItem>): List<ChecklistItem> {
+    val held = this?.item ?: return items
+    val drop = drop ?: return items
+    val rest = items.filter { it.id != held.id }
+    if (drop.todoId != todoId) return rest
+    val at = drop.beforeId?.let { b -> rest.indexOfFirst { it.id == b } }?.takeIf { it >= 0 } ?: rest.size
+    return rest.toMutableList().apply { add(at, held) }
+}
+
+/**
+ * Glides a row from where it was placed to where it is placed now, so rows making room for a
+ * dragged item slide rather than jump. Outer modifiers still see the new place at once: the
+ * drag reads rows from there.
+ */
+internal fun Modifier.slideToPlace(): Modifier = composed {
+    val scope = rememberCoroutineScope()
+    var target by remember { mutableStateOf<IntOffset?>(null) }
+    val anim = remember { Animatable(IntOffset.Zero, IntOffset.VectorConverter) }
+    onPlaced { c ->
+        val at = c.positionInParent().round()
+        val was = target
+        target = at
+        if (was != null && was != at) {
+            // Start from where the row is drawn now, so a slide interrupted mid-way stays smooth.
+            val from = anim.value + (was - at)
+            scope.launch {
+                anim.snapTo(from)
+                anim.animateTo(IntOffset.Zero, spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold))
+            }
         }
-    }
+    }.offset { anim.value }
 }
 
 internal fun Modifier.checklistRow(item: ChecklistItem, handle: Boolean = true): Modifier = composed {
     val state = LocalChecklistDrag.current ?: return@composed this
     val color = MaterialTheme.colorScheme.primary
+    val held = state.item?.id == item.id
     DisposableEffect(state, item.id) { onDispose { state.rows.remove(item.id); state.handles.remove(item.id) } }
     onGloballyPositioned {
         state.rows[item.id] = it.boundsInRoot()
         if (handle) state.handles[item.id] = it.boundsInRoot()
-    }.graphicsLayer { alpha = if (state.item?.id == item.id) 0.25f else 1f }.drawBehind {
-        if (state.item != null && state.drop == ChecklistDrop(item.todoId, item.id)) {
-            drawLine(color, Offset(40.dp.toPx(), 0f), Offset(size.width, 0f), 2.dp.toPx())
+    }.drawWithContent {
+        if (!held) {
+            drawContent()
+            return@drawWithContent
         }
+        // The held item's slot, where it will land: a dashed outline over a faint tint.
+        val inset = 1.dp.toPx()
+        drawRoundRect(
+            color.copy(alpha = 0.08f), topLeft = Offset(inset, inset), size = Size(size.width - inset * 2, size.height - inset * 2),
+            cornerRadius = CornerRadius(10.dp.toPx()),
+        )
+        drawRoundRect(
+            color.copy(alpha = 0.55f), topLeft = Offset(inset, inset), size = Size(size.width - inset * 2, size.height - inset * 2),
+            cornerRadius = CornerRadius(10.dp.toPx()),
+            style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))),
+        )
     }
 }
 
@@ -214,25 +285,54 @@ internal fun Modifier.checklistHandle(id: String): Modifier = composed {
     onGloballyPositioned { state.handles[id] = it.boundsInRoot() }
 }
 
+/**
+ * The held item, lifted off the list under the finger: the same node and strip as on the card,
+ * a little larger and casting a shadow. Where it lands shows in the lists themselves; the
+ * preview only speaks up when there is nowhere to land.
+ */
 @Composable
 internal fun ChecklistDragPreview(state: ChecklistDragState) {
     val item = state.item ?: return
     val density = LocalDensity.current
     val shape = RoundedCornerShape(12.dp)
     val cs = MaterialTheme.colorScheme
-    Box(Modifier.zIndex(10f).offset {
-        val p = state.pointer - state.grab - state.hostOrigin
-        IntOffset(p.x.roundToInt(), p.y.roundToInt())
-    }.width(with(density) { state.originalBounds.width.toDp() }).shadow(12.dp, shape).background(cs.surfaceContainerHigh, shape).padding(12.dp)) {
-        Column {
-            Text(item.text, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            val before = state.drop?.beforeId?.let { state.items[it]?.text?.take(12) }
-            val hint = when {
-                state.drop == null -> "拖到检查项之间或其他待办"
-                before != null -> "松手放到「$before」前"
-                else -> "松手放到检查项末尾"
-            }
-            Text(hint, style = MaterialTheme.typography.labelSmall, color = cs.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    val lift = remember(item.id) { Animatable(0f) }
+    LaunchedEffect(item.id) { lift.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow)) }
+    Column(
+        Modifier.zIndex(10f).offset {
+            val p = state.pointer - state.grab - state.hostOrigin
+            IntOffset(p.x.roundToInt(), p.y.roundToInt())
+        }.width(with(density) { state.originalBounds.width.toDp() }),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    val s = 1f + 0.04f * lift.value
+                    scaleX = s; scaleY = s
+                    rotationZ = -1.2f * lift.value
+                }
+                .shadow(6.dp + 10.dp * lift.value, shape, spotColor = cs.primary.copy(alpha = 0.4f))
+                .background(cs.surfaceContainerHigh, shape)
+                .border(1.dp, cs.primary.copy(alpha = 0.35f), shape)
+                .heightIn(min = with(density) { state.originalBounds.height.toDp() })
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(14.dp).clip(CircleShape).border(1.4.dp, if (item.done) cs.primary else cs.outline, CircleShape))
+            Spacer(Modifier.width(12.dp))
+            Text(
+                item.text, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                textDecoration = if (item.done) TextDecoration.LineThrough else null,
+            )
+        }
+        if (state.drop == null) {
+            Text(
+                "拖到检查项之间或其他待办上",
+                style = MaterialTheme.typography.labelSmall,
+                color = cs.onPrimary,
+                modifier = Modifier.padding(start = 12.dp, top = 6.dp).clip(RoundedCornerShape(50)).background(cs.primary).padding(horizontal = 8.dp, vertical = 2.dp),
+            )
         }
     }
 }

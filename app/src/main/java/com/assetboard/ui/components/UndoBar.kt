@@ -57,7 +57,8 @@ data class UndoEvent(val text: String, val action: String = "撤销", val undo: 
  * the row at once anyway (see [DustState.register]).
  */
 const val UNDO_MS = 3_000L
-private const val MESSAGE_MS = 2_500L
+/** How long a plain message stays. */
+const val MESSAGE_MS = 2_500L
 
 /** Snackbar content that knows how long its action stays, for the countdown ring. */
 class TimedVisuals(

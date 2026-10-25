@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.12] - 2026-10-25
+
+### Added
+
+- 记账: pulling the assets tab down records a bill on a sheet of its own: 支出 or 收入, the amount
+  on its own keys (+ and − add a receipt up), a category in a tap, and the account and day
+  guessed from the last bill; 再记 saves and stays open for the next. A bill is a flow out of or
+  into one account, so its balance moves and a later stocktake still has the last word. A card on
+  the assets tab shows the month's spending, the last seven days and the latest bills; 账单 shows
+  a month at a time by category and by day, a tap edits a bill, a left swipe deletes it, both with
+  an undo. An account page records one straight onto that account. New in the backup as format 13.
+
+### Changed
+
+- Dragging a todo is rebuilt. Today is in the hand-set order alone, so any open row can go above
+  any other, overdue or important or not; edge scrolling speeds up the nearer and longer the
+  finger waits and never loses the row however far it travels; a row dragged across a section's
+  title in a list goes into that section. Up and down only ever reorders: resting over a card no
+  longer arms a merge, which is the right slide toward the row above, the badge naming the target.
+  Another todo edited in place no longer stops a row from moving.
+- A checklist item being dragged opens a gap where it would land and the other items slide out of
+  its way, the way todo cards trade places, instead of an insertion line; the lifted copy looks
+  like the item itself.
+- The assets tab's pull records a bill; 新建账户 stays in the header.
+
+### Fixed
+
+- The diary's 已排版 notice never went by itself and queued up behind itself on repeated taps. Its
+  撤销 now stays four seconds with a countdown, a second tap offers it afresh, and it goes at once
+  when typing, another day or leaving the tab makes it unable to undo.
+
 ## [0.9.11] - 2026-10-24
 
 ### Added

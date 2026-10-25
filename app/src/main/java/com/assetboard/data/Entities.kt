@@ -140,11 +140,20 @@ enum class FlowKind(val label: String, val defaultFeeOn: FeeOn) {
     BORROW("借款", FeeOn.FROM),
     EXTERNAL_IN("外部转入", FeeOn.TO),
     EXTERNAL_OUT("外部转出", FeeOn.FROM),
+    /** 记账: money spent from one account, with a [MoneyFlow.category]. */
+    EXPENSE("支出", FeeOn.FROM),
+    /** 记账: money earned into one account, with a [MoneyFlow.category]. */
+    INCOME("收入", FeeOn.TO),
+    ;
+
+    /** An entry of 记账 rather than a move the account pages record. */
+    val isBill: Boolean get() = this == EXPENSE || this == INCOME
 }
 
 /**
  * Money moving between accounts. `from` loses [amount], `to` gains `amount - fee`.
- * A null side means money entering or leaving the app.
+ * A null side means money entering or leaving the app. An [FlowKind.isBill] flow has one side
+ * and a [category] (see `domain/Bills.kt`); every other kind leaves it null.
  */
 @Serializable
 @Entity(
@@ -176,6 +185,8 @@ data class MoneyFlow(
     val at: Long,
     val note: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    /** A bill's category key; null for the other kinds, and read as 其他 when unknown. */
+    val category: String? = null,
 ) {
     fun involves(accountId: String) = fromAccountId == accountId || toAccountId == accountId
 }

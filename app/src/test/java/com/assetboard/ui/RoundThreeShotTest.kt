@@ -157,7 +157,7 @@ class RoundThreeShotTest {
         }
         compose.mainClock.advanceTimeBy(300)
         compose.onRoot().captureRoboImage("screenshots/78-todo-nest.png", roborazziOptions = SHOT_OPTIONS)
-        compose.onNodeWithText("并入检查项").assertExists()
+        compose.onNodeWithText("并入「采购清单」").assertExists()
         compose.onNodeWithText("整理桌面").performTouchInput { up() }
         compose.mainClock.autoAdvance = true
         compose.waitUntil(5_000) { titlesInOrder(c) == listOf("回邮件", "订机票", "采购清单") }

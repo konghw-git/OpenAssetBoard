@@ -254,6 +254,21 @@ class MigrationTest {
         }
     }
 
+    @Test fun migrationElevenToTwelveGivesFlowsNoCategoryAndKeepsTheLedger() {
+        val before = helper.createDatabase(name, 11).use { db ->
+            seedV1(db)
+            ledgerTables.associateWith { db.dump(it) }
+        }
+        helper.runMigrationsAndValidate(name, 12, true, Migrations.MIGRATION_11_12).use { db ->
+            fun List<Any?>.col(name: String) = this[indexOf(name) - size / 2]
+            val flows = db.dump("flows")
+            assertEquals(listOf("BUY", "EXTERNAL_IN"), flows.map { it.col("kind") })
+            assertTrue(flows.all { it.col("category") == null })
+            assertEquals(listOf(200_000L, 10_000L), flows.map { it.col("amount") })
+            for (t in ledgerTables - "flows") assertEquals(before.getValue(t), db.dump(t))
+        }
+    }
+
     @Test fun migrationTenToElevenRemindsAtTheTimeAndKeepsTheTodo() {
         helper.createDatabase(name, 10).use { db ->
             db.put(

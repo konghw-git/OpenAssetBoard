@@ -22,6 +22,7 @@ import com.assetboard.ui.todo.TodoHomeScreen
 import com.assetboard.ui.todo.TodoDetailScreen
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -89,6 +90,29 @@ class ChecklistDragTest {
         drag("A1", "A3")
         compose.waitUntil(5_000) { items(c, "Parent A") == listOf("A2", "A3", "A1") }
         assertEquals(listOf("B1", "B2"), items(c, "Parent B"))
+    }
+
+    @Test fun theOtherItemsMakeRoomWhileOneIsHeld() {
+        show()
+        fun top(text: String) = compose.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
+        val a2 = top("A2")
+        val a3 = top("A3")
+        val start = compose.onNodeWithText("A1").fetchSemanticsNode().boundsInRoot.center
+        compose.mainClock.autoAdvance = false
+        compose.onRoot().performTouchInput { down(start) }
+        compose.mainClock.advanceTimeBy(900)
+        repeat(10) { step ->
+            compose.onRoot().performTouchInput { moveTo(start + Offset(0f, (a3 - a2) * 2.2f * (step + 1) / 10f)) }
+            compose.mainClock.advanceTimeBy(40)
+        }
+        compose.mainClock.advanceTimeBy(600)
+        // A1's slot went to the end: A2 and A3 slid up into the room it left, before any drop.
+        assertTrue(top("A2") < a2 - 10f)
+        assertTrue(top("A3") < a3 - 10f)
+        compose.onRoot().performTouchInput { cancel() }
+        compose.mainClock.advanceTimeBy(600)
+        compose.mainClock.autoAdvance = true
+        assertEquals(a2, top("A2"), 2f)
     }
 
     @Test fun moveIntoAnotherTodosChecklistAtTheDropPosition() {

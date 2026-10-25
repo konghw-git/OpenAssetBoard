@@ -1,6 +1,7 @@
 package com.assetboard.domain
 
 import com.assetboard.data.Account
+import com.assetboard.data.FlowKind
 import com.assetboard.data.MoneyFlow
 
 /** A rule violation with a message fit to show the user as is. */
@@ -19,6 +20,11 @@ object Rules {
         ensure(flow.fromAccountId == null || flow.fromAccountId != flow.toAccountId) { "转出和转入不能是同一个账户" }
         ensure((flow.fromAccountId == null) == (from == null)) { "转出账户不存在" }
         ensure((flow.toAccountId == null) == (to == null)) { "转入账户不存在" }
+        when (flow.kind) {
+            FlowKind.EXPENSE -> ensure(flow.fromAccountId != null && flow.toAccountId == null && flow.fee == 0L) { "支出要从一个账户付出" }
+            FlowKind.INCOME -> ensure(flow.toAccountId != null && flow.fromAccountId == null && flow.fee == 0L) { "收入要进到一个账户" }
+            else -> ensure(flow.category == null) { "只有记账的支出和收入有分类" }
+        }
         for (account in listOfNotNull(from, to)) {
             // A flow at the baseline instant would be silently absorbed by the baseline valuation.
             ensure(flow.at > account.baselineAt) {

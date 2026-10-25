@@ -62,6 +62,13 @@ import com.assetboard.ui.components.glassBarColors
 import com.assetboard.data.Account
 import com.assetboard.data.AccountGroup
 import com.assetboard.data.FlowKind
+import com.assetboard.domain.Bills
+import com.assetboard.ui.bill.BillSheet
+import com.assetboard.ui.bill.billViewModel
+import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.components.UndoMessages
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import com.assetboard.domain.Dates
 import com.assetboard.domain.Ledger
 import com.assetboard.domain.LedgerData
@@ -102,6 +109,8 @@ data class TimelineEntry(
     val valuationId: String? = null,
     val flowId: String? = null,
     val snapshotId: String? = null,
+    /** A 记账 entry, edited on its sheet rather than the flow page. */
+    val bill: Boolean = false,
 )
 
 data class AccountDetail(
@@ -146,6 +155,15 @@ fun buildDetail(l: LedgerData, accountId: String): AccountDetail? {
         )
     }
     val flowEntries = l.flowsOf(a.id).map { f ->
+        if (f.kind.isBill) {
+            return@map TimelineEntry(
+                key = "f" + f.id, at = f.at, type = EntryType.FLOW,
+                title = f.kind.label + " · " + Bills.category(f).label,
+                subtitle = f.note?.takeIf { it.isNotBlank() },
+                amount = l.toDisplay(a.id, Ledger.flowDelta(f, a.id)),
+                delta = null, netEffect = null, flowId = f.id, bill = true,
+            )
+        }
         val outgoing = f.fromAccountId == a.id
         val other = (if (outgoing) f.toAccountId else f.fromAccountId)?.let { l.accountById[it]?.name } ?: "外部"
         val fee = if (f.fee > 0) {
@@ -176,7 +194,8 @@ fun buildDetail(l: LedgerData, accountId: String): AccountDetail? {
     )
 }
 
-private data class QuickAction(val label: String, val icon: ImageVector, val flowKind: FlowKind?)
+/** [flowKind] null: a new valuation, unless [bill], which opens 记一笔. */
+private data class QuickAction(val label: String, val icon: ImageVector, val flowKind: FlowKind?, val bill: Boolean = false)
 
 private fun actionsFor(d: AccountDetail): List<QuickAction> = when {
     d.account.isInvestment -> listOf(
@@ -188,11 +207,13 @@ private fun actionsFor(d: AccountDetail): List<QuickAction> = when {
     )
     d.isLiability -> listOf(
         QuickAction("更新欠款", Icons.Default.Edit, null),
+        QuickAction("记一笔", Icons.AutoMirrored.Outlined.ReceiptLong, null, bill = true),
         QuickAction("还款", Icons.Default.CreditScore, FlowKind.REPAY),
         QuickAction("借款", Icons.Default.RequestQuote, FlowKind.BORROW),
     )
     else -> listOf(
         QuickAction("更新余额", Icons.Default.Edit, null),
+        QuickAction("记一笔", Icons.AutoMirrored.Outlined.ReceiptLong, null, bill = true),
         QuickAction("转账", Icons.Default.SwapHoriz, FlowKind.TRANSFER),
         QuickAction("外部转入", Icons.Default.CallReceived, FlowKind.EXTERNAL_IN),
         QuickAction("外部转出", Icons.Default.CallMade, FlowKind.EXTERNAL_OUT),
@@ -213,6 +234,17 @@ fun AccountDetailScreen(
     val ledger by LocalContainer.current.repository.ledger.collectAsStateWithLifecycle()
     val detail = remember(ledger, accountId) { ledger?.let { buildDetail(it, accountId) } }
     val cs = MaterialTheme.colorScheme
+    val billVm = billViewModel("account")
+    val snackbar = remember { SnackbarHostState() }
+    UndoMessages(billVm.events, snackbar, billVm::undo)
+    // 记一笔 on this account, or a bill of its timeline being edited.
+    var recording by rememberSaveable { mutableStateOf(false) }
+    var billEditing by rememberSaveable { mutableStateOf<String?>(null) }
+    if (recording) BillSheet(null, billVm, onDismiss = { recording = false }, presetAccount = accountId)
+    billEditing?.let { id ->
+        val f = ledger?.flows?.firstOrNull { it.id == id }
+        if (f == null) billEditing = null else BillSheet(f, billVm, onDismiss = { billEditing = null })
+    }
 
     GlassScaffold(
         topBar = {
@@ -223,6 +255,7 @@ fun AccountDetailScreen(
                 colors = glassBarColors(),
             )
         },
+        snackbarHost = { GlassSnackbarHost(snackbar) },
     ) { padding ->
         val d = detail
         if (d == null) {
@@ -239,7 +272,13 @@ fun AccountDetailScreen(
         ) {
             item { HeaderCard(d) }
             item {
-                ActionsCard(actionsFor(d)) { a -> if (a.flowKind == null) onNewValuation() else onNewFlow(a.flowKind.name) }
+                ActionsCard(actionsFor(d)) { a ->
+                    when {
+                        a.bill -> recording = true
+                        a.flowKind == null -> onNewValuation()
+                        else -> onNewFlow(a.flowKind.name)
+                    }
+                }
             }
             item { ChartCard(d) }
             item {
@@ -250,6 +289,7 @@ fun AccountDetailScreen(
                         TimelineRow(e) {
                             when {
                                 e.type == EntryType.BASELINE -> onEdit()
+                                e.bill -> billEditing = e.flowId
                                 e.flowId != null -> onOpenFlow(e.flowId)
                                 e.valuationId != null -> onOpenValuation(e.valuationId)
                             }

@@ -248,26 +248,35 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     }
 
     /** A 排版 that changed the text: what it was before, for the snackbar's 撤销. */
-    val tidied = MutableSharedFlow<Tidied>(extraBufferCapacity = 1)
+    val tidied = MutableSharedFlow<Tidied>(extraBufferCapacity = 4)
+    private var lastTidied: Tidied? = null
 
-    /** 一键排版: the whole text through [DiaryFormat.tidy], saved at once like any typing. */
+    /**
+     * 一键排版: the whole text through [DiaryFormat.tidy], saved at once like any typing. Tapped
+     * again with nothing left to tidy, it offers the last 撤销 afresh while that can still undo,
+     * rather than covering it with 已经很整齐了.
+     */
     fun tidy() {
         val s = _session.value ?: return
         if (s.status.value != DiarySession.Status.READY) return
         val before = s.text.value
         val after = DiaryFormat.tidy(before)
         if (after == before) {
-            messages.tryEmit("已经很整齐了")
+            val last = lastTidied?.takeIf { it.session === s && it.after == before }
+            if (last != null) tidied.tryEmit(last) else messages.tryEmit("已经很整齐了")
             return
         }
         s.onInput(after)
         saveScope.launch { s.saveNow() }
-        tidied.tryEmit(Tidied(s, before, after))
+        val t = Tidied(s, before, after)
+        lastTidied = t
+        tidied.tryEmit(t)
     }
 
     /** Puts the text back as it was before [t], unless it was typed on since. */
     fun undoTidy(t: Tidied) {
         val s = _session.value?.takeIf { it === t.session && it.text.value == t.after } ?: return
+        if (lastTidied === t) lastTidied = null
         s.onInput(t.before)
         saveScope.launch { s.saveNow() }
     }

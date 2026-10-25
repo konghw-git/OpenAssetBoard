@@ -332,7 +332,25 @@ class TodoRepository(
      * other todo where it was: they swap the places they hold in the one order all views share.
      * Places held twice (orders from before this rule) are first spread out over every todo.
      */
-    suspend fun reorder(idsInOrder: List<String>) = tx {
+    suspend fun reorder(idsInOrder: List<String>) = tx { reorderIn(idsInOrder) }
+
+    /**
+     * A drag across a section's title in a list: [moved] go into [sectionId] (null: loose, above
+     * the first title), keeping their list, and the list takes [idsInOrder], in one write.
+     */
+    suspend fun place(idsInOrder: List<String>, moved: List<String>, sectionId: String?) = tx {
+        for (id in moved.distinct()) {
+            val t = live(id)
+            if (t.listId == null || t.sectionId == sectionId) continue
+            val section = sectionId?.let { dao.section(it) }?.takeIf { it.deletedAt == null && it.listId == t.listId }
+            ensure(sectionId == null || section != null) { "分区不存在" }
+            save(t.copy(sectionId = section?.id).bump(seq = false))
+        }
+        reorderIn(idsInOrder)
+    }
+
+    /** [idsInOrder] trade the places they hold among themselves, so that they come in this order. */
+    private suspend fun reorderIn(idsInOrder: List<String>) {
         val ids = idsInOrder.distinct()
         var moved = ids.mapNotNull { dao.todo(it) }
         if (moved.map { it.sortOrder }.toSet().size < moved.size) {

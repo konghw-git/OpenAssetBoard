@@ -9,6 +9,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
@@ -31,8 +34,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * A held todo merges when it rests over another card, or slides right toward the row above.
- * A quick vertical drop reorders; a cancelled drag never merges.
+ * A held todo merges only when it slides right toward the row above. Moving up or down always
+ * reorders, however long it rests over another card or travels with edge scrolling; a cancelled
+ * drag never merges.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -105,38 +109,92 @@ class TodoNestTest {
         assertTrue(runBlocking { c.todos.loadOnce() }.checklistByTodo.values.all { it.isEmpty() })
     }
 
-    @Test fun heldOverANonAdjacentTodoItMergesIntoThatTodo() {
+    @Test fun restingOverAnotherTodoOnlyMovesIt() {
         val c = show()
         fun top(text: String) = compose.onNodeWithText(text).fetchSemanticsNode().boundsInRoot.top
         val distance = top("最后的") - top("先写的")
-        drag("先写的", dx = 0f, dy = distance, rest = 800)
-        compose.waitUntil(5_000) { "先写的" !in titles(c) }
-        val d = runBlocking { c.todos.loadOnce() }
-        val target = d.todos.first { it.title == "最后的" }
-        assertEquals(listOf("先写的"), d.checklistByTodo[target.id].orEmpty().map { it.text })
+        drag("先写的", dx = 0f, dy = distance, rest = 1_500)
+        compose.waitUntil(5_000) { titles(c) == listOf("后写的", "最后的", "先写的") }
+        assertTrue(runBlocking { c.todos.loadOnce() }.checklistByTodo.values.all { it.isEmpty() })
     }
 
-    @Test fun aTodoCanReachAMergeTargetAfterEdgeScrolling() {
-        val c = show()
-        runBlocking(c.gate.bound()) { repeat(12) { c.todos.create(TodoDraft("远处 $it")) } }
-        compose.waitUntil(10_000) { c.todos.data.value?.todos?.size == 15 }
-        compose.mainClock.advanceTimeBy(1_000)
-        val start = compose.onNodeWithText("先写的", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
+    /** Held at an edge, [text] rides the scroll until the list ends, then is let go. */
+    private fun holdAtEdge(text: String, bottom: Boolean, frames: Int = 400) {
+        val start = compose.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
         val bounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
         compose.onRoot().performTouchInput { down(start) }
         compose.mainClock.advanceTimeBy(900)
-        compose.onRoot().performTouchInput { moveTo(Offset(start.x, bounds.bottom - 40f)) }
-        repeat(150) { compose.mainClock.advanceTimeBy(32); Thread.sleep(5) }
-        val target = compose.onNodeWithText("远处 11", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
-        compose.onRoot().performTouchInput { moveTo(target) }
-        compose.mainClock.advanceTimeBy(800)
+        compose.onRoot().performTouchInput { moveTo(Offset(start.x, if (bottom) bounds.bottom - 30f else bounds.top + 30f)) }
+        repeat(frames) { compose.mainClock.advanceTimeBy(16); Thread.sleep(2) }
         compose.onRoot().performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
         compose.mainClock.autoAdvance = true
-        compose.waitUntil(5_000) { "先写的" !in titles(c) }
+    }
+
+    @Test fun aTodoTravelsPastTallCardsToTheEndWithEdgeScrolling() {
+        val c = show()
+        runBlocking(c.gate.bound()) {
+            repeat(12) { i ->
+                val id = c.todos.create(TodoDraft("远处 $i"))
+                repeat(4) { c.todos.addChecklistItem(id, "第 $it 步") }
+            }
+        }
+        compose.waitUntil(10_000) { c.todos.data.value?.todos?.size == 15 }
+        compose.mainClock.advanceTimeBy(1_000)
+        holdAtEdge("先写的", bottom = true)
+        compose.waitUntil(5_000) { titles(c).last() == "先写的" }
+        assertTrue(runBlocking { c.todos.loadOnce() }.checklistByTodo.values.none { items -> items.any { it.text == "先写的" } })
+    }
+
+    @Test fun aTodayRowGoesAboveTheOverdueOnes() {
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
+        val today = c.todos.today()
+        runBlocking(c.gate.bound()) {
+            repeat(5) { i ->
+                val id = c.todos.create(TodoDraft("过期 $i", planDate = today.minusDays(1)))
+                repeat(i % 3 + 1) { c.todos.addChecklistItem(id, "要点 $it") }
+            }
+            c.todos.create(TodoDraft("拿两个快递", planDate = today))
+        }
+        compose.setContent {
+            CompositionLocalProvider(LocalContainer provides c) {
+                AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) { TodoHomeScreen({}, {}, initialView = "today") }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("过期 0")).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(1_000)
+        // The row is below the screen: scroll the list until it is in view.
+        compose.onAllNodes(hasScrollToNodeAction()).onFirst().performScrollToNode(hasText("拿两个快递"))
+        compose.mainClock.advanceTimeBy(500)
+        holdAtEdge("拿两个快递", bottom = false)
+        compose.waitUntil(5_000) {
+            com.assetboard.domain.todo.TodoViews.today(c.todos.data.value!!.todos, today).first().todo.title == "拿两个快递"
+        }
+    }
+
+    @Test fun aListRowCrossesASectionTitleIntoThatSection() {
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
+        val (listId, sectionId) = runBlocking(c.gate.bound()) {
+            val l = c.todos.createList("搬家")
+            val s = c.todos.createSection(l, "第二阶段")
+            c.todos.create(TodoDraft("打包", listId = l))
+            c.todos.create(TodoDraft("约车", listId = l))
+            c.todos.create(TodoDraft("搬运", listId = l, sectionId = s))
+            l to s
+        }
+        compose.setContent {
+            CompositionLocalProvider(LocalContainer provides c) {
+                AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) { TodoHomeScreen({}, {}, initialView = "list:$listId") }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("搬运")).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(1_000)
+        fun top(text: String) = compose.onNodeWithText(text).fetchSemanticsNode().boundsInRoot.top
+        drag("约车", dx = 0f, dy = top("搬运") - top("约车"))
+        compose.waitUntil(5_000) { runBlocking { c.todos.loadOnce() }.todos.first { it.title == "约车" }.sectionId == sectionId }
         val d = runBlocking { c.todos.loadOnce() }
-        val into = d.todos.first { it.title == "远处 11" }
-        assertEquals(listOf("先写的"), d.checklistByTodo[into.id].orEmpty().map { it.text })
+        assertEquals(null, d.todos.first { it.title == "打包" }.sectionId)
     }
 
     @Test fun selectedRowsMergeIntoTheVisibleRowAbove() {

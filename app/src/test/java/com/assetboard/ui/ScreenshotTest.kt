@@ -26,6 +26,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -154,6 +155,8 @@ class ScreenshotTest {
     @Test fun allocationReturnsToTotal() {
         val c = demoContainer()
         shot("01-overview-allocation", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        compose.onNode(hasScrollAction()).performScrollToKey("allocation")
+        compose.mainClock.advanceTimeBy(800)
         compose.onNodeWithText("配置", useUnmergedTree = true).assertExists()
         compose.onAllNodesWithText("储蓄账户")[0].performClick()
         compose.onNodeWithText("配置", useUnmergedTree = true).assertDoesNotExist()
@@ -166,7 +169,7 @@ class ScreenshotTest {
         val c = demoContainer()
         shot("01-overview-groups-fold", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
         compose.onNodeWithText("农行①").assertDoesNotExist()
-        compose.onNode(hasScrollAction()).performScrollToIndex(2)
+        compose.onNode(hasScrollAction()).performScrollToKey("accounts")
         compose.mainClock.advanceTimeBy(1_500)
         compose.onRoot().captureRoboImage("screenshots/01c-overview-accounts.png", roborazziOptions = SHOT_OPTIONS)
         // [0] is the hero's legend row, [1] the group in the accounts card.
@@ -186,7 +189,7 @@ class ScreenshotTest {
     @Test fun accountSwipes() {
         val c = demoContainer()
         shot("01-overview-account-swipes", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
-        compose.onNode(hasScrollAction()).performScrollToIndex(2)
+        compose.onNode(hasScrollAction()).performScrollToKey("accounts")
         compose.mainClock.advanceTimeBy(1_000)
         // Its click action rather than a touch: a touch leaves a ripple that the hand-run clock
         // below sometimes still shows in 01h and sometimes not.
@@ -222,18 +225,19 @@ class ScreenshotTest {
         compose.waitUntil(5_000) { !c.repository.ledger.value!!.accounts.first { it.name == "农行②" }.isDisabled }
     }
 
-    /** Pulling the assets list down past its top is 新建账户; the hint says so while armed. */
-    @Test fun overviewPullAddsAnAccount() {
+    /** Pulling the assets list down past its top is 记一笔; the hint says so while armed. 新建账户 stays in the header. */
+    @Test fun overviewPullRecordsABill() {
         val c = demoContainer()
         var added = 0
         shot("01-overview-pull-add", c) { OverviewScreen({}, noop, {}, noop, noop, { added++ }) }
         compose.onNode(hasScrollAction()).performTouchInput { down(center); moveBy(Offset(0f, 40f)); repeat(6) { moveBy(Offset(0f, 100f)) } }
         compose.mainClock.advanceTimeBy(400)
-        compose.onNodeWithText("松手新建账户").assertExists()
+        compose.onNodeWithText("松手记一笔").assertExists()
         compose.onRoot().captureRoboImage("screenshots/01i-overview-pull-armed.png", roborazziOptions = SHOT_OPTIONS)
         compose.onNode(hasScrollAction()).performTouchInput { up() }
         compose.mainClock.advanceTimeBy(1_000)
-        assert(added == 1) { "pull opened the new account page $added times" }
+        compose.onNodeWithContentDescription("再记").assertExists()
+        assert(added == 0) { "pull opened the new account page $added times" }
     }
 
     /** The scroll bar on the right edge, while the list moves. */

@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
@@ -169,6 +170,9 @@ class ModuleScreenshotTest {
         compose.onRoot().captureRoboImage("screenshots/26-todo-swipe-right.png", roborazziOptions = SHOT_OPTIONS)
         compose.onNodeWithText("交水电费").performTouchInput { up() }
         compose.mainClock.advanceTimeBy(1_000)
+        // Robolectric draws only when something captures; the dust snapshots each card's recorded
+        // layer, so draw once here or the swipe below finds nothing to dissolve when shots are off.
+        compose.onRoot().captureToImage()
         // A long left swipe: the card turns to dust, the undo bar comes up. The clock is driven
         // by hand, or waiting for idle would run the dust to its end.
         compose.mainClock.autoAdvance = false

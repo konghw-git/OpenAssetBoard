@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performTouchInput
@@ -115,9 +116,13 @@ class RoundTwoShotTest {
         runBlocking(c.gate.bound()) { c.diary.setMood(today, 4) }
         set(c) { DiaryScreen(null, {}, {}, {}, {}) }
         shot("50-diary-mood")
+        // The clock stands still: waiting would run the 撤销's few seconds out before the shot.
+        compose.mainClock.autoAdvance = false
         compose.onNodeWithContentDescription("一键排版").performClick()
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("撤销")).fetchSemanticsNodes().isNotEmpty() }
-        shot("51-diary-tidied")
+        compose.mainClock.advanceTimeBy(600)
+        compose.onNodeWithText("撤销").assertExists()
+        compose.onRoot().captureRoboImage("screenshots/51-diary-tidied.png", roborazziOptions = SHOT_OPTIONS)
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun diaryCalendarMoods() {
@@ -198,7 +203,8 @@ class RoundTwoShotTest {
         compose.mainClock.advanceTimeBy(500)
         shot("62-todo-gathered")
         compose.onAllNodes(hasSetTextAction())[0].performTextReplacement("这周杂事")
-        compose.onNodeWithText("完成").performClick()
+        // Today is in the hand-set order: the new todo stands where the first of the two did, below the screen's edge here.
+        compose.onNodeWithText("完成").performScrollTo().performClick()
         compose.waitUntil(5_000) {
             runBlocking { c.todos.loadOnce().todos.any { it.title == "这周杂事" && it.deletedAt == null } }
         }

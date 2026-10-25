@@ -1,22 +1,17 @@
 package com.assetboard.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -28,32 +23,45 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
+import kotlin.math.abs
 
 /**
  * Long-press-and-drag reordering for a LazyColumn. The screen keeps its own copy of the order:
- * [onMove] swaps two keys in it (returning false where the move is not allowed, such as across
- * sections), and [onDrop] saves it. The dragged row follows the finger; near either edge the
- * list scrolls under it. A row picked up and let go without moving calls [onHold] instead, when
- * there is one: the long press keeps its other meaning, such as selecting. [onStart] hears the
- * pick-up, before anything moves, and may fold other rows away to carry them along; it answers
- * how far that moved the row's slot up, so the row stays under the finger.
+ * [onMove] moves one key to another's place in it (returning false where the move is not allowed,
+ * such as across sections), and [onDrop] saves it. The dragged row follows the finger; near
+ * either edge the list scrolls under it. A row picked up and let go without moving calls [onHold]
+ * instead, when there is one: the long press keeps its other meaning, such as selecting. [onStart]
+ * hears the pick-up, before anything moves, and may fold other rows away to carry them along.
  *
- * Where [onNest] is set, the row can also go into the one above it: slid to the right past
- * [nestArm] while held, it shows [nestInto] (the row above, when [canNest] allows it), and let go
- * there it calls [onNest] instead of [onDrop]. The sideways slide never moves rows up or down, so
- * a reorder stays a reorder while it travels. Holding over another row for a moment also arms
- * a merge into that row, in either direction; a quick release still changes the order.
+ * The row's place on screen is worked out from the finger's travel and where the list lays its
+ * slot out now, never kept as a running sum: rows folding away, an editor closing above, a
+ * scroll or a move all leave it under the finger without any bookkeeping. Edge scrolling never
+ * takes the slot itself out of view, because a lazy list drops what it does not show, and with
+ * it the gesture.
+ *
+ * Where [onNest] is set, the row can also go into the one above it: slid right past [nestArm]
+ * while held, it shows [nestInto] (the row above, when [canNest] allows it), and let go there it
+ * calls [onNest] instead of [onDrop]. Only a sideways slide does that: moving up or down takes the
+ * slide back, so a reorder stays a reorder however long it travels or rests.
  */
 @Stable
 class ReorderState internal constructor(
@@ -64,35 +72,60 @@ class ReorderState internal constructor(
     private val haptic: HapticFeedback,
     private val nestArm: Float,
     private val nestMax: Float,
+    private val maxSpeed: Float,
 ) {
     var dragging by mutableStateOf<Any?>(null)
         private set
-    /** How far the dragged row sits from its slot in the layout. */
-    var offset by mutableFloatStateOf(0f)
-        private set
-    /** How far the dragged row has slid right, toward going into the row above; 0 without [onNest]. */
+    /** How far right the dragged row has slid, toward going into the row above; 0 without [onNest]. */
     var nestOffset by mutableFloatStateOf(0f)
         private set
     /** The row the dragged one goes into if let go now. */
     var nestInto by mutableStateOf<Any?>(null)
         private set
+    /** The row just let go, gliding from where the finger left it into its slot. */
+    var settling by mutableStateOf<Any?>(null)
+        private set
     internal var onMove: (from: Any, to: Any) -> Boolean = { _, _ -> false }
     internal var onDrop: (Any) -> Unit = {}
     internal var onHold: ((Any) -> Unit)? = null
-    internal var onStart: (Any) -> Float = { 0f }
+    internal var onStart: (Any) -> Unit = {}
     internal var canNest: (row: Any, into: Any) -> Boolean = { _, _ -> false }
     internal var onNest: ((row: Any, into: Any) -> Unit)? = null
+    /** A header pinned to the top of the list: the top scroll zone starts under it. */
+    internal var stickyKey: Any? = null
     private var scroller: Job? = null
-    private var hoverJob: Job? = null
-    private var hover: Any? = null
-    /** The candidate under the finger, not yet armed until the finger rests. */
-    val hovering: Any? get() = hover
-    private var hoverPoint = Offset.Zero
+    private var settler: Job? = null
+    private val settle = Animatable(0f)
+    /** The finger's travel since the pick-up. */
+    private var travel by mutableFloatStateOf(0f)
+    /** Where the row's slot was at the pick-up, and where it was last seen laid out. */
+    private var startSlot = 0f
+    private var lastSlot = 0f
     private var grabY = 0f
     private var travelled = 0f
     private var moved = false
+    /** The layout a move was made on: the next move waits for the one that shows it. */
+    private var movedOn: LazyListLayoutInfo? = null
     private var released: Any? = null
     private var releasedAt = 0L
+
+    /** How far the dragged row sits from its slot in the layout. */
+    val offset: Float
+        get() {
+            val key = dragging ?: return 0f
+            val slot = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }?.offset?.toFloat() ?: lastSlot
+            return startSlot + travel - slot
+        }
+
+    /** How far [key]'s row is drawn from its slot: following the finger, or settling after it. */
+    fun translationOf(key: Any): Float = when (key) {
+        dragging -> offset
+        settling -> settle.value
+        else -> 0f
+    }
+
+    /** Whether [key]'s row is held or still settling, and so drawn over its neighbours. */
+    fun isLifted(key: Any): Boolean = dragging == key || settling == key
 
     /**
      * Whether a click on [key]'s row is only the finger lifting after a long press picked it up.
@@ -102,47 +135,59 @@ class ReorderState internal constructor(
         dragging == key || (released == key && System.nanoTime() - releasedAt < CLICK_AFTER_RELEASE_NS)
 
     internal fun start(key: Any, point: Offset = Offset.Zero) {
+        val me = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return
         haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
-        dragging = key
-        offset = onStart(key)
-        nestOffset = 0f
-        nestInto = null
-        hover = null
-        hoverJob?.cancel()
+        settler?.cancel()
+        settling = null
+        startSlot = me.offset.toFloat()
+        lastSlot = startSlot
+        travel = 0f
         grabY = point.y
         travelled = 0f
         moved = false
+        movedOn = null
+        nestOffset = 0f
+        nestInto = null
+        dragging = key
+        onStart(key)
         scroller?.cancel()
         scroller = scope.launch { autoScroll() }
     }
 
     internal fun drag(dx: Float, dy: Float) {
-        offset += dy
-        travelled += kotlin.math.abs(dy)
+        if (dragging == null) return
+        travel += dy
+        travelled += abs(dx) + abs(dy)
         if (onNest != null) {
-            nestOffset = (nestOffset + dx).coerceIn(0f, nestMax)
-            travelled += kotlin.math.abs(dx)
+            // Up or down takes the slide back: only a sideways move goes into the row above.
+            val back = if (abs(dy) > abs(dx)) abs(dy) * 0.6f else 0f
+            nestOffset = (nestOffset + dx - back).coerceIn(0f, nestMax)
         }
+        swapIfCrossed()
         updateNest()
-        if (hover == null) swapIfCrossed()
     }
 
     internal fun end(cancelled: Boolean = false) {
         val key = dragging ?: return
         scroller?.cancel()
-        hoverJob?.cancel()
         // A cancelled drag releases the row; it must never turn into a merge.
         val into = nestInto.takeUnless { cancelled }
-        // A quick drop over a card sorts it; only the highlighted, armed target merges.
-        if (!cancelled && into == null) hover?.let { if (onMove(key, it)) moved = true }
-        hover = null
+        val from = offset
         dragging = null
-        offset = 0f
+        travel = 0f
         nestOffset = 0f
         nestInto = null
         released = key
         releasedAt = System.nanoTime()
         haptic.performHapticFeedback(if (into != null) HapticFeedbackType.Confirm else HapticFeedbackType.GestureEnd)
+        if (into == null && from != 0f) {
+            settling = key
+            settler = scope.launch {
+                settle.snapTo(from)
+                settle.animateTo(0f, spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow))
+                settling = null
+            }
+        }
         val hold = onHold
         val nest = onNest
         when {
@@ -152,97 +197,94 @@ class ReorderState internal constructor(
         }
     }
 
-    /**
-     * Resting over another row arms that target. Otherwise the right-slide shortcut uses the
-     * row above, with hysteresis so a finger on its threshold does not flicker between states.
-     */
+    /** The right-slide arms the row above, with hysteresis so a finger on its threshold does not flicker. */
     private fun updateNest() {
         val key = dragging ?: return
         if (onNest == null) return
         val before = nestInto
-        val visible = list.layoutInfo.visibleItemsInfo
-        val me = visible.firstOrNull { it.key == key }
-        val finger = me?.let { it.offset + offset + grabY }
-        val over = finger?.let { y -> visible.firstOrNull {
-            it.key != key && it.size > 0 && y >= it.offset + 4 && y < it.offset + it.size - 4 && canNest(key, it.key)
-        }?.key }
-        val point = Offset(nestOffset, finger ?: 0f)
-        if (over != hover || (over != null && (point - hoverPoint).getDistance() > slop)) {
-            hoverJob?.cancel()
-            hover = over
-            hoverPoint = point
-            nestInto = null
-            if (over != null) hoverJob = scope.launch {
-                delay(450)
-                if (dragging == key && hover == over && canNest(key, over)) {
-                    nestInto = over
-                    haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
-                }
-            }
-        }
+        val above = above(key)
         nestInto = when {
-            over != null -> nestInto?.takeIf { it == over }
-            nestOffset >= nestArm -> above(key)?.takeIf { canNest(key, it) }
+            nestOffset >= nestArm -> above?.takeIf { canNest(key, it) }
             nestOffset < nestArm * 2 / 3 -> null
-            else -> before?.takeIf { it == above(key) }
+            else -> before?.takeIf { it == above }
         }
         if (nestInto != before) haptic.performHapticFeedback(if (nestInto != null) HapticFeedbackType.GestureThresholdActivate else HapticFeedbackType.SegmentTick)
     }
 
     /** The key of the row right above [key]'s slot, if it is on screen. */
-    private fun above(key: Any): Any? {
+    fun above(key: Any): Any? {
         val visible = list.layoutInfo.visibleItemsInfo
         val me = visible.firstOrNull { it.key == key } ?: return null
-        // Selected companions remain in the lazy list with zero height to keep the gesture alive.
+        // Rows carried along stay in the lazy list with zero height to keep the gesture alive.
         return visible.lastOrNull { it.index < me.index && it.size > 0 }?.key
     }
 
     /**
-     * Trades places with the row above once the dragged row's top edge passes that row's middle,
-     * or with the row below once its bottom edge does: by edges, so a tall row moves as readily
-     * as a short one.
+     * Takes the place of the row above once the dragged row's top edge passes that row's middle,
+     * or of the row below once its bottom edge does: by edges, so a tall row moves as readily as
+     * a short one. One move per layout: the next waits until the list has laid this one out.
      */
     private fun swapIfCrossed() {
         val key = dragging ?: return
-        val visible = list.layoutInfo.visibleItemsInfo
+        val info = list.layoutInfo
+        if (info === movedOn) return
+        val visible = info.visibleItemsInfo
         val me = visible.firstOrNull { it.key == key } ?: return
-        val top = me.offset + offset
+        lastSlot = me.offset.toFloat()
+        val top = startSlot + travel
         val bottom = top + me.size
-        val above = visible.firstOrNull { it.index == me.index - 1 }?.takeIf { top < it.offset + it.size / 2f }
-        val below = visible.firstOrNull { it.index == me.index + 1 }?.takeIf { bottom > it.offset + it.size / 2f }
+        val above = visible.lastOrNull { it.index < me.index && it.size > 0 }?.takeIf { top < it.offset + it.size / 2f }
+        val below = visible.firstOrNull { it.index > me.index && it.size > 0 }?.takeIf { bottom > it.offset + it.size / 2f }
         val target = above ?: below ?: return
-        val down = target === below
+        // Past a tall row near an edge the slot would land off screen, where the list drops it and
+        // the gesture with it: wait for the edge scroll to bring the row in first.
+        val slot = if (target === above) target.offset else target.offset + target.size - me.size
+        if (slot >= info.viewportEndOffset - 1 || slot + me.size <= info.viewportStartOffset + 1) return
         val first = list.firstVisibleItemIndex
         val firstOffset = list.firstVisibleItemScrollOffset
         if (!onMove(key, target.key)) return
+        movedOn = info
         moved = true
         haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
-        offset -= if (down) (target.offset + target.size - (me.offset + me.size)).toFloat() else (target.offset - me.offset).toFloat()
         // A move at the top would otherwise make the list follow the row that left the top slot.
         if (me.index == first || target.index == first) list.requestScrollToItem(first, firstOffset)
     }
 
+    /**
+     * Scrolls while the finger is near an edge, faster the nearer it is and the longer it waits
+     * there, but never so far that the dragged row's slot leaves the screen: the slot catches up
+     * through moves, one per frame, and the scroll waits for it.
+     */
     private suspend fun autoScroll() {
+        var waited = 0
         while (scope.isActive) {
             withFrameNanos { }
             val key = dragging ?: return
             val info = list.layoutInfo
             val me = info.visibleItemsInfo.firstOrNull { it.key == key } ?: continue
-            val top = me.offset + offset
-            val bottom = top + me.size
-            val start = info.viewportStartOffset + edge
-            val end = info.viewportEndOffset - edge
-            val speed = when {
-                top < start -> -((start - top) / edge).coerceAtMost(1f) * 22f
-                bottom > end -> ((bottom - end) / edge).coerceAtMost(1f) * 22f
+            lastSlot = me.offset.toFloat()
+            var top = info.viewportStartOffset.toFloat()
+            stickyKey?.let { k ->
+                info.visibleItemsInfo.firstOrNull { it.key == k && it.offset <= top + 1 }?.let { top = (it.offset + it.size).toFloat() }
+            }
+            val bottom = info.viewportEndOffset.toFloat()
+            val finger = startSlot + travel + grabY
+            val pull = when {
+                finger < top + edge -> -(top + edge - finger) / edge
+                finger > bottom - edge -> (finger - bottom + edge) / edge
                 else -> 0f
+            }.coerceIn(-1f, 1f)
+            if (pull == 0f) {
+                waited = 0
+            } else {
+                waited++
+                var speed = pull * maxSpeed * (0.35f + 0.65f * (waited / 40f).coerceAtMost(1f))
+                speed = if (speed < 0) maxOf(speed, -(info.viewportEndOffset - me.offset - 1f).coerceAtLeast(0f))
+                else minOf(speed, (me.offset + me.size - info.viewportStartOffset - 1f).coerceAtLeast(0f))
+                if (speed != 0f) list.scrollBy(speed)
             }
-            if (speed != 0f) {
-                val moved = list.scrollBy(speed)
-                offset += moved
-                updateNest()
-                if (hover == null) swapIfCrossed()
-            }
+            swapIfCrossed()
+            updateNest()
         }
     }
 }
@@ -276,23 +318,13 @@ fun CarryBadge(text: String, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.SemiBold,
         color = cs.onPrimary,
+        maxLines = 1,
         modifier = modifier
             .shadow(4.dp, RoundedCornerShape(50))
             .clip(RoundedCornerShape(50))
             .background(cs.primary)
             .padding(horizontal = 8.dp, vertical = 2.dp),
     )
-}
-
-/**
- * How far [key]'s slot moves up when the rows keyed [gone] fold away ([foldedAway]): the heights
- * of the ones above it on screen. What [rememberReorderState]'s onStart answers when it folds
- * rows away to carry them.
- */
-fun LazyListState.heightAbove(key: Any, gone: Collection<Any>): Float {
-    val info = layoutInfo
-    val me = info.visibleItemsInfo.firstOrNull { it.key == key } ?: return 0f
-    return info.visibleItemsInfo.filter { it.index < me.index && it.key in gone }.sumOf { it.size }.toFloat()
 }
 
 /**
@@ -310,18 +342,20 @@ fun rememberReorderState(
     onMove: (from: Any, to: Any) -> Boolean,
     onDrop: (Any) -> Unit,
     onHold: ((Any) -> Unit)? = null,
-    onStart: (Any) -> Float = { 0f },
+    onStart: (Any) -> Unit = {},
     canNest: (row: Any, into: Any) -> Boolean = { _, _ -> false },
     onNest: ((row: Any, into: Any) -> Unit)? = null,
+    stickyKey: Any? = null,
 ): ReorderState {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val edge = with(density) { 64.dp.toPx() }
+    val edge = with(density) { 72.dp.toPx() }
     val slop = with(density) { 10.dp.toPx() }
     val nestArm = with(density) { NestArm.toPx() }
     val nestMax = with(density) { NestMax.toPx() }
+    val maxSpeed = with(density) { 9.dp.toPx() }
     val haptic = LocalHapticFeedback.current
-    val state = remember(list) { ReorderState(list, scope, edge, slop, haptic, nestArm, nestMax) }
+    val state = remember(list) { ReorderState(list, scope, edge, slop, haptic, nestArm, nestMax, maxSpeed) }
     val move by rememberUpdatedState(onMove)
     val drop by rememberUpdatedState(onDrop)
     val hold by rememberUpdatedState(onHold)
@@ -334,6 +368,7 @@ fun rememberReorderState(
     state.onStart = { start(it) }
     state.canNest = { a, b -> mayNest(a, b) }
     state.onNest = if (onNest == null) null else ({ a, b -> nest?.invoke(a, b) })
+    state.stickyKey = stickyKey
     return state
 }
 

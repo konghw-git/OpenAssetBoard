@@ -8,7 +8,6 @@ import com.assetboard.ui.components.LocalAmbient
 import com.assetboard.ui.components.ReorderState
 import com.assetboard.ui.components.CarryBadge
 import com.assetboard.ui.components.foldedAway
-import com.assetboard.ui.components.heightAbove
 import com.assetboard.ui.components.rememberReorderState
 import com.assetboard.ui.components.reorderable
 import com.assetboard.ui.components.stackUnder
@@ -326,13 +325,14 @@ fun TodoHomeScreen(
             val a = order.indexOfFirst { it.key == from }
             val b = order.indexOfFirst { it.key == to }
             val x = order.getOrNull(a) as? Line.Item
-            val y = order.getOrNull(b) as? Line.Item
-            if (x?.band == null || x.band != y?.band) {
-                false
-            } else {
-                order = order.toMutableList().apply { add(b, removeAt(a)) }
-                true
+            val ok = x?.band != null && when (val y = order.getOrNull(b)) {
+                is Line.Item -> x.band == y.band
+                // In a list, a row crosses a section's title into the section on its other side.
+                is Line.Header -> x.band == LIST_BAND && y.sectionId != null
+                null -> false
             }
+            if (ok) order = order.toMutableList().apply { add(b, removeAt(a)) }
+            ok
         },
         onDrop = { key ->
             if (carried.isNotEmpty()) {
@@ -340,9 +340,19 @@ fun TodoHomeScreen(
                 val at = rest.indexOfFirst { it.key == key }
                 if (at >= 0) order = rest.toMutableList().apply { addAll(at + 1, carried) }
             }
+            val goes = listOf(key as String) + carried.map { it.key }
             carried = emptyList()
-            val band = (order.firstOrNull { it.key == key } as? Line.Item)?.band ?: return@rememberReorderState
-            vm.reorder(order.filter { it is Line.Item && it.band == band }.map { it.key })
+            val at = order.indexOfFirst { it.key == key }
+            val band = (order.getOrNull(at) as? Line.Item)?.band ?: return@rememberReorderState
+            val ids = order.filter { it is Line.Item && it.band == band }.map { it.key }
+            if (band == LIST_BAND) {
+                // The section is the title above the row, or none above the first title.
+                val section = order.subList(0, at).lastOrNull { it is Line.Header }?.let { (it as Line.Header).sectionId }
+                val changed = goes.filter { id -> d?.todoById?.get(id)?.let { it.sectionId != section } == true }
+                if (changed.isNotEmpty()) vm.place(ids, changed, section) else vm.reorder(ids)
+            } else {
+                vm.reorder(ids)
+            }
         },
         // Held without moving: the long press selects, as on rows that cannot move.
         onHold = { key ->
@@ -350,15 +360,15 @@ fun TodoHomeScreen(
             if (order.any { it.key == key }) selection = selection.toggle(key as String)
         },
         onStart = start@{ key ->
+            swipe.closeAll()
+            // Picking up another row ends an edit in place, which saves it.
+            if (editingId != null && editingId != key) editingId = null
             val me = order.firstOrNull { it.key == key } as? Line.Item
-            if (me == null || key !in selection || selection.size < 2) return@start 0f
-            val ride = order.filter { it is Line.Item && it.key != key && it.key in selection && it.band == me.band }
-            if (ride.isEmpty()) return@start 0f
-            carried = ride
-            listState.heightAbove(key, ride.map { it.key })
+            if (me == null || key !in selection || selection.size < 2) return@start
+            carried = order.filter { it is Line.Item && it.key != key && it.key in selection && it.band == me.band }
         },
-        // Rest over an open todo to merge into it; the right-slide shortcut still uses the one
-        // above. Selected companions ride along, as with the selection bar's merge action.
+        // Slid right, the row goes into the open todo above it. Selected companions ride along,
+        // as with the selection bar's merge action.
         canNest = { key, into ->
             val goes = listOf(key) + carried.map { it.key }
             val target = (order.firstOrNull { it.key == into } as? Line.Item)?.row
@@ -371,6 +381,7 @@ fun TodoHomeScreen(
             selection = emptySet()
             d?.todoById?.get(into as String)?.let { vm.mergeInto(it, goes) }
         },
+        stickyKey = VIEW_HEADER,
     )
     // The lists in the order on screen; a drag rearranges them here and saves the order on release.
     val shownLists = remember(d) { d?.lists?.filter { it.archivedAt == null }.orEmpty() }
@@ -652,6 +663,10 @@ private fun HomeTitle(today: LocalDate, done: Int, total: Int, onSettings: () ->
 
 /** The dial's index among the narrow layout's LazyColumn items. */
 private const val DIAL_ITEM = 2
+/** The chosen view's title, pinned to the top while its rows scroll under it. */
+private const val VIEW_HEADER = "view-header"
+/** The band of a list's open rows, whichever section they are in. */
+private const val LIST_BAND = "list"
 private const val PULL_HINT = "下拉新建待办"
 private const val PULL_ARMED = "松手新建待办"
 
@@ -702,8 +717,8 @@ private fun LazyListScope.listCards(c: ListsContext) {
         val cs = MaterialTheme.colorScheme
         Box(
             Modifier
-                .zIndex(if (dragged) 1f else 0f)
-                .graphicsLayer { translationY = if (dragged) c.reorder.offset else 0f }
+                .zIndex(if (c.reorder.isLifted(key)) 1f else 0f)
+                .graphicsLayer { translationY = c.reorder.translationOf(key) }
                 .then(if (dragged) Modifier else Modifier.animateItem())
                 .padding(horizontal = 16.dp, vertical = 4.dp),
         ) {
@@ -929,7 +944,7 @@ private class ViewContext(
 
 private fun LazyListScope.viewContent(c: ViewContext) {
     val d = c.data ?: return
-    stickyHeader("view-header") { ViewHeader(c) }
+    stickyHeader(VIEW_HEADER) { ViewHeader(c) }
     val listId = c.list?.id
     if (c.list != null && (c.list.notes.isNotBlank() || c.list.deadline != null)) {
         item("list-notes-$listId") { ListNotes(c.list, c.today) }
@@ -957,21 +972,22 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                 val editing = c.editing == t.id
                 val checklistDrag = LocalChecklistDrag.current
                 val checklistMoving = checklistDrag?.item != null
-                val movable = line.band != null && c.editing == null && !checklistMoving
+                // Another row being edited in place does not stop this one moving: the pick-up ends that edit.
+                val movable = line.band != null && !editing && !checklistMoving
                 val dragged = c.reorder.dragging == t.id
                 val nesting = dragged && c.reorder.nestInto != null
+                val nestScale by animateFloatAsState(if (nesting) 0.94f else 1f, spring(dampingRatio = 0.6f, stiffness = 600f), label = "nest")
                 val stack = if (dragged) c.carried.size else 0
                 val stackColor = MaterialTheme.colorScheme.primary
                 Box(
                     Modifier
                         .then(if (t.id in c.carried) Modifier.foldedAway() else Modifier)
-                        .zIndex(if (dragged) 1f else 0f)
+                        .zIndex(if (c.reorder.isLifted(t.id)) 1f else 0f)
                         .graphicsLayer {
-                            translationY = if (dragged) c.reorder.offset else 0f
+                            translationY = c.reorder.translationOf(t.id)
                             // Slid right, toward going into the row above; a little smaller once it would.
                             translationX = if (dragged) c.reorder.nestOffset else 0f
-                            val s = if (nesting) 0.94f else 1f
-                            scaleX = s; scaleY = s
+                            scaleX = nestScale; scaleY = nestScale
                         }
                         .then(if (dragged) Modifier else Modifier.animateItem())
                         // The rows carried along peek out under the one held, as a little stack.
@@ -1045,10 +1061,15 @@ private fun LazyListScope.viewContent(c: ViewContext) {
                             swipe = c.swipe,
                         )
                     }
+                    val sliding = dragged && with(LocalDensity.current) { c.reorder.nestOffset > 12.dp.toPx() }
                     when {
                         // At the leading corner: the card has slid right, its trailing one off the screen.
-                        nesting -> CarryBadge(if (stack > 0) "${stack + 1} 条并入检查项" else "并入检查项", Modifier.align(Alignment.TopStart).padding(start = 28.dp))
-                        dragged && c.reorder.hovering != null -> CarryBadge("停留后并入检查项", Modifier.align(Alignment.TopStart).padding(start = 28.dp))
+                        nesting -> {
+                            val into = (c.reorder.nestInto as? String)?.let { d.todoById[it]?.title?.take(10) }
+                            val what = if (stack > 0) "${stack + 1} 条并入" else "并入"
+                            CarryBadge(if (into != null) "$what「$into」" else what + "检查项", Modifier.align(Alignment.TopStart).padding(start = 28.dp))
+                        }
+                        sliding -> CarryBadge("继续右滑，并入上一条", Modifier.align(Alignment.TopStart).padding(start = 28.dp))
                         stack > 0 -> CarryBadge("${stack + 1} 条", Modifier.align(Alignment.TopEnd).padding(end = 6.dp))
                     }
                 }
@@ -1270,9 +1291,9 @@ fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, onSave: (S
 private fun Set<String>.toggle(id: String) = if (id in this) this - id else this + id
 
 private fun buildLines(d: TodoData, view: TodoView?, listId: String?, today: LocalDate): List<Line> = when {
-    view == TodoView.TODAY -> TodoViews.today(d.todos, today).map { Line.Item(it, band = TodoViews.todayBand(it, today)) }
+    view == TodoView.TODAY -> TodoViews.today(d.todos, today).map { Line.Item(it, band = TodoViews.todayBand(it)) }
     view == TodoView.UPCOMING -> TodoViews.upcoming(d.todos, today).flatMap { (date, rows) ->
-        listOf(Line.Header("h-$date", dayTitle(date, today))) + rows.map { Line.Item(it, band = if (it.done) null else "$date|${it.todo.important}") }
+        listOf(Line.Header("h-$date", dayTitle(date, today))) + rows.map { Line.Item(it, band = if (it.done) null else "$date") }
     }
     view == TodoView.INBOX -> TodoViews.inbox(d.todos, today).map { Line.Item(it, band = if (it.done) null else "inbox") }
     view == TodoView.SOMEDAY -> TodoViews.someday(d.todos, today).map { Line.Item(it, band = if (it.done) null else "someday") }
@@ -1283,9 +1304,10 @@ private fun buildLines(d: TodoData, view: TodoView?, listId: String?, today: Loc
         val rows = TodoViews.list(listId, d.todos, today)
         val sections = d.sections.filter { it.listId == listId }.sortedBy { it.sortOrder }
         val loose = rows.filter { it.todo.sectionId == null || sections.none { s -> s.id == it.todo.sectionId } }
-        fun band(r: ViewRow, section: String?) = if (r.done) null else "section|$section"
-        loose.map { Line.Item(it, band = band(it, null)) } + sections.flatMap { s ->
-            listOf(Line.Header("s-${s.id}", s.name, s.id)) + rows.filter { it.todo.sectionId == s.id }.map { Line.Item(it, s.id, band(it, s.id)) }
+        // One band over the whole list: a row crosses a section's title into that section.
+        fun band(r: ViewRow) = if (r.done) null else LIST_BAND
+        loose.map { Line.Item(it, band = band(it)) } + sections.flatMap { s ->
+            listOf(Line.Header("s-${s.id}", s.name, s.id)) + rows.filter { it.todo.sectionId == s.id }.map { Line.Item(it, s.id, band(it)) }
         }
     }
     else -> emptyList()

@@ -71,23 +71,25 @@ class TodoViewsTest {
         assertEquals(today.plusDays(7), TodoViews.upcoming(listOf(t), today, zone).single().first)
     }
 
-    @Test fun v8_overdueGroupComesFirst() {
+    @Test fun v8_todayKeepsTheHandSetOrderOverdueOrNot() {
+        val today1 = todo(plan = today)
         val overdue = todo(plan = today.minusDays(2))
         val important = todo(plan = today, important = true)
-        val rows = TodoViews.today(listOf(important, overdue), today, zone)
-        assertEquals(listOf(overdue.id, important.id), rows.map { it.todo.id })
+        val rows = TodoViews.today(listOf(important, overdue, today1), today, zone)
+        assertEquals(listOf(today1.id, overdue.id, important.id), rows.map { it.todo.id })
     }
 
-    @Test fun todayRowsTradePlacesOnlyWithinTheirBand() {
+    @Test fun everyOpenTodayRowTradesPlacesWithAnyOther() {
         val a = todo(plan = today)
-        val b = todo(plan = today)
         val flagged = todo(plan = today, important = true)
         val late = todo(plan = today.minusDays(2))
-        val rows = TodoViews.today(listOf(a, b, flagged, late), today, zone).associateBy { it.todo.id }
-        fun band(t: com.assetboard.data.Todo) = TodoViews.todayBand(rows.getValue(t.id), today)
-        assertEquals(band(a), band(b))
-        assertTrue(band(a) != band(flagged))
-        assertTrue(band(a) != band(late))
+        val doneAt = today.atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
+        val done = todo(plan = today, completedAt = doneAt)
+        val rows = TodoViews.today(listOf(a, flagged, late, done), today, zone).associateBy { it.todo.id }
+        fun band(t: com.assetboard.data.Todo) = TodoViews.todayBand(rows.getValue(t.id))
+        assertEquals(band(a), band(flagged))
+        assertEquals(band(a), band(late))
+        assertEquals(null, band(done))
     }
 
     @Test fun v9_finishedTodayIsGreyAndNotCounted() {

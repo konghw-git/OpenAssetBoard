@@ -132,13 +132,13 @@ class FlowEditViewModel(
         val xOnFrom = when (k) {
             FlowKind.BUY -> !x.isInvestment
             FlowKind.SELL, FlowKind.DIVIDEND -> x.isInvestment
-            FlowKind.TRANSFER, FlowKind.EXTERNAL_OUT -> true
+            FlowKind.TRANSFER, FlowKind.EXTERNAL_OUT, FlowKind.EXPENSE -> true
             FlowKind.REPAY -> !isLiability(x)
             FlowKind.BORROW -> isLiability(x)
-            FlowKind.EXTERNAL_IN -> false
+            FlowKind.EXTERNAL_IN, FlowKind.INCOME -> false
         }
         val otherSide = when (k) {
-            FlowKind.EXTERNAL_IN, FlowKind.EXTERNAL_OUT -> null
+            FlowKind.EXTERNAL_IN, FlowKind.EXTERNAL_OUT, FlowKind.EXPENSE, FlowKind.INCOME -> null
             else -> other ?: suggestCounterpart(k, x)
         }
         if (xOnFrom) { fromId = x.id; toId = otherSide } else { toId = x.id; fromId = otherSide }
@@ -225,7 +225,8 @@ fun FlowEditScreen(accountId: String?, flowId: String?, initialKind: String?, on
             SectionCard(contentPadding = PaddingValues(16.dp)) {
                 Text("类型", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FlowKind.entries.forEach { k ->
+                    // 支出 and 收入 are 记账's, with categories, on their own sheet.
+                    FlowKind.entries.filter { !it.isBill || it == vm.kind }.forEach { k ->
                         FilterChip(selected = vm.kind == k, onClick = { vm.applyKind(k) }, label = { Text(k.label) })
                     }
                 }

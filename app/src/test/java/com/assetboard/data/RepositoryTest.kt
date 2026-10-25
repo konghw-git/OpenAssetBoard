@@ -270,4 +270,44 @@ class RepositoryTest {
         assertEquals(-20_000_00L, t.liabilities)
         assertEquals(18_482_13L, t.netWorth)
     }
+
+    private fun expense(from: String, amount: Long, at: Long, category: String? = "food") =
+        MoneyFlow(newId(), FlowKind.EXPENSE, from, null, amount, at = at, createdAt = at, category = category)
+
+    @Test fun spendingLowersTheBalanceAndEarningRaisesIt() = runBlocking(gate.bound()) {
+        val cash = repo.createAccount(AccountDraft(group(), "钱包"), 0, 1_000_00, null)
+        repo.saveFlow(expense(cash, 35_00, 100))
+        repo.saveFlow(MoneyFlow(newId(), FlowKind.INCOME, null, cash, 500_00, at = 200, createdAt = 200, category = "salary"))
+        val l = repo.loadOnce()
+        assertEquals(1_465_00L, l.currentBalance(cash))
+        assertEquals(listOf("food", "salary"), l.flows.sortedBy { it.at }.map { it.category })
+    }
+
+    @Test fun spendingOnACardRaisesItsDebt() = runBlocking(gate.bound()) {
+        val card = repo.createAccount(AccountDraft(group(liability = true), "信用卡"), 0, 200_00, null)
+        repo.saveFlow(expense(card, 50_00, 100))
+        val l = repo.loadOnce()
+        assertEquals(250_00L, l.toDisplay(card, l.currentBalance(card)))
+    }
+
+    @Test fun billsKeepTheirShape() = runBlocking(gate.bound()) {
+        val g = group()
+        val a = repo.createAccount(AccountDraft(g, "a"), 0, 100_00, null)
+        val b = repo.createAccount(AccountDraft(g, "b"), 0, 100_00, null)
+        // 支出 goes out of one account to nowhere, 收入 the other way; only they have a category.
+        expectRule { repo.saveFlow(MoneyFlow(newId(), FlowKind.EXPENSE, a, b, 1_00, at = 100, createdAt = 0, category = "food")) }
+        expectRule { repo.saveFlow(MoneyFlow(newId(), FlowKind.INCOME, a, null, 1_00, at = 100, createdAt = 0, category = "salary")) }
+        expectRule { repo.saveFlow(MoneyFlow(newId(), FlowKind.TRANSFER, a, b, 1_00, at = 100, createdAt = 0, category = "food")) }
+        expectRule { repo.saveFlow(MoneyFlow(newId(), FlowKind.EXPENSE, a, null, 2_00, fee = 1_00, at = 100, createdAt = 0, category = "food")) }
+        assertEquals(0, repo.loadOnce().flows.size)
+    }
+
+    /** A stocktake has the last word: a bill dated before it is kept but leaves today's balance alone. */
+    @Test fun aBillBeforeTheLatestBalanceRecordLeavesTheBalanceAlone() = runBlocking(gate.bound()) {
+        val cash = repo.createAccount(AccountDraft(group(), "钱包"), 0, 1_000_00, null)
+        repo.addValuation(cash, 500, 800_00, null)
+        repo.saveFlow(expense(cash, 35_00, 300))
+        repo.saveFlow(expense(cash, 10_00, 700))
+        assertEquals(790_00L, repo.loadOnce().currentBalance(cash))
+    }
 }

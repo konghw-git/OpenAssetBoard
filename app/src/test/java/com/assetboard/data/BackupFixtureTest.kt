@@ -42,6 +42,25 @@ class BackupFixtureTest {
         return Uri.fromFile(File(f.context.cacheDir, name).apply { writeText(text) })
     }
 
+    @Test fun formatThirteenRestoresBills() = f.run {
+        val uri = fixture("format-13.json")
+        assertEquals(13, f.backup.inspect(uri).formatVersion)
+        f.backup.restore(uri)
+        val l = f.ledger.loadOnce()
+        val bills = l.flows.filter { it.kind.isBill }.associateBy { it.category }
+        assertEquals(35_50L, bills.getValue("food").amount)
+        assertEquals("午饭", bills.getValue("food").note)
+        assertEquals(FlowKind.INCOME, bills.getValue("salary").kind)
+        val bank = l.accounts.single { it.name == "银行" }.id
+        assertEquals(100_00L - 35_50L + 8_000_00L, l.currentBalance(bank))
+    }
+
+    /** A file from before 记账 reads with every flow uncategorised. */
+    @Test fun formatTwelveHasNoBills() = f.run {
+        f.backup.restore(fixture("format-12.json"))
+        assertTrue(f.ledger.loadOnce().flows.all { it.category == null && !it.kind.isBill })
+    }
+
     @Test fun formatTwelveRestoresRemindersAhead() = f.run {
         val uri = fixture("format-12.json")
         assertEquals(12, f.backup.inspect(uri).formatVersion)
@@ -99,7 +118,9 @@ class BackupFixtureTest {
     @Test fun writeTheCurrentFormat() = f.run {
         assumeTrue(System.getenv("WRITE_BACKUP_FIXTURE") == "1")
         val g = f.ledger.createGroup("储蓄", false, 0)
-        f.ledger.createAccount(AccountDraft(g, "银行"), 0, 100_00, null)
+        val bank = f.ledger.createAccount(AccountDraft(g, "银行"), 0, 100_00, null)
+        f.ledger.saveFlow(MoneyFlow(newId(), FlowKind.EXPENSE, bank, null, 35_50, at = f.now - 3_600_000, note = "午饭", createdAt = f.now, category = "food"))
+        f.ledger.saveFlow(MoneyFlow(newId(), FlowKind.INCOME, null, bank, 8_000_00, at = f.now - 7_200_000, createdAt = f.now, category = "salary"))
         val fund = f.ledger.createGroup("投资", false, 1)
         f.ledger.createAccount(AccountDraft(fund, "基金"), 0, 5_000_00, null)
         val list = f.todos.createList("论文")

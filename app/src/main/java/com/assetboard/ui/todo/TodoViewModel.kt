@@ -151,6 +151,8 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
 
     fun reorder(ids: List<String>) = action { repo.reorder(ids) }
 
+    fun place(ids: List<String>, moved: List<String>, sectionId: String?) = action { repo.place(ids, moved, sectionId) }
+
     fun moveChecklist(itemId: String, into: String, before: String?) = action {
         val undo = repo.moveChecklistItem(itemId, into, before) ?: return@action
         _events.tryEmit(TodoEvent("已移动检查项") { repo.undoChecklistMove(undo) })

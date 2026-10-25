@@ -124,6 +124,7 @@ import com.assetboard.ui.notes.NoteTopicsScreen
 import com.assetboard.ui.notes.NotesScreen
 import com.assetboard.ui.overview.OverviewScreen
 import com.assetboard.ui.record.FlowEditScreen
+import com.assetboard.ui.bill.BillScreen
 import com.assetboard.ui.record.ValuationEditScreen
 import com.assetboard.ui.settings.GroupsScreen
 import com.assetboard.ui.settings.PreRestoreScreen
@@ -184,6 +185,7 @@ object Routes {
     const val TRASH = "trash"
     const val PRE_RESTORE = "pre_restore"
     const val REMINDER_GUIDE = "reminder_guide"
+    const val BILLS = "bills"
     const val DIARY_SEARCH = "diary_search"
     const val NOTE_SEARCH = "note_search"
     const val NOTE_TOPICS = "note_topics"
@@ -376,6 +378,7 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit, backdrop: Backd
                                 onAddAccount = { groupId -> nav.navigate(Routes.accountEdit(groupId = groupId)) },
                                 onHealth = { record -> nav.navigate(Routes.health(record)) },
                                 onFood = { record -> nav.navigate(Routes.food(record)) },
+                                onBills = { nav.navigate(Routes.BILLS) },
                             )
                             Tab.TODO -> TodoHomeScreen(
                                 onSettings = settings,
@@ -433,6 +436,7 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit, backdrop: Backd
                 composable(Routes.TRASH) { TrashScreen(onBack = back) }
                 composable(Routes.PRE_RESTORE) { PreRestoreScreen(onBack = back) }
                 composable(Routes.REMINDER_GUIDE) { ReminderGuideScreen(onBack = back) }
+                composable(Routes.BILLS) { BillScreen(onBack = back, onAddAccount = { nav.navigate(Routes.accountEdit()) }) }
                 composable("stocktake?snapshotId={snapshotId}", arguments = listOf(optional("snapshotId"))) {
                     StocktakeScreen(snapshotId = it.arg("snapshotId"), onBack = back)
                 }

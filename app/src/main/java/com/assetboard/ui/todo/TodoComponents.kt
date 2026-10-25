@@ -239,7 +239,8 @@ fun TodoRow(
     val checklistDrag = LocalChecklistDrag.current
     val highlighted = selected || (checklistDrag?.item != null && checklistDrag.drop?.todoId == todo.id && checklistDrag.item?.todoId != todo.id)
     val badge = if (done) null else TodoViews.trailing(todo, today, inUpcoming)
-    val points = if (done) emptyList() else checklist
+    // While a checklist item is dragged, the lists show where it would land.
+    val points = if (done) emptyList() else checklistDrag.preview(todo.id, checklist)
     val content by animateFloatAsState(if (done) 0.55f else 1f, tween(260), label = "done")
     val tint by animateColorAsState(if (highlighted) cs.primary.copy(alpha = 0.16f) else Color.Transparent, tween(200), label = "tint")
     val lift by animateFloatAsState(if (lifted) 1f else 0f, spring(stiffness = Spring.StiffnessMediumLow), label = "lift")
@@ -372,7 +373,7 @@ private fun InlineChecklist(items: List<ChecklistItem>, onToggle: ((String) -> U
     Column(modifier.padding(top = ChecklistGap).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(ChecklistGap)) {
         items.forEachIndexed { i, item ->
             key(item.id) {
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).checklistRow(item)) {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).checklistRow(item).slideToPlace()) {
                     CheckNode(item, above = if (i == 0) lead + ChecklistGap else ChecklistGap, last = i == items.lastIndex, onToggle)
                     Box(Modifier.weight(1f)) {
                         if (onDelete == null) {
