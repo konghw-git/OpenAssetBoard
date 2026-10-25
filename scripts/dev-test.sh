@@ -12,8 +12,8 @@
 #   scripts/dev-test.sh --compile                           # only compile the app and the tests
 #
 # --all is every test with every screenshot compared, and lint; scripts/publish-release.sh runs the
-# very same command, so a tree that passed it is not tested twice (Gradle hands back the cached
-# result in seconds). Screenshots are compared, never recorded: a change lists the images that
+# very same command, so content that passed it is not tested twice, before a commit or after it
+# (only *.md and docs/ may change in between). Screenshots are compared, never recorded: a change lists the images that
 # differ (new and old side by side in app/build/outputs/roborazzi/*_compare.png), and --accept
 # takes them as the new baselines without running anything again.
 set -euo pipefail
@@ -25,6 +25,7 @@ ENV_FILE="$HOME/.local/share/dev-dl/android-env.sh"
 cd "$PROJECT"
 
 offline=--offline
+rerun=
 args=()
 filters=()
 mode=tests
@@ -38,7 +39,7 @@ for a in "$@"; do
     --compile) mode=compile ;;
     --online) offline= ;;
     # Run them even when nothing changed: Gradle otherwise hands back the cached results.
-    --rerun) filters+=(--rerun) ;;
+    --rerun) filters+=(--rerun); rerun=1 ;;
     -*) echo "unknown option: $a" >&2; exit 2 ;;
     *) filters+=(--tests "*$a") ;;
   esac
@@ -47,6 +48,26 @@ done
 
 results="app/build/test-results/testDebugUnitTest"
 full_run="app/build/test-results/roborazzi/full-run"
+passed="build/gate-passed"
+
+# What the gate checks, as one hash: every file git would commit but the prose (*.md, docs/), and
+# the baselines. Committing changes the build itself (BuildConfig carries the commit), so Gradle's
+# cache cannot carry a pass across a commit; this does, for the very same content.
+fingerprint() {
+  python3 -I - <<'PY'
+import hashlib, os, subprocess
+listed = subprocess.run(["git", "ls-files", "-z", "-co", "--exclude-standard"], capture_output=True, check=True).stdout
+files = sorted({f for f in listed.decode().split("\0") if f and not f.endswith(".md") and not f.startswith("docs/")})
+shots = sorted(os.path.join("app/screenshots", n) for n in os.listdir("app/screenshots")) if os.path.isdir("app/screenshots") else []
+h = hashlib.sha1()
+for p in files + shots:
+    if os.path.isfile(p):
+        h.update(p.encode() + b"\0")
+        with open(p, "rb") as f:
+            h.update(hashlib.sha1(f.read()).digest())
+print(h.hexdigest())
+PY
+}
 case "$mode" in
   compile) exec ./gradlew "${args[@]}" -q compileDebugUnitTestKotlin ;;
   accept) exec python3 -I scripts/shots.py accept ;;
@@ -65,6 +86,12 @@ esac
 start=$(date +%s)
 status=0
 if [ "$mode" = all ]; then
+  tree=$(fingerprint)
+  if [ -z "$rerun" ] && [ "$(cat "$passed" 2>/dev/null)" = "$tree" ]; then
+    echo "gate passed: it already passed on exactly this content (--rerun to run it again)"
+    exit 0
+  fi
+  rm -f "$passed"
   # The app reads the time only through AppClock, which the screenshots pin (PinnedClock).
   if grep -rnE 'System\.currentTimeMillis\(\)|System::currentTimeMillis|(LocalDate|LocalDateTime|LocalTime|YearMonth)\.now\(\)' \
       app/src/main --include='*.kt' | grep -v 'domain/AppClock.kt'; then
@@ -128,6 +155,11 @@ fi
 
 echo "took $(( $(date +%s) - start ))s (full log: /tmp/asset-board-test.log)"
 if [ "$mode" = all ]; then
-  if [ "$failed" = 0 ]; then echo "gate passed"; else echo "gate failed"; fi
+  if [ "$failed" = 0 ]; then
+    mkdir -p build && echo "$tree" > "$passed"
+    echo "gate passed"
+  else
+    echo "gate failed"
+  fi
 fi
 exit $failed

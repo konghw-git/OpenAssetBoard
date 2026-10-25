@@ -18,10 +18,10 @@
 | 改动所在的测试类，可以点到方法 | `scripts/dev-test.sh WeekStatsTest 'TodoNestTest.slidRightItGoesIntoTheTodoAbove'` | 纯 JVM 类约 8 秒，Robolectric 类约 12 秒 |
 | 看界面：渲染并比对相关截图 | `scripts/dev-test.sh --shots 'ModuleScreenshotTest.todoList'` | 约 20 秒 |
 | 除截图类以外的全部 | `scripts/dev-test.sh --fast` | 约 40 秒 |
-| **门禁**：全部测试、全部截图比对、lint | `scripts/dev-test.sh --all` | 约 4 分钟；同一棵树再跑几秒 |
+| **门禁**：全部测试、全部截图比对、lint | `scripts/dev-test.sh --all` | 约 4 分钟；内容没变再跑直接放行 |
 
 - **先写能复现问题的测试，在改动前跑一次确认它失败**，再改代码让它通过。计算规则放 `domain/` 的纯 JVM 测试（最快），仓储放 `data/` 的 Robolectric 测试，手势和布局用 Compose UI 测试断言位置、焦点、数据结果，而不是只看截图。
-- **门禁只有一个**：提交前是 `--all`，`scripts/publish-release.sh` 里跑的也是它。Gradle 构建缓存按输入命中，同一棵树过了一次门禁，发布时再跑直接拿回结果（实测 9 秒）。换了参数（点名、`--shots`、`--fast`）就是另一组输入，各自缓存。要强制重跑加 `--rerun`。
+- **门禁只有一个**：提交前是 `--all`，`scripts/publish-release.sh` 里跑的也是它。门禁通过时记下内容指纹：要提交的全部文件（`*.md` 和 `docs/` 除外）加上基准图。内容一样再跑 `--all` 会直接放行，提交之后也一样。之所以不靠 Gradle 缓存，是因为提交号编进了 BuildConfig，一提交缓存就失效。内容改了就交给 Gradle 缓存，没改到的部分几秒拿回。换了参数（点名、`--shots`、`--fast`）是另一组输入，各自缓存。要强制重跑加 `--rerun`。
 - **截图只比对，不重录**。门禁列出变化的、新增的、以及不再有测试画的（过期）基准图，新旧对比在 `app/build/outputs/roborazzi/<名字>_compare.png`。确认是有意改动后跑 `scripts/dev-test.sh --accept`：这次画出的图收为基准，过期的移走，旧图留在 `build/screenshots-replaced/<时间>/`。不用再跑全量录制，之后再跑一次 `--all` 确认即可。刚克隆时没有基准图（`app/screenshots/` 不入库），先 `--accept` 一次。
 - **截图里的时间是固定的**：`PinnedClock` 把「今天」定在 2026-10-25（周日）20:30，测试时区固定为 Asia/Shanghai，所以基准图不会隔天过期。应用代码一律经 `domain/AppClock` 读时间，门禁会拦下直接调用 `System.currentTimeMillis()`、`LocalDate.now()` 的代码。截图测试里造演示数据也用 `AppClock`。
 - **一个画面一张基准图**：要交互的截图测试用 `show()` 打开页面，不要再拍一张和页面本身一样的图。行为由 Compose UI 测试断言，截图测试只负责画面。
@@ -55,7 +55,7 @@
 
 ## 发布流程（维护者）
 
-1. 更新 `CHANGELOG.md` 与 `app/build.gradle.kts` 里的 `versionCode` / `versionName`。版本号会编进 BuildConfig，所以先改版本号再过门禁，第 4 步才能直接拿到缓存结果。
+1. 更新 `CHANGELOG.md` 与 `app/build.gradle.kts` 里的 `versionCode` / `versionName`。先改版本号再过门禁，改了版本号就是另一份内容。
 2. `scripts/dev-test.sh --all` 通过，并用 `scripts/compare-backups.py` 对比升级前后的账本。
-3. `./gradlew assembleRelease`，在真机上覆盖安装验证。
-4. 提交后运行 `bash scripts/publish-release.sh`：重跑同一道门禁（树没变就命中缓存），然后签名构建、校验证书、打 tag、推送、创建 Release 并上传 `OpenAssetBoard-x.y.z.apk`（需要 `gh auth login`）。应用内升级读的是最新一个非预发布 Release 里第一个 `.apk`，tag 必须是 `v` + `versionName`。
+3. `./gradlew assembleRelease`，在真机上覆盖安装验证。验证记录写在 `docs/` 里，不影响门禁指纹。
+4. 提交后运行 `bash scripts/publish-release.sh`：同一道门禁，内容和第 2 步一样就直接放行，然后签名构建、校验证书、打 tag、推送、创建 Release 并上传 `OpenAssetBoard-x.y.z.apk`（需要 `gh auth login`）。应用内升级读的是最新一个非预发布 Release 里第一个 `.apk`，tag 必须是 `v` + `versionName`。
