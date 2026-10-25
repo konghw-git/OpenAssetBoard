@@ -1,5 +1,6 @@
 package com.assetboard.ui.bill
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -127,7 +128,7 @@ fun BillScreen(onBack: () -> Unit, onAddAccount: () -> Unit) {
     val ledger by container.repository.ledger.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     UndoMessages(vm.events, snackbar, vm::undo)
-    val now = YearMonth.now()
+    val now = java.time.YearMonth.now(AppClock.clock)
     var monthText by rememberSaveable { mutableStateOf(now.toString()) }
     val month = YearMonth.parse(monthText)
     var incomeShares by rememberSaveable { mutableStateOf(false) }
@@ -254,7 +255,7 @@ private fun MonthHero(m: Bills.Month) {
         Row {
             HeroFigure("收入", m.income, Modifier.weight(1f))
             HeroFigure("结余", m.balance, Modifier.weight(1f), signed = true)
-            val days = if (m.month == YearMonth.now()) LocalDate.now().dayOfMonth else m.month.lengthOfMonth()
+            val days = if (m.month == java.time.YearMonth.now(AppClock.clock)) AppClock.today().dayOfMonth else m.month.lengthOfMonth()
             HeroFigure("日均支出", m.expense / days, Modifier.weight(1f))
         }
     }
@@ -319,7 +320,7 @@ private fun SharesCard(m: Bills.Month, income: Boolean, only: String?, onKind: (
 @Composable
 private fun DayHeader(d: Bills.Day) {
     val cs = MaterialTheme.colorScheme
-    val today = LocalDate.now()
+    val today = AppClock.today()
     val name = when (d.date) {
         today -> "今天"
         today.minusDays(1) -> "昨天"
@@ -397,7 +398,7 @@ private fun EmptyMonth(current: Boolean, onRecord: () -> Unit) {
 @Composable
 fun BillCard(l: LedgerData, onOpen: () -> Unit, onRecord: () -> Unit, onEdit: (MoneyFlow) -> Unit, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
-    val today = LocalDate.now()
+    val today = AppClock.today()
     val m = remember(l, today) { Bills.month(l.flows, YearMonth.from(today)) }
     val week = remember(l, today) { Bills.dailySpending(l.flows, today) }
     val recent = remember(l) { Bills.bills(l.flows).sortedWith(compareByDescending<MoneyFlow> { it.at }.thenByDescending { it.createdAt }).take(3) }

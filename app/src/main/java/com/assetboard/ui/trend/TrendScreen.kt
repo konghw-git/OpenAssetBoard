@@ -1,5 +1,6 @@
 package com.assetboard.ui.trend
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -85,7 +86,7 @@ fun TrendScreen(onBack: () -> Unit, onOpenStocktake: (String) -> Unit, onNewStoc
     val ledger by LocalContainer.current.repository.ledger.collectAsStateWithLifecycle()
     val all = remember(ledger) { ledger?.netWorthSeries().orEmpty() }
     var range by rememberSaveable { mutableStateOf(ChartRange.Y1) }
-    val period = remember(all, range) { NetWorthTrend.period(all, range.days, System.currentTimeMillis()) }
+    val period = remember(all, range) { NetWorthTrend.period(all, range.days, AppClock.millis()) }
     var selected by remember(period) { mutableStateOf<Int?>(null) }
     val cs = MaterialTheme.colorScheme
 

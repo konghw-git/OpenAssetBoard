@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import com.assetboard.domain.LedgerException
 import com.assetboard.domain.calendar.WorkdayCalendar
 import com.assetboard.domain.ensure
@@ -110,7 +111,7 @@ class TodoRepository(
     private val gate: WriteGate,
     scope: CoroutineScope,
     private val calendar: () -> WorkdayCalendar,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = AppClock::millis,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
     private val onChanged: (Set<String>) -> Unit = {},
 ) {

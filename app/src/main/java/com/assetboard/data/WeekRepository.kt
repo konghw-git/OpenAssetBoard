@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import com.assetboard.domain.LedgerException
 import com.assetboard.domain.ensure
 import kotlinx.coroutines.CoroutineScope
@@ -24,7 +25,7 @@ class WeekRepository(
     private val db: AppDatabase,
     private val gate: WriteGate,
     private val editors: EditorRegistry,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = AppClock::millis,
 ) : WeekStore {
     private val dao = db.weekDao()
     private val queue = Mutex()
@@ -142,7 +143,7 @@ class WeekSession(
     private val store: WeekStore,
     val weekStart: LocalDate,
     scope: CoroutineScope,
-    clock: () -> Long = System::currentTimeMillis,
+    clock: () -> Long = AppClock::millis,
 ) : TextSession<Unit>(scope, clock) {
     typealias Status = TextSession.Status
 

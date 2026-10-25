@@ -146,7 +146,7 @@ JDK 21 and the Android SDK (platform 36 / 37) are required.
 scripts/setup-toolchain.sh
 source ~/.local/share/dev-dl/android-env.sh
 
-./gradlew testDebugUnitTest   # 185 unit tests: rules, repositories, restore, migrations, UI
+./gradlew testDebugUnitTest   # every unit test: rules, repositories, restore, migrations, UI
 ./gradlew assembleDebug       # app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -159,18 +159,16 @@ scripts/create-keystore.sh    # written to your own directory; keep a copy somew
 
 > The debug build uses `com.assetboard.debug`, so it never replaces — or wipes — a release install. Android refuses a release upgrade signed with a different key, and uninstalling clears the local database: back up first.
 
-### Regenerating the screenshots
+### Screenshots and baselines
 
 The screenshots are rendered on the JVM by Roborazzi against the real Compose UI; no device needed:
 
 ```bash
-./gradlew testDebugUnitTest --tests '*ScreenshotTest*' -Proborazzi.test.record=true
-# written to app/screenshots/, the baselines later runs are checked against
-./gradlew testDebugUnitTest -Proborazzi.test.verify=true
-# compared pixel by pixel; a difference fails, with diff images in app/build/outputs/roborazzi/
+scripts/dev-test.sh --all      # every test, the screenshots against app/screenshots/ pixel by pixel, then lint
+scripts/dev-test.sh --accept   # after an intended UI change: what this run drew becomes the baselines
 ```
 
-Record again after an intended UI change. `scripts/publish-release.sh` checks against the baselines before a release whenever they exist. The images in `docs/images/` are those PNGs scaled down and converted to WebP.
+"Today" in the screenshots is one fixed day, so the baselines do not go stale overnight. A fresh clone has no baselines and `--all` lists every image as new: `--accept` once. `scripts/publish-release.sh` runs the same `--all` before a release. The images in `docs/images/` are those PNGs scaled down and converted to WebP; `scripts/dev-test.sh --brand` redraws the banner.
 
 ## Stack
 

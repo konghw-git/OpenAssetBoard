@@ -1,5 +1,6 @@
 package com.assetboard.ui.components
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -395,7 +396,7 @@ fun Sparkline(values: List<Long>, color: Color, modifier: Modifier = Modifier, a
 enum class ChartRange(val label: String, val days: Long?) {
     M3("3月", 92), H6("半年", 183), Y1("1年", 366), ALL("全部", null);
 
-    fun <T> filter(items: List<T>, at: (T) -> Long, now: Long = System.currentTimeMillis()): List<T> {
+    fun <T> filter(items: List<T>, at: (T) -> Long, now: Long = AppClock.millis()): List<T> {
         val d = days ?: return items
         val cutoff = now - d * 24 * 3600 * 1000
         return items.filter { at(it) >= cutoff }

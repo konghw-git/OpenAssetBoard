@@ -1,5 +1,6 @@
 package com.assetboard.ui.health
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -97,7 +98,7 @@ fun FoodEditSheet(
     onSave: (FoodDraft) -> Unit,
     onDelete: (FoodEntry) -> Unit,
 ) {
-    val today = LocalDate.now()
+    val today = AppClock.today()
     val label = existing?.takeIf { it.unit in FoodUnit.labelUnits }
     var labelled by rememberSaveable { mutableStateOf(label != null) }
     var name by rememberSaveable { mutableStateOf(existing?.name.orEmpty()) }

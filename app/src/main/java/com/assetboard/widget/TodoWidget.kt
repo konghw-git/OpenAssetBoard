@@ -1,5 +1,6 @@
 package com.assetboard.widget
 
+import com.assetboard.domain.AppClock
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.runtime.Composable
@@ -52,7 +53,7 @@ class TodoWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = (context.applicationContext as AssetBoardApp).container
         val data = runCatching { container.todos.loadOnce() }.getOrNull()
-        val today = TodoViews.localDate(System.currentTimeMillis())
+        val today = TodoViews.localDate(AppClock.millis())
         val rows = data?.let { TodoViews.today(it.todos, today) }.orEmpty()
         val open = rows.count { !it.done }
         // The token's epoch is bound here, when the widget is drawn.

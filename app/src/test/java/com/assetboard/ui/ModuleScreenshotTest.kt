@@ -1,5 +1,7 @@
 package com.assetboard.ui
 
+import com.assetboard.domain.AppClock
+import com.assetboard.PinnedClock
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
@@ -19,7 +21,6 @@ import com.assetboard.domain.todo.RepeatType
 import com.assetboard.ui.diary.DiaryCalendarScreen
 import com.assetboard.ui.diary.DiaryScreen
 import com.assetboard.ui.settings.ReminderGuideScreen
-import com.assetboard.ui.settings.SettingsScreen
 import com.assetboard.ui.settings.TrashScreen
 import com.assetboard.ui.theme.AssetBoardTheme
 import com.assetboard.ui.todo.TodoDetailScreen
@@ -44,7 +45,6 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performTextReplacement
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.test.performClick
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.rules.RuleChain
 import org.junit.rules.TestRule
@@ -65,10 +65,10 @@ import java.time.LocalTime
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
 class ModuleScreenshotTest {
     private val composeRule = createAndroidComposeRule<ComponentActivity>()
-    @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
+    @get:Rule val rules: TestRule = RuleChain.outerRule(PinnedClock()).around(composeRule).around(CloseTestContainers())
     private val compose get() = composeRule
 
-    private val today = LocalDate.now()
+    private val today: LocalDate get() = AppClock.today()
 
     private class Demo(val c: AppContainer, val listId: String, val detailId: String)
 
@@ -119,7 +119,14 @@ class ModuleScreenshotTest {
         return Demo(c, listId, detail)
     }
 
+    /** [show], then the page as the baseline [name]. */
     private fun shot(name: String, container: AppContainer, dark: Boolean = false, until: () -> Boolean = { true }, content: @Composable () -> Unit) {
+        show(container, dark, until, content)
+        compose.onRoot().captureRoboImage("screenshots/$name.png", roborazziOptions = SHOT_OPTIONS)
+    }
+
+    /** The page loaded and settled, not captured: where a test that goes on to interact starts. */
+    private fun show(container: AppContainer, dark: Boolean = false, until: () -> Boolean = { true }, content: @Composable () -> Unit) {
         compose.setContent {
             CompositionLocalProvider(LocalContainer provides container) {
                 AssetBoardTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT, upIsRed = true) { content() }
@@ -130,7 +137,6 @@ class ModuleScreenshotTest {
         compose.waitUntil(30_000, until)
         compose.mainClock.advanceTimeBy(2_000)
         compose.waitForIdle()
-        compose.onRoot().captureRoboImage("screenshots/$name.png", roborazziOptions = SHOT_OPTIONS)
     }
 
     /** The habits load apart from the todos; a shot taken before them shows an empty panel. */
@@ -139,11 +145,6 @@ class ModuleScreenshotTest {
     @Test fun todoHome() {
         val d = demo()
         shot("20-todo-home", d.c, until = habitsShown) { TodoHomeScreen({}, {}) }
-    }
-
-    @Test fun todoToday() {
-        val d = demo()
-        shot("21-todo-today", d.c, until = habitsShown) { TodoHomeScreen({}, {}, initialView = "today") }
     }
 
     @Test fun todoSwipeAndDust() {
@@ -216,7 +217,7 @@ class ModuleScreenshotTest {
     /** The 每日 pill opens the habit editor; a habit's form opens under it, and so does a new one's. */
     @Test fun habitEditor() {
         val d = demo()
-        shot("20-todo-home-habit-editor", d.c, until = habitsShown) { TodoHomeScreen({}, {}, initialView = "today") }
+        show(d.c, until = habitsShown) { TodoHomeScreen({}, {}, initialView = "today") }
         compose.onNodeWithText("每日").performClick()
         compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("每日打卡").assertExists()
@@ -249,7 +250,7 @@ class ModuleScreenshotTest {
     /** Pulling the list down opens the new-todo field; pulling again while it is open opens nothing more. */
     @Test fun todoPullOpensTheComposer() {
         val d = demo()
-        shot("20-todo-home-pull-composer", d.c, until = habitsShown) { TodoHomeScreen({}, {}, initialView = "today") }
+        show(d.c, until = habitsShown) { TodoHomeScreen({}, {}, initialView = "today") }
         compose.onAllNodes(hasText("准备做什么？")).assertCountEquals(0)
         compose.mainClock.autoAdvance = false
         compose.onNodeWithText("待办").performTouchInput { down(center); moveBy(Offset(0f, 40f)); repeat(6) { moveBy(Offset(0f, 100f)) } }
@@ -286,7 +287,7 @@ class ModuleScreenshotTest {
     /** Long press and drag: the lower row of a band moves above the upper one, and stays there. */
     @Test fun todoDragReorders() {
         val d = demo()
-        shot("21-todo-today-drag-reorder", d.c, until = habitsShown) { TodoHomeScreen({}, {}, initialView = "today") }
+        show(d.c, until = habitsShown) { TodoHomeScreen({}, {}, initialView = "today") }
         compose.onAllNodes(hasScrollToIndexAction())[0].performScrollToIndex(6)
         compose.mainClock.advanceTimeBy(500)
         fun top(text: String) = compose.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
@@ -321,11 +322,8 @@ class ModuleScreenshotTest {
 
     @Config(qualifiers = "w850dp-h900dp-xhdpi")
     @Test fun todoUnfolded() {
-        // Kept out of the comparison: here alone the habits sometimes load late in Robolectric,
-        // so the shot is taken as it stands and only looked at.
-        assumeTrue("not compared", System.getProperty("roborazzi.test.verify") != "true")
         val d = demo()
-        shot("26-todo-unfolded", d.c) { TodoHomeScreen({}, {}) }
+        shot("26-todo-unfolded", d.c, until = habitsShown) { TodoHomeScreen({}, {}) }
     }
 
     @Test fun diary() {
@@ -356,11 +354,6 @@ class ModuleScreenshotTest {
             ),
         )
         shot("43-update-dialog", d.c) { com.assetboard.ui.settings.UpdatePrompt() }
-    }
-
-    @Test fun settingsFull() {
-        val d = demo()
-        shot("41-settings", d.c) { SettingsScreen({}, {}) }
     }
 
     @Test fun guide() {

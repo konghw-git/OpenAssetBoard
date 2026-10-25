@@ -1,5 +1,7 @@
 package com.assetboard.ui
 
+import com.assetboard.domain.AppClock
+import com.assetboard.PinnedClock
 import com.assetboard.ui.theme.AppTheme
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.width
@@ -13,6 +15,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onLast
@@ -80,7 +83,7 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
 class ScreenshotTest {
     private val composeRule = createAndroidComposeRule<ComponentActivity>()
-    @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
+    @get:Rule val rules: TestRule = RuleChain.outerRule(PinnedClock()).around(composeRule).around(CloseTestContainers())
     private val compose get() = composeRule
 
     private val day = 24L * 3600 * 1000
@@ -90,7 +93,7 @@ class ScreenshotTest {
         val repo = c.repository
         runBlocking(c.gate.bound()) {
             repo.seedDemo()
-            val now = System.currentTimeMillis()
+            val now = AppClock.millis()
             val start = now - 200 * day
             var l = repo.loadOnce()
             for (a in l.accounts) {
@@ -122,7 +125,17 @@ class ScreenshotTest {
         return c
     }
 
+    /** [show], then the page (or its sheet) as the baseline [name]. */
     private fun shot(name: String, container: AppContainer, dark: Boolean = false, sheet: Boolean = false, until: () -> Boolean = { true }, content: @Composable () -> Unit) {
+        show(container, dark, sheet, until, content)
+        (if (sheet) compose.onAllNodes(isRoot()).onLast() else compose.onRoot()).captureRoboImage("screenshots/$name.png", roborazziOptions = SHOT_OPTIONS)
+    }
+
+    /**
+     * The page loaded and settled, not captured: a test that goes on to interact starts here, since
+     * its first frame is the page's own baseline already.
+     */
+    private fun show(container: AppContainer, dark: Boolean = false, sheet: Boolean = false, until: () -> Boolean = { true }, content: @Composable () -> Unit) {
         compose.setContent {
             CompositionLocalProvider(LocalContainer provides container) {
                 AssetBoardTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT, upIsRed = true) { content() }
@@ -141,10 +154,19 @@ class ScreenshotTest {
         if (sheet) compose.waitUntil(10_000) { compose.onAllNodes(isRoot()).fetchSemanticsNodes().size > 1 }
         compose.mainClock.advanceTimeBy(2_000)
         compose.waitForIdle()
-        (if (sheet) compose.onAllNodes(isRoot()).onLast() else compose.onRoot()).captureRoboImage("screenshots/$name.png", roborazziOptions = SHOT_OPTIONS)
     }
 
     private val noop: () -> Unit = {}
+
+    /**
+     * 40 ms on and one frame drawn, not kept: Robolectric draws only when something captures, and
+     * an animation starts on the first frame drawn after the tap. That frame still shows the page as
+     * it was, the page's own baseline; the frames after it show the switch.
+     */
+    private fun firstFrame() {
+        compose.mainClock.advanceTimeBy(40)
+        compose.onRoot().captureToImage()
+    }
 
     @Test fun overview() {
         val c = demoContainer()
@@ -154,7 +176,7 @@ class ScreenshotTest {
     /** Picking a group under the hero's ring puts its share in the middle; picking it again lets go. */
     @Test fun allocationReturnsToTotal() {
         val c = demoContainer()
-        shot("01-overview-allocation", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        show(c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
         compose.onNode(hasScrollAction()).performScrollToKey("allocation")
         compose.mainClock.advanceTimeBy(800)
         compose.onNodeWithText("配置", useUnmergedTree = true).assertExists()
@@ -167,7 +189,7 @@ class ScreenshotTest {
     /** Groups start folded; one opens on tap, and the header opens them all. */
     @Test fun overviewGroupsFold() {
         val c = demoContainer()
-        shot("01-overview-groups-fold", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        show(c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
         compose.onNodeWithText("农行①").assertDoesNotExist()
         compose.onNode(hasScrollAction()).performScrollToKey("accounts")
         compose.mainClock.advanceTimeBy(1_500)
@@ -188,7 +210,7 @@ class ScreenshotTest {
      */
     @Test fun accountSwipes() {
         val c = demoContainer()
-        shot("01-overview-account-swipes", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        show(c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
         compose.onNode(hasScrollAction()).performScrollToKey("accounts")
         compose.mainClock.advanceTimeBy(1_000)
         // Its click action rather than a touch: a touch leaves a ripple that the hand-run clock
@@ -229,7 +251,7 @@ class ScreenshotTest {
     @Test fun overviewPullRecordsABill() {
         val c = demoContainer()
         var added = 0
-        shot("01-overview-pull-add", c) { OverviewScreen({}, noop, {}, noop, noop, { added++ }) }
+        show(c) { OverviewScreen({}, noop, {}, noop, noop, { added++ }) }
         compose.onNode(hasScrollAction()).performTouchInput { down(center); moveBy(Offset(0f, 40f)); repeat(6) { moveBy(Offset(0f, 100f)) } }
         compose.mainClock.advanceTimeBy(400)
         compose.onNodeWithText("松手记一笔").assertExists()
@@ -243,7 +265,7 @@ class ScreenshotTest {
     /** The scroll bar on the right edge, while the list moves. */
     @Test fun overviewScrollBar() {
         val c = demoContainer()
-        shot("01-overview-scroll-bar", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        show(c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
         compose.mainClock.autoAdvance = false
         compose.onNode(hasScrollAction()).performTouchInput { down(center); repeat(8) { moveBy(Offset(0f, -60f)) } }
         repeat(20) { compose.mainClock.advanceTimeByFrame() }
@@ -311,10 +333,11 @@ class ScreenshotTest {
     /** Mid-switch from 1年 to 3月: the thumb sliding and the line morphing, its ticks never stacked. */
     @Test fun trendSwitchMidway() {
         val c = demoContainer()
-        shot("05-trend-switch-midway", c) { TrendScreen(noop, {}, noop) }
+        show(c) { TrendScreen(noop, {}, noop) }
         compose.mainClock.autoAdvance = false
         compose.onNode(hasText("3月") and hasClickAction()).performClick()
-        for (ms in listOf(40, 80, 160)) {
+        firstFrame()
+        for (ms in listOf(80, 160)) {
             compose.mainClock.advanceTimeBy(if (ms == 160) 80 else 40)
             compose.onRoot().captureRoboImage("screenshots/05d-trend-switch-${ms}ms.png", roborazziOptions = SHOT_OPTIONS)
         }
@@ -323,7 +346,7 @@ class ScreenshotTest {
 
     @Test fun trendLower() {
         val c = demoContainer()
-        shot("05-trend-lower", c) { TrendScreen(noop, {}, noop) }
+        show(c) { TrendScreen(noop, {}, noop) }
         // Items: headline, range, net worth chart, assets and debts, change.
         compose.onNode(hasScrollAction()).performScrollToIndex(3)
         compose.mainClock.advanceTimeBy(1_500)
@@ -369,7 +392,7 @@ class ScreenshotTest {
     private fun withHealth(c: AppContainer, profile: Boolean = true): AppContainer {
         runBlocking(c.gate.bound()) {
             if (profile) c.health.saveProfile(Sex.MALE, LocalDate.of(2001, 8, 2), 1820, null)
-            val today = LocalDate.now()
+            val today = AppClock.today()
             for (i in 90 downTo 0) {
                 if (i in 40..49 || i in 12..15 || i % 5 == 3) continue
                 val g = 92_100L + i * 32L + ((i * 37) % 7 - 3) * 120L
@@ -387,19 +410,16 @@ class ScreenshotTest {
 
     @Test fun healthLower() {
         val c = withHealth(demoContainer())
-        shot("11-health-lower", c) { HealthScreen(noop) }
+        show(c) { HealthScreen(noop) }
         // Items: hero, selectors, trend, figures, target, body type, records.
         compose.onNode(hasScrollAction()).performScrollToIndex(3)
         compose.mainClock.advanceTimeBy(1_500)
         compose.onRoot().captureRoboImage("screenshots/11b-health-figures.png", roborazziOptions = SHOT_OPTIONS)
-        compose.onNode(hasScrollAction()).performScrollToIndex(5)
-        compose.mainClock.advanceTimeBy(1_500)
-        compose.onRoot().captureRoboImage("screenshots/11c-health-records.png", roborazziOptions = SHOT_OPTIONS)
     }
 
     @Test fun healthBodyFat() {
         val c = withHealth(demoContainer())
-        shot("11-health-body-fat", c) { HealthScreen(noop) }
+        show(c) { HealthScreen(noop) }
         compose.onNode(hasText("体脂率") and hasClickAction()).performClick()
         compose.onNode(hasText("全部") and hasClickAction()).performClick()
         compose.mainClock.advanceTimeBy(1_500)
@@ -409,13 +429,14 @@ class ScreenshotTest {
     /** Mid-switch frames: the thumb on its way and the weight line morphing into body fat. */
     @Test fun healthSwitchMidway() {
         val c = withHealth(demoContainer())
-        shot("11-health-switch-midway", c, until = {
+        show(c, until = {
             compose.onAllNodes(hasText("体脂率") and hasClickAction()).fetchSemanticsNodes().isNotEmpty()
         }) { HealthScreen(noop) }
         compose.mainClock.autoAdvance = false
         compose.onNode(hasText("体脂率") and hasClickAction()).performClick()
-        for (ms in listOf(40, 80, 120, 160, 200, 260)) {
-            compose.mainClock.advanceTimeBy(if (ms == 40) 40 else if (ms == 260) 60 else 40)
+        firstFrame()
+        for (ms in listOf(80, 120, 160, 200, 260)) {
+            compose.mainClock.advanceTimeBy(if (ms == 260) 60 else 40)
             compose.onRoot().captureRoboImage("screenshots/11e-health-switch-${ms}ms.png", roborazziOptions = SHOT_OPTIONS)
         }
         compose.mainClock.advanceTimeBy(1_000)
@@ -444,7 +465,7 @@ class ScreenshotTest {
         val c = demoContainer()
         runBlocking(c.gate.bound()) {
             c.health.saveProfile(Sex.MALE, LocalDate.of(2001, 8, 2), 1820, null)
-            c.health.save(MeasurementDraft(null, LocalDate.now(), 92_100, null, null))
+            c.health.save(MeasurementDraft(null, AppClock.today(), 92_100, null, null))
         }
         shot("01e-overview-one-weigh-in", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
     }
@@ -452,7 +473,7 @@ class ScreenshotTest {
     /** A week of eating: labels and portions most days, one day not recorded at all. */
     private fun withFood(c: AppContainer): AppContainer {
         runBlocking(c.gate.bound()) {
-            val today = LocalDate.now()
+            val today = AppClock.today()
             // Entries are stamped with the clock; two in one millisecond would swap places in
             // 最近吃过 from one run to the next.
             suspend fun label(d: LocalDate, name: String, per: Int, amount: Int, unit: FoodUnit, cal: Long, p: Long, f: Long, carb: Long, na: Long?, kj: Boolean = true) =
@@ -506,8 +527,8 @@ class ScreenshotTest {
         compose.mainClock.advanceTimeBy(500)
         compose.onAllNodes(isRoot()).onLast().captureRoboImage("screenshots/16d-food-quick.png", roborazziOptions = SHOT_OPTIONS)
         compose.onNode(hasText("保存 · 350 kcal") and hasClickAction()).performClick()
-        compose.waitUntil(5_000) { runBlocking { c.food.onDate(LocalDate.now()) }.isNotEmpty() }
-        val e = runBlocking { c.food.onDate(LocalDate.now()) }.single()
+        compose.waitUntil(5_000) { runBlocking { c.food.onDate(AppClock.today()) }.isNotEmpty() }
+        val e = runBlocking { c.food.onDate(AppClock.today()) }.single()
         org.junit.Assert.assertEquals(350_000L, e.energyCal)
         org.junit.Assert.assertNull(e.per)
         org.junit.Assert.assertNull(e.proteinMg)
@@ -517,7 +538,7 @@ class ScreenshotTest {
     /** 水煮蛋 × 2: one portion's kcal and a tap on +; the nutrients open and fold again. */
     @Test fun foodServings() {
         val c = withHealth(demoContainer())
-        shot("16e-food-servings-open", c, sheet = true) { FoodScreen(noop, startRecording = true) }
+        show(c, sheet = true) { FoodScreen(noop, startRecording = true) }
         compose.onNode(hasSetTextAction() and hasText("热量 kcal")).performTextInput("70")
         compose.onNode(hasContentDescription("多一份") and hasClickAction()).performClick()
         compose.onNode(hasSetTextAction() and hasText("每份热量 kcal")).assertExists()
@@ -531,8 +552,8 @@ class ScreenshotTest {
         compose.onNode(hasSetTextAction() and hasText("蛋白质 g")).assertDoesNotExist()
         compose.onNode(hasText("已填 1 项")).assertExists()
         compose.onNode(hasText("保存 · 140 kcal") and hasClickAction()).performClick()
-        compose.waitUntil(5_000) { runBlocking { c.food.onDate(LocalDate.now()) }.isNotEmpty() }
-        val e = runBlocking { c.food.onDate(LocalDate.now()) }.single()
+        compose.waitUntil(5_000) { runBlocking { c.food.onDate(AppClock.today()) }.isNotEmpty() }
+        val e = runBlocking { c.food.onDate(AppClock.today()) }.single()
         org.junit.Assert.assertEquals(FoodUnit.SERVING, e.unit)
         org.junit.Assert.assertEquals(4, e.amount)
         org.junit.Assert.assertEquals(70_000L, e.energyCal)

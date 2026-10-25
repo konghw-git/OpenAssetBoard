@@ -1,5 +1,6 @@
 package com.assetboard.reminder
 
+import com.assetboard.domain.AppClock
 import android.app.NotificationManager
 import android.content.Intent
 import android.os.Build
@@ -128,10 +129,10 @@ private fun AlarmContent(title: String, onDone: () -> Unit, onSnooze: () -> Unit
         verticalArrangement = Arrangement.Center,
     ) {
         // A ring can last five minutes: the clock must not stand still meanwhile.
-        val now by produceState(System.currentTimeMillis()) {
+        val now by produceState(AppClock.millis()) {
             while (true) {
                 delay(1_000)
-                value = System.currentTimeMillis()
+                value = AppClock.millis()
             }
         }
         Text(Dates.time(now), fontSize = 64.sp, fontWeight = FontWeight.Light, color = cs.onPrimaryContainer)

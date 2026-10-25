@@ -146,7 +146,7 @@
 scripts/setup-toolchain.sh
 source ~/.local/share/dev-dl/android-env.sh
 
-./gradlew testDebugUnitTest   # 185 个单元测试：计算规则、仓储、恢复、迁移、界面
+./gradlew testDebugUnitTest   # 全部单元测试：计算规则、仓储、恢复、迁移、界面
 ./gradlew assembleDebug       # app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -159,18 +159,16 @@ scripts/create-keystore.sh    # 生成到你自己的目录，务必另存一份
 
 > Debug 包的包名是 `com.assetboard.debug`，与正式包并存，不会覆盖、不会清空正式包的数据。**正式包一旦用不同签名覆盖安装会被 Android 拒绝；卸载会清空本地数据库**，升级前请先备份。
 
-### 重新生成截图
+### 截图与基准图
 
 界面截图由 Roborazzi 在 JVM 上渲染真实 Compose 界面得到，不需要设备：
 
 ```bash
-./gradlew testDebugUnitTest --tests '*ScreenshotTest*' -Proborazzi.test.record=true
-# 输出到 app/screenshots/，作为之后比对的基准图
-./gradlew testDebugUnitTest -Proborazzi.test.verify=true
-# 与基准图逐像素比对，有差异就失败，差异图在 app/build/outputs/roborazzi/
+scripts/dev-test.sh --all      # 全部测试，截图与 app/screenshots/ 的基准图逐像素比对，再跑 lint
+scripts/dev-test.sh --accept   # 界面有意改动后：把这次画出的截图收为新基准图
 ```
 
-界面有意改动后重新录一次基准图。`scripts/publish-release.sh` 发布前会在基准图存在时自动比对。`docs/images/` 里的图是这些 PNG 缩放、转成 WebP 后的版本。
+截图里的「今天」是固定的一天，基准图不会隔天过期。刚克隆时没有基准图，`--all` 会把每张图列为新增，先 `--accept` 一次。`scripts/publish-release.sh` 发布前跑的就是同一个 `--all`。`docs/images/` 里的图是这些 PNG 缩放、转成 WebP 后的版本，横幅用 `scripts/dev-test.sh --brand` 重画。
 
 ## 技术栈
 

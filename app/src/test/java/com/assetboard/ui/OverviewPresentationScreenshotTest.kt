@@ -1,5 +1,7 @@
 package com.assetboard.ui
 
+import com.assetboard.domain.AppClock
+import com.assetboard.PinnedClock
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
@@ -49,7 +51,7 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], application = Application::class, qualifiers = "w320dp-h880dp-xxhdpi")
 class OverviewPresentationScreenshotTest {
     private val compose = createAndroidComposeRule<ComponentActivity>()
-    @get:Rule val rules: TestRule = RuleChain.outerRule(compose).around(CloseTestContainers())
+    @get:Rule val rules: TestRule = RuleChain.outerRule(PinnedClock()).around(compose).around(CloseTestContainers())
 
     @Test fun narrowLargeAmountsLight() = narrow(ThemeMode.LIGHT)
     @Test fun narrowLargeAmountsDark() = narrow(ThemeMode.DARK)
@@ -59,7 +61,7 @@ class OverviewPresentationScreenshotTest {
         runBlocking(c.gate.bound()) {
             c.repository.seedDemo()
             val group = c.repository.loadOnce().groups.first { !it.isLiability }
-            c.repository.createAccount(AccountDraft(group.id, "长期储备", null, AccountKind.NORMAL, null), System.currentTimeMillis(), 123_456_789_012L, null)
+            c.repository.createAccount(AccountDraft(group.id, "长期储备", null, AccountKind.NORMAL, null), AppClock.millis(), 123_456_789_012L, null)
         }
         val totals = runBlocking { c.repository.loadOnce().currentTotals() }
         val total = totals.netWorth

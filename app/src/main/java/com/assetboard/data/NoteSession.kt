@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import kotlinx.coroutines.CoroutineScope
 
 /** The writes a note editor makes; a seam for tests. */
@@ -19,7 +20,7 @@ interface NoteStore {
 class NoteSession(
     private val store: NoteStore,
     scope: CoroutineScope,
-    clock: () -> Long = System::currentTimeMillis,
+    clock: () -> Long = AppClock::millis,
     /** First body write of a new note: the page remembers the id it now has. */
     private val onCreated: (noteId: String) -> Unit = {},
 ) : TextSession<List<SourceRef>>(scope, clock) {

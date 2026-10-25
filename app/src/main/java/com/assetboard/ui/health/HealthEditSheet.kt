@@ -1,5 +1,6 @@
 package com.assetboard.ui.health
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -63,7 +64,7 @@ fun HealthEditSheet(
     onSave: (MeasurementDraft, overwrite: Boolean) -> Unit,
     onDelete: (BodyMeasurement) -> Unit,
 ) {
-    val today = LocalDate.now()
+    val today = AppClock.today()
     val previous = records.lastOrNull { it.id != existing?.id }
     var weight by rememberSaveable { mutableStateOf(existing?.let { Health.kgInput(it.weightG) } ?: "") }
     var fat by rememberSaveable { mutableStateOf(existing?.bodyFatBp?.let(Health::percentInput) ?: "") }

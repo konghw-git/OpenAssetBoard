@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.paint
 import com.assetboard.R
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,8 +51,9 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
- * The README's banner and icon, into screenshots/ (converted to WebP for docs/images/ by
- * hand). The banner shows the screens rendered by the other screenshot tests, so run those first.
+ * The README's banner and icon, into screenshots/ (converted to WebP for docs/images/ by hand).
+ * Drawn on request only (scripts/dev-test.sh --brand), never compared: the banner is made of the
+ * other baselines, which are compared themselves.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -61,6 +63,8 @@ class BrandShotTest {
     private val green = Color(0xFF123F36)
     private val paper = Color(0xFFF7F5EF)
     private val gold = Color(0xFFE2B45E)
+
+    @Before fun onRequest() = assumeTrue("drawn on request: scripts/dev-test.sh --brand", System.getProperty("brand") == "true")
 
     @Test @Config(sdk = [35], application = Application::class, qualifiers = "w512dp-h512dp-mdpi")
     fun icon() {
@@ -76,10 +80,7 @@ class BrandShotTest {
     @Test @Config(sdk = [35], application = Application::class, qualifiers = "w1280dp-h640dp-xhdpi")
     fun banner() {
         val shots = listOf("01-overview", "20-todo-home", "50-notes").map { File("screenshots/$it.png") }
-        assumeTrue("render the screenshot tests first", shots.all { it.exists() })
-        // Made of the other screens, which are checked themselves; a fresh record may also run it
-        // before them, leaving no baseline to check it against.
-        assumeTrue("the banner is not checked", System.getProperty("roborazzi.test.verify") != "true")
+        check(shots.all { it.exists() }) { "the banner is made of the baselines: accept them first" }
         val images = shots.map { BitmapFactory.decodeFile(it.path).asImageBitmap() }
         compose.setContent {
             Box(

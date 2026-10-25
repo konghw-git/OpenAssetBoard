@@ -96,6 +96,14 @@ android {
                     test.systemProperty("robolectric.dependency.proxy.port", System.getProperty("https.proxyPort") ?: "80")
                 }
                 test.maxHeapSize = "3g"
+                // One zone on every machine; screenshots also pin the clock itself (PinnedClock).
+                test.systemProperty("user.timezone", "Asia/Shanghai")
+                // The baselines are compared against, so they are an input: a cached result is
+                // only reused for the very images it was compared with.
+                test.inputs.dir("screenshots").withPropertyName("screenshotBaselines")
+                    .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE).optional()
+                // -Pbrand (scripts/dev-test.sh --brand): the README's banner and icon, drawn on request only.
+                if (project.hasProperty("brand")) test.systemProperty("brand", "true")
                 // -PskipShots (scripts/dev-test.sh --fast): the inner loop leaves out the classes
                 // that render screenshots, the slow half of the suite. They hold assertions too,
                 // so the whole suite still runs before a change is done.

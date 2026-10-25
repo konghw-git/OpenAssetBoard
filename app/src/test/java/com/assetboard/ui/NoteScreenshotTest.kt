@@ -1,5 +1,7 @@
 package com.assetboard.ui
 
+import com.assetboard.domain.AppClock
+import com.assetboard.PinnedClock
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
@@ -44,10 +46,10 @@ import java.time.LocalDate
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
 class NoteScreenshotTest {
     private val composeRule = createAndroidComposeRule<ComponentActivity>()
-    @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
+    @get:Rule val rules: TestRule = RuleChain.outerRule(PinnedClock()).around(composeRule).around(CloseTestContainers())
     private val compose get() = composeRule
 
-    private val today = LocalDate.now()
+    private val today: LocalDate get() = AppClock.today()
 
     private fun demo(empty: Boolean = false, review: Boolean = false): AppContainer {
         val c = TestContainers.open(ApplicationProvider.getApplicationContext())
@@ -73,7 +75,7 @@ class NoteScreenshotTest {
             n.saveDraft(null, "一段没能存进正文的文字", "保存失败：磁盘已满")
             if (!review) return@runBlocking
             // Written six weeks ago and not touched since: today's review.
-            val longAgo = System.currentTimeMillis() - 42L * 24 * 60 * 60 * 1000
+            val longAgo = AppClock.millis() - 42L * 24 * 60 * 60 * 1000
             c.db.noteDao().insert(
                 com.assetboard.data.Note(
                     "old", read, "复利的耐心\n真正难的不是算清楚，而是在什么都没发生的那些年里不下车。#长期主义",

@@ -5,9 +5,9 @@
 # the asset name matter. Needs the release keystore (scripts/create-keystore.sh) and `gh auth login`.
 #
 # Before anything is tagged, the gate: versionCode above the last release's (the updater refuses
-# anything else, silently for every user), the unit tests (checking the screenshots against
-# app/screenshots when that folder has any), lint against its baseline, and after the build the
-# APK's signing certificate against the release key's.
+# anything else, silently for every user), `scripts/dev-test.sh --all` (every test, the screenshots
+# against app/screenshots, lint against its baseline), and after the build the APK's signing
+# certificate against the release key's.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
@@ -34,9 +34,8 @@ if [ -n "$PREV_TAG" ]; then
     [ "$CODE" -gt "${PREV_CODE:-0}" ] || { echo "versionCode $CODE is not above $PREV_TAG's $PREV_CODE: no installed copy would take this update" >&2; exit 1; }
 fi
 
-VERIFY=()
-compgen -G "app/screenshots/*.png" >/dev/null && VERIFY=(-Proborazzi.test.verify=true)
-./gradlew ${GRADLE_ARGS:-} testDebugUnitTest "${VERIFY[@]}" lintRelease
+# The same gate as before a commit: a tree that already passed it comes back from the cache.
+scripts/dev-test.sh --all
 
 ./gradlew ${GRADLE_ARGS:-} assembleRelease
 APK="build/release/OpenAssetBoard-$VERSION.apk"

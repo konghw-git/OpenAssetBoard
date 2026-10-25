@@ -1,5 +1,6 @@
 package com.assetboard.ui.account
 
+import com.assetboard.domain.AppClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -329,7 +330,7 @@ private fun HeaderCard(d: AccountDetail) {
             if (d.account.isDisabled) Pill("已停用", cs.onSurfaceVariant)
             else if (!d.account.includeInTotal) Pill("不计入净资产", cs.onSurfaceVariant)
             d.account.lockedUntil?.let { until ->
-                val days = Dates.daysBetween(System.currentTimeMillis(), until)
+                val days = Dates.daysBetween(AppClock.millis(), until)
                 Pill(if (days > 0) "锁定至 ${Dates.date(until)} · 还剩 $days 天" else "已于 ${Dates.date(until)} 解锁", cs.secondary)
             }
         }

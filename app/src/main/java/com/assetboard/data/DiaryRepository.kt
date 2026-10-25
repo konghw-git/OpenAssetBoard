@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import com.assetboard.domain.LedgerException
 import com.assetboard.domain.ensure
 import kotlinx.coroutines.flow.Flow
@@ -29,7 +30,7 @@ interface DiaryStore {
 class DiaryRepository(
     private val db: AppDatabase,
     private val gate: WriteGate,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = AppClock::millis,
     /** Shared with the note editors; the restore commits all of them first. */
     val editors: EditorRegistry = EditorRegistry(),
 ) : DiaryStore {

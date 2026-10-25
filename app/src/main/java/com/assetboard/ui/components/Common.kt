@@ -1,5 +1,6 @@
 package com.assetboard.ui.components
 
+import com.assetboard.domain.AppClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -303,7 +304,7 @@ fun DateField(
     onPick: (Long) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    maxDate: LocalDate = LocalDate.now(),
+    maxDate: LocalDate = AppClock.today(),
     minDate: LocalDate? = null,
     supportingText: String? = null,
     showTime: Boolean = true,
@@ -334,7 +335,7 @@ fun DatePickDialog(
     initial: LocalDate,
     onDismiss: () -> Unit,
     onPick: (LocalDate) -> Unit,
-    maxDate: LocalDate? = LocalDate.now(),
+    maxDate: LocalDate? = AppClock.today(),
     minDate: LocalDate? = null,
 ) {
     val selectable = remember(maxDate, minDate) {

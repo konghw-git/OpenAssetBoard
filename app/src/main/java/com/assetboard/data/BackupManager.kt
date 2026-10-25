@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
@@ -129,7 +130,7 @@ class BackupManager(
     private val calendar: () -> WorkdayCalendar,
     private val effects: RestoreEffects,
     private val onRestored: () -> Unit,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = AppClock::millis,
     private val weeks: WeekRepository = WeekRepository(db, gate, editors, clock),
 ) {
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = false }

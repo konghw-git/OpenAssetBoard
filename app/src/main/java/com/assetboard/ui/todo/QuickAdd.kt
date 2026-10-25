@@ -1,5 +1,6 @@
 package com.assetboard.ui.todo
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -111,7 +112,7 @@ fun QuickAddForm(
     // A day or time written into the title (明天下午3点): read until the user picks one by hand
     // or says 不识别, which leaves the words as they are.
     var reading by rememberSaveable { mutableStateOf(true) }
-    val found = remember(title, today, reading) { if (reading) TodoDateParser.parse(title, today, LocalTime.now()) else null }
+    val found = remember(title, today, reading) { if (reading) TodoDateParser.parse(title, today, java.time.LocalTime.now(AppClock.clock)) else null }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) {

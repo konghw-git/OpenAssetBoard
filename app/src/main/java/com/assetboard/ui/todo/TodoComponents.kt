@@ -1,5 +1,6 @@
 package com.assetboard.ui.todo
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -104,13 +105,13 @@ import java.time.temporal.TemporalAdjusters
 /** Today's date, refreshed when the screen resumes and at midnight. */
 @Composable
 fun rememberToday(): LocalDate {
-    var today by remember { mutableStateOf(LocalDate.now()) }
+    var today by remember { mutableStateOf(AppClock.today()) }
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(owner) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
-                today = LocalDate.now()
-                val untilMidnight = ChronoUnit.MILLIS.between(LocalDateTime.now(), today.plusDays(1).atStartOfDay())
+                today = AppClock.today()
+                val untilMidnight = ChronoUnit.MILLIS.between(java.time.LocalDateTime.now(AppClock.clock), today.plusDays(1).atStartOfDay())
                 delay(untilMidnight.coerceAtLeast(1_000) + 500)
             }
         }

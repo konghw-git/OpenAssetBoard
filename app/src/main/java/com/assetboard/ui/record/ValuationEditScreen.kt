@@ -1,5 +1,6 @@
 package com.assetboard.ui.record
 
+import com.assetboard.domain.AppClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,7 +78,7 @@ class ValuationEditViewModel(
     var isLiability by mutableStateOf(false)
     var inStocktake by mutableStateOf(false)
     var isBaseline by mutableStateOf(false)
-    var at by mutableStateOf(System.currentTimeMillis())
+    var at by mutableStateOf(AppClock.millis())
     var input by mutableStateOf("")
     var note by mutableStateOf("")
 

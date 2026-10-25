@@ -1,5 +1,6 @@
 package com.assetboard.ui.settings
 
+import com.assetboard.domain.AppClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -175,7 +176,7 @@ fun TrashScreen(onBack: () -> Unit) {
                 Text("按删除的批次列出，满 30 天自动彻底删除。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp))
             }
             items(list, key = { it.batch }) { b ->
-                val left = TodoRepository.TRASH_DAYS - Dates.daysBetween(b.deletedAt, System.currentTimeMillis())
+                val left = TodoRepository.TRASH_DAYS - Dates.daysBetween(b.deletedAt, AppClock.millis())
                 SectionCard(Modifier.dissolvable(batchKey(b.batch)), contentPadding = PaddingValues(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 6.dp)) {
                     Text(describe(b), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 12.dp))
                     Text("删除于 ${Dates.dateTime(b.deletedAt)} · 还剩 ${left.coerceAtLeast(0)} 天", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)

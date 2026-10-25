@@ -1,5 +1,7 @@
 package com.assetboard.ui
 
+import com.assetboard.domain.AppClock
+import com.assetboard.PinnedClock
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
@@ -65,10 +67,10 @@ import java.time.LocalTime
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
 class RoundTwoShotTest {
     private val composeRule = createAndroidComposeRule<ComponentActivity>()
-    @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
+    @get:Rule val rules: TestRule = RuleChain.outerRule(PinnedClock()).around(composeRule).around(CloseTestContainers())
     private val compose get() = composeRule
 
-    private val today = LocalDate.now()
+    private val today: LocalDate get() = AppClock.today()
 
     private fun container(): AppContainer = TestContainers.open(ApplicationProvider.getApplicationContext())
 
@@ -286,7 +288,7 @@ class RoundTwoShotTest {
     @Test fun settingsBackupProblem() {
         val c = container()
         c.settings.setBackupTreeUri("content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FAssetBoard")
-        c.settings.setBackupError("无法在备份目录创建文件", System.currentTimeMillis() - 3_600_000)
+        c.settings.setBackupError("无法在备份目录创建文件", AppClock.millis() - 3_600_000)
         set(c) { SettingsScreen({}, {}) }
         shot("59-settings-backup-problem")
     }

@@ -1,5 +1,6 @@
 package com.assetboard.reminder
 
+import com.assetboard.domain.AppClock
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -111,7 +112,7 @@ class ReminderScheduler(private val context: Context, private val container: App
         // A background task binds the epoch when it starts.
         val epoch = container.gate.bound()
         withContext(epoch) {
-            val now = System.currentTimeMillis()
+            val now = AppClock.millis()
             for (id in ids) {
                 val t = container.todos.todo(id)
                 syncOne(id, t, now, epoch.value, fromBoot)
@@ -152,7 +153,7 @@ class ReminderScheduler(private val context: Context, private val container: App
     suspend fun fire(token: ReminderToken) = lock.withLock {
         val t = container.todos.todo(token.id) ?: return@withLock
         if (token.epoch != container.gate.epochNow() || t.stateSeq != token.seq || !TodoViews.isOpen(t)) return@withLock
-        val now = System.currentTimeMillis()
+        val now = AppClock.millis()
         withContext(com.assetboard.data.Epoch(token.epoch)) {
             when (val plan = ReminderState.plan(t, now)) {
                 ReminderPlan.None -> Unit
@@ -171,7 +172,7 @@ class ReminderScheduler(private val context: Context, private val container: App
         // A blocked channel drops the notification, so the period would be lost; it goes missed instead.
         val canPost = if (!t.strongRemind) channelEnabled(Notifier.CH_REMINDER) else fromBoot && channelEnabled(Notifier.CH_STRONG_BOOT)
         if (!canPost && !(t.strongRemind && !fromBoot && notificationsEnabled())) {
-            addMissed(MissedReminder(t.id, t.title, ReminderState.pending(t)?.first ?: System.currentTimeMillis(), notificationsOff = true))
+            addMissed(MissedReminder(t.id, t.title, ReminderState.pending(t)?.first ?: AppClock.millis(), notificationsOff = true))
         } else if (t.strongRemind) {
             if (fromBoot) {
                 nm.notify(Notifier.notificationId(t.id), Notifier.bootStrong(context, t, token, lateMinutes))
@@ -249,7 +250,7 @@ class ReminderScheduler(private val context: Context, private val container: App
     /** Five minutes after a boot-time strong reminder: swap it for a silent "unhandled" note. */
     private fun scheduleUnhandled(token: ReminderToken, title: String) {
         val pi = unhandledIntent(token, title) ?: return
-        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + RingService.MAX_RING_MS, pi)
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, AppClock.millis() + RingService.MAX_RING_MS, pi)
     }
 
     // ------------------------------------------------------------ test from the guide
@@ -260,7 +261,7 @@ class ReminderScheduler(private val context: Context, private val container: App
         val intent = token.into(Intent(context, ReminderReceiver::class.java).setAction(ReminderReceiver.ACTION_TEST).setData(Uri.parse("assetboard://test/$strong")))
             .putExtra(ReminderReceiver.EXTRA_STRONG, strong)
         val pi = PendingIntent.getBroadcast(context, if (strong) 7_201 else 7_200, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val at = System.currentTimeMillis() + 15_000
+        val at = AppClock.millis() + 15_000
         if (exactAllowed() && strong) {
             am.setAlarmClock(AlarmManager.AlarmClockInfo(at, pi), pi)
         } else if (exactAllowed()) {
@@ -292,8 +293,8 @@ class ReminderScheduler(private val context: Context, private val container: App
         if (!settings.diaryReminderEnabled.value) return
         val minutes = settings.diaryReminderMinutes.value
         val zone = ZoneId.systemDefault()
-        val now = System.currentTimeMillis()
-        var at = LocalDate.now().atTime(LocalTime.of(minutes / 60, minutes % 60)).atZone(zone).toInstant().toEpochMilli()
+        val now = AppClock.millis()
+        var at = AppClock.today().atTime(LocalTime.of(minutes / 60, minutes % 60)).atZone(zone).toInstant().toEpochMilli()
         if (at <= now) at += 24 * 3600_000L
         am.setWindow(AlarmManager.RTC_WAKEUP, at, 5 * 60_000L, pi)
     }

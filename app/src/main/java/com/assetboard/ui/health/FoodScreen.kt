@@ -1,5 +1,6 @@
 package com.assetboard.ui.health
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -200,7 +201,7 @@ fun FoodScreen(onBack: () -> Unit, startRecording: Boolean = false, onWeigh: () 
     ErrorDialog(error) { vm.error.value = null }
     val snackbar = remember { SnackbarHostState() }
     UndoMessages(vm.events, snackbar, vm::undo)
-    val today = LocalDate.now()
+    val today = AppClock.today()
     var selected by rememberSaveable { mutableStateOf(today.toString()) }
     var editing by rememberSaveable { mutableStateOf<String?>(if (startRecording) NEW else null) }
     var picking by rememberSaveable { mutableStateOf(false) }

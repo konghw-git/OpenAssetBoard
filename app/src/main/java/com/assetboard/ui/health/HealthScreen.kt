@@ -1,5 +1,6 @@
 package com.assetboard.ui.health
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -163,7 +164,7 @@ fun fatGradeColor(g: Health.FatGrade): Color = when (g) {
     Health.FatGrade.HIGH -> MaterialTheme.colorScheme.secondary
 }
 
-fun dayLabel(date: String, today: LocalDate = LocalDate.now()): String {
+fun dayLabel(date: String, today: LocalDate = AppClock.today()): String {
     val d = LocalDate.parse(date)
     return when (ChronoUnit.DAYS.between(d, today)) {
         0L -> "今天"
@@ -338,7 +339,7 @@ private fun HealthHero(s: HealthState, r: Reading, onRecord: () -> Unit) {
     val extra = AppTheme.extra
     val m = r.m
     val weight = animatedCents(m.weightG)
-    val daysAgo = ChronoUnit.DAYS.between(LocalDate.parse(m.date), LocalDate.now())
+    val daysAgo = ChronoUnit.DAYS.between(LocalDate.parse(m.date), AppClock.today())
     Box(
         Modifier
             .fillMaxWidth()
@@ -457,7 +458,7 @@ internal fun HeroFigure(label: String, value: String, grade: String?, modifier: 
 @Composable
 private fun TrendCard(s: HealthState, metric: HealthMetric, range: HealthRange) {
     val cs = MaterialTheme.colorScheme
-    val period = remember(s.records, range) { HealthTrend.period(s.records, range.days, System.currentTimeMillis()) } ?: return
+    val period = remember(s.records, range) { HealthTrend.period(s.records, range.days, AppClock.millis()) } ?: return
     val chart = remember(period, metric, s.profile, cs.primary) { healthChart(metric, period.points, s.profile, cs.primary, cs.tertiary, s.records) }
     var selected by remember(chart) { mutableStateOf<Int?>(null) }
     SectionCard(contentPadding = PaddingValues(16.dp)) {
@@ -607,7 +608,7 @@ private fun TargetCard(s: HealthState, profile: HealthProfile, range: HealthRang
     val latest = s.latest ?: return
     val target = Health.targetWeightG(profile.heightMm, profile.targetWeightG)
     val healthy = Health.healthyRangeG(profile.heightMm)
-    val period = remember(s.records, range) { HealthTrend.period(s.records, range.days, System.currentTimeMillis()) }
+    val period = remember(s.records, range) { HealthTrend.period(s.records, range.days, AppClock.millis()) }
     val start = period?.start
     val progress = if (start != null && start !== latest) HealthTrend.targetProgress(start.weightG, latest.weightG, target) else null
     SectionCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {

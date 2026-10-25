@@ -1,5 +1,6 @@
 package com.assetboard.ui.diary
 
+import com.assetboard.domain.AppClock
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -288,7 +289,7 @@ fun DiaryScreen(
         }
     }
     val cs = MaterialTheme.colorScheme
-    val today = LocalDate.now()
+    val today = AppClock.today()
     val streak by vm.streak.collectAsStateWithLifecycle()
     val habits by remember(date) { container.habits.observeDay(date) }.collectAsStateWithLifecycle(null)
     val habitsSince by remember { container.habits.observeFirstDate() }.collectAsStateWithLifecycle(null)

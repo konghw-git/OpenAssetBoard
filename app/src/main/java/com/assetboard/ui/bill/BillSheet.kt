@@ -1,5 +1,6 @@
 package com.assetboard.ui.bill
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -177,7 +178,7 @@ fun BillSheet(
     }
     var input by rememberSaveable { mutableStateOf(existing?.let { Money.toInput(it.amount).removeSuffix(".00") }.orEmpty()) }
     var note by rememberSaveable { mutableStateOf(existing?.note.orEmpty()) }
-    var date by rememberSaveable { mutableStateOf((existing?.at?.let(Dates::localDate) ?: LocalDate.now()).toString()) }
+    var date by rememberSaveable { mutableStateOf((existing?.at?.let(Dates::localDate) ?: AppClock.today()).toString()) }
     var accountId by rememberSaveable {
         mutableStateOf(existing?.let(Bills::accountOf) ?: presetAccount?.takeIf { id -> Bills.usableAccounts(l).any { it.id == id } } ?: Bills.suggestAccount(l, vm.lastAccount(false)))
     }
@@ -195,7 +196,7 @@ fun BillSheet(
     val category = if (income) incomeCategory else expenseCategory
     val value = Bills.amountOf(input)
     val day = LocalDate.parse(date)
-    val now = System.currentTimeMillis()
+    val now = AppClock.millis()
     // An edited bill keeps its instant while its day stays; moved to another day, its time of day.
     val at = if (existing != null && Dates.localDate(existing.at) == day) existing.at else Bills.at(day, now, existing?.at ?: now)
 
@@ -212,7 +213,7 @@ fun BillSheet(
             amount = cents,
             at = at,
             note = note.trim().ifEmpty { null },
-            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+            createdAt = existing?.createdAt ?: AppClock.millis(),
             category = category,
         )
     }
@@ -397,7 +398,7 @@ fun BillSheet(
 internal const val KIND_TAG = "bill-kind"
 
 private fun dayLabel(day: LocalDate): String {
-    val today = LocalDate.now()
+    val today = AppClock.today()
     return when (day) {
         today -> "今天"
         today.minusDays(1) -> "昨天"

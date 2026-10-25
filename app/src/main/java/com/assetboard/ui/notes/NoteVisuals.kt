@@ -1,5 +1,6 @@
 package com.assetboard.ui.notes
 
+import com.assetboard.domain.AppClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.animation.animateColorAsState
@@ -66,11 +67,11 @@ fun topicColor(topics: List<NoteTopic>, topicId: String?): Color {
 }
 
 /** Today's edits by the clock, older ones by the day. */
-fun whenLabel(at: Long, now: Long = System.currentTimeMillis()): String =
+fun whenLabel(at: Long, now: Long = AppClock.millis()): String =
     if (Dates.daysBetween(at, now) == 0L) Dates.time(at) else Dates.relative(at, now)
 
 /** "10月12日", with the year only when it is not this one. */
-fun dayLabel(date: LocalDate, today: LocalDate = LocalDate.now()): String =
+fun dayLabel(date: LocalDate, today: LocalDate = AppClock.today()): String =
     if (date.year == today.year) "${date.monthValue}月${date.dayOfMonth}日" else "${date.year}年${date.monthValue}月${date.dayOfMonth}日"
 
 /** `#标签` in [color], everything else as it is. */

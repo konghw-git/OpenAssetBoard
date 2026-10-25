@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -60,11 +61,11 @@ class WeatherService(private val context: Context, private val settings: Setting
         if (fix != null) {
             val city = cityName(fix.latitude, fix.longitude)
             settings.putString(KEY_LAST_PLACE, "${fix.latitude},${fix.longitude},${city.orEmpty()}")
-            settings.putLong(KEY_LAST_PLACE_AT, System.currentTimeMillis())
+            settings.putLong(KEY_LAST_PLACE_AT, AppClock.millis())
             return@withContext Place(fix.latitude, fix.longitude, city)
         }
         val at = settings.long(KEY_LAST_PLACE_AT)
-        if (System.currentTimeMillis() - at > 6 * 3600_000L) return@withContext null
+        if (AppClock.millis() - at > 6 * 3600_000L) return@withContext null
         settings.string(KEY_LAST_PLACE)?.split(",", limit = 3)?.let { p ->
             Place(p[0].toDouble(), p[1].toDouble(), p.getOrNull(2)?.ifEmpty { null })
         }
@@ -78,7 +79,7 @@ class WeatherService(private val context: Context, private val settings: Setting
             lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
             else -> return lm.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
         }
-        val recent = lm.getLastKnownLocation(provider)?.takeIf { System.currentTimeMillis() - it.time < 30 * 60_000 }
+        val recent = lm.getLastKnownLocation(provider)?.takeIf { AppClock.millis() - it.time < 30 * 60_000 }
         if (recent != null) return recent
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return lm.getLastKnownLocation(provider)
         return withTimeoutOrNull(15_000) {
@@ -107,7 +108,7 @@ class WeatherService(private val context: Context, private val settings: Setting
     }
 
     /** Throws on network failure; null when the service has no data for that day. */
-    suspend fun daily(place: Place, date: LocalDate, today: LocalDate = LocalDate.now()): WeatherResult? = withContext(Dispatchers.IO) {
+    suspend fun daily(place: Place, date: LocalDate, today: LocalDate = AppClock.today()): WeatherResult? = withContext(Dispatchers.IO) {
         val ago = ChronoUnit.DAYS.between(date, today)
         val daily = "daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto"
         val url = if (ago in 0..92) {

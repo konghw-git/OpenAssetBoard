@@ -1,5 +1,6 @@
 package com.assetboard.ui.health
 
+import com.assetboard.domain.AppClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -50,7 +51,7 @@ fun HealthProfileSheet(
     onDismiss: () -> Unit,
     onSave: (Sex, LocalDate, Int, Long?) -> Unit,
 ) {
-    val today = LocalDate.now()
+    val today = AppClock.today()
     var sex by rememberSaveable { mutableStateOf(profile?.sex ?: Sex.MALE) }
     var birth by rememberSaveable { mutableStateOf(profile?.birthDate) }
     var height by rememberSaveable { mutableStateOf(profile?.let { Health.cmInput(it.heightMm) } ?: "") }

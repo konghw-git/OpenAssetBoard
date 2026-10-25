@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import kotlinx.coroutines.CoroutineScope
 import java.time.LocalDate
 
@@ -11,7 +12,7 @@ class DiarySession(
     private val store: DiaryStore,
     val date: LocalDate,
     scope: CoroutineScope,
-    clock: () -> Long = System::currentTimeMillis,
+    clock: () -> Long = AppClock::millis,
     /** First body write of a new entry: time to fetch the weather. */
     private val onCreated: (entryId: String) -> Unit = {},
 ) : TextSession<Unit>(scope, clock) {

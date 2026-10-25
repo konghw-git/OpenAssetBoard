@@ -11,7 +11,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.geometry.Offset
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
@@ -21,7 +20,6 @@ import com.assetboard.data.AccountDraft
 import com.assetboard.data.FlowKind
 import com.assetboard.data.ThemeMode
 import com.assetboard.ui.bill.BillScreen
-import com.assetboard.ui.overview.OverviewScreen
 import com.assetboard.ui.theme.AssetBoardTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -34,7 +32,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** 记一笔 from the sheet: keys, category, 保存 and 再记, and the pull on the assets tab that opens it. */
+/** 记一笔 from the sheet: keys, category, 保存 and 再记. The pull that opens it is in ScreenshotTest. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
@@ -111,25 +109,5 @@ class BillSheetTest {
         compose.waitUntil(5_000) { bills(c).size == 2 }
         assertEquals(listOf(FlowKind.EXPENSE to 12_00L, FlowKind.INCOME to 8_000_00L), bills(c).sortedBy { it.amount }.map { it.kind to it.amount })
         assertEquals(1_000_00L - 12_00L + 8_000_00L, runBlocking { c.repository.loadOnce() }.currentBalance(wallet))
-    }
-
-    @Test fun pullingTheAssetsTabDownOpensTheSheet() {
-        val c = container()
-        compose.setContent {
-            CompositionLocalProvider(LocalContainer provides c) {
-                AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) { OverviewScreen({}, {}, {}, {}, {}, {}) }
-            }
-        }
-        compose.waitUntil(10_000) { compose.onAllNodes(hasText("本月支出")).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNode(hasScrollAction()).performTouchInput { down(center); moveBy(Offset(0f, 40f)); repeat(6) { moveBy(Offset(0f, 100f)) } }
-        compose.mainClock.advanceTimeBy(400)
-        compose.onNodeWithText("松手记一笔").assertExists()
-        compose.onNode(hasScrollAction()).performTouchInput { up() }
-        compose.mainClock.advanceTimeBy(1_000)
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("再记")).fetchSemanticsNodes().isNotEmpty() }
-        press("9")
-        compose.onNodeWithContentDescription("保存").performClick()
-        compose.waitUntil(5_000) { bills(c).size == 1 }
-        assertEquals(9_00L, bills(c).single().amount)
     }
 }

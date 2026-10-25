@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import android.content.Context
 import androidx.room.withTransaction
 import com.assetboard.domain.calendar.HolidayTable
@@ -59,7 +60,7 @@ class HolidayRepository(private val context: Context, private val db: AppDatabas
         db.withTransaction {
             db.metaDao().clearHolidayYear(file.year.toString())
             db.metaDao().putHolidays(file.days.map { Holiday(it.date, it.name, it.isOffDay) })
-            db.metaDao().putHolidayYear(HolidayYear(file.year, source, System.currentTimeMillis()))
+            db.metaDao().putHolidayYear(HolidayYear(file.year, source, AppClock.millis()))
         }
         return true
     }
@@ -68,7 +69,7 @@ class HolidayRepository(private val context: Context, private val db: AppDatabas
      * From November on, looks for next year's schedule (and refreshes the current one). Failures
      * are silent; the weekly worker simply tries again.
      */
-    suspend fun updateOnline(today: LocalDate = LocalDate.now()) = withContext(Dispatchers.IO) {
+    suspend fun updateOnline(today: LocalDate = AppClock.today()) = withContext(Dispatchers.IO) {
         // November on: next year's schedule, and this year's again, as it can still change.
         val years = buildList {
             if (today.monthValue >= 11) add(today.year + 1)

@@ -1,5 +1,6 @@
 package com.assetboard.ui.stocktake
 
+import com.assetboard.domain.AppClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -106,7 +107,7 @@ data class StockRow(
 data class StocktakeUi(
     val loaded: Boolean = false,
     val editing: Boolean = false,
-    val at: Long = System.currentTimeMillis(),
+    val at: Long = AppClock.millis(),
     val rows: List<StockRow> = emptyList(),
 ) {
     val changedCount: Int get() = rows.count { it.changed }
@@ -125,7 +126,7 @@ class StocktakeViewModel(private val container: AppContainer, private val snapsh
     init {
         viewModelScope.launch {
             val l = repo.ledger.filterNotNull().first()
-            _ui.value = if (snapshotId != null) loadExisting(l, snapshotId) else loadNew(l, System.currentTimeMillis(), emptyMap())
+            _ui.value = if (snapshotId != null) loadExisting(l, snapshotId) else loadNew(l, AppClock.millis(), emptyMap())
         }
     }
 
@@ -269,7 +270,7 @@ fun StocktakeScreen(snapshotId: String?, onBack: () -> Unit) {
                 pickDate = false
                 vm.setDate(Dates.pickedAt(d))
             },
-            maxDate = LocalDate.now(),
+            maxDate = AppClock.today(),
         )
     }
     if (confirmDelete) {
@@ -302,7 +303,7 @@ private fun SummaryCard(ui: StocktakeUi, onPickDate: () -> Unit) {
             Text("盘点时间", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
             AssistChip(
                 onClick = onPickDate,
-                label = { Text(if (Dates.daysBetween(ui.at, System.currentTimeMillis()) == 0L) "今天 ${Dates.time(ui.at)}" else Dates.date(ui.at)) },
+                label = { Text(if (Dates.daysBetween(ui.at, AppClock.millis()) == 0L) "今天 ${Dates.time(ui.at)}" else Dates.date(ui.at)) },
                 leadingIcon = { Icon(Icons.Default.CalendarMonth, null, Modifier.padding(start = 2.dp)) },
             )
         }
@@ -320,7 +321,7 @@ private fun SummaryCard(ui: StocktakeUi, onPickDate: () -> Unit) {
                 Pill(Money.format(diff, signed = true), extra.signed(diff))
             }
         }
-        if (!ui.editing && Dates.daysBetween(ui.at, System.currentTimeMillis()) > 0) {
+        if (!ui.editing && Dates.daysBetween(ui.at, AppClock.millis()) > 0) {
             Spacer(Modifier.height(8.dp))
             Text(
                 "正在补录历史盘点：预填的是当天的余额。",

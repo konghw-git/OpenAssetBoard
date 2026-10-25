@@ -1,10 +1,12 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
+
 /**
  * Five groups and fifteen accounts with plausible balances, for screenshots and tests. Test-only:
  * a fresh install starts empty.
  */
-suspend fun LedgerRepository.seedDemo(at: Long = System.currentTimeMillis()) {
+suspend fun LedgerRepository.seedDemo(at: Long = AppClock.millis()) {
     data class Seed(val name: String, val purpose: String?, val cents: Long, val kind: AccountKind = AccountKind.NORMAL, val institution: String? = null)
     val plan = listOf(
         Triple("现金账户", false, listOf(Seed("现金", null, 0))),

@@ -1,5 +1,7 @@
 package com.assetboard.ui
 
+import com.assetboard.domain.AppClock
+import com.assetboard.PinnedClock
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
@@ -63,10 +65,10 @@ import java.time.LocalDate
 @Config(sdk = [35], application = Application::class, qualifiers = "w400dp-h880dp-xxhdpi")
 class RoundThreeShotTest {
     private val composeRule = createAndroidComposeRule<ComponentActivity>()
-    @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
+    @get:Rule val rules: TestRule = RuleChain.outerRule(PinnedClock()).around(composeRule).around(CloseTestContainers())
     private val compose get() = composeRule
 
-    private val today = LocalDate.now()
+    private val today: LocalDate get() = AppClock.today()
 
     private fun container(): AppContainer = TestContainers.open(ApplicationProvider.getApplicationContext())
 

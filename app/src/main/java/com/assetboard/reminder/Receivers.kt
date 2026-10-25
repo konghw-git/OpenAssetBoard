@@ -1,5 +1,6 @@
 package com.assetboard.reminder
 
+import com.assetboard.domain.AppClock
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.os.Build
@@ -133,7 +134,7 @@ class DiaryReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         async(context) {
             val container = ReminderScheduler.container(context)
-            val entry = runCatching { container.diary.entryOn(LocalDate.now()) }.getOrNull()
+            val entry = runCatching { container.diary.entryOn(AppClock.today()) }.getOrNull()
             if (container.settings.diaryReminderEnabled.value && needsNudge(entry?.body)) {
                 val nm = context.getSystemService(NotificationManager::class.java)
                 val channel = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) null else nm.getNotificationChannel(Notifier.CH_DIARY)

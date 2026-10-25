@@ -1,5 +1,6 @@
 package com.assetboard.ui.record
 
+import com.assetboard.domain.AppClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -88,7 +89,7 @@ class FlowEditViewModel(
     var amountInput by mutableStateOf("")
     var feeInput by mutableStateOf("")
     var feeOn by mutableStateOf(kind.defaultFeeOn)
-    var at by mutableStateOf(System.currentTimeMillis())
+    var at by mutableStateOf(AppClock.millis())
     var note by mutableStateOf("")
     private var createdAt: Long? = null
     private var ledger: LedgerData? = null
@@ -180,7 +181,7 @@ class FlowEditViewModel(
                     feeOn = feeOn,
                     at = at,
                     note = note.ifBlank { null },
-                    createdAt = createdAt ?: System.currentTimeMillis(),
+                    createdAt = createdAt ?: AppClock.millis(),
                 ),
             )
         }

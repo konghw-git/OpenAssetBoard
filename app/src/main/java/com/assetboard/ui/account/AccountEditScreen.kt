@@ -1,5 +1,6 @@
 package com.assetboard.ui.account
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -103,7 +104,7 @@ class AccountEditViewModel(
     var note by mutableStateOf("")
 
     // New accounts only.
-    var baselineAt by mutableStateOf(System.currentTimeMillis())
+    var baselineAt by mutableStateOf(AppClock.millis())
     var baselineInput by mutableStateOf("0")
     var costInput by mutableStateOf("")
 
@@ -423,7 +424,7 @@ fun AccountEditScreen(
     }
     if (pickLock) {
         DatePickDialog(
-            initial = vm.lockedUntil?.let { Dates.localDate(it) } ?: java.time.LocalDate.now().plusMonths(6),
+            initial = vm.lockedUntil?.let { Dates.localDate(it) } ?: AppClock.today().plusMonths(6),
             onDismiss = { pickLock = false },
             // The day itself is unlocked, as the account page says ("已于 … 解锁").
             onPick = { vm.lockedUntil = it.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(); pickLock = false },

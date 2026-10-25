@@ -1,5 +1,6 @@
 package com.assetboard.ui.overview
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -243,7 +244,7 @@ data class OverviewState(
     val liquidity: Liquidity,
 )
 
-fun buildOverview(l: LedgerData, now: Long = System.currentTimeMillis()): OverviewState {
+fun buildOverview(l: LedgerData, now: Long = AppClock.millis()): OverviewState {
     fun row(a: Account): AccountRowUi {
         val g = l.groupById[a.groupId]
         return AccountRowUi(
@@ -321,7 +322,7 @@ class OverviewViewModel(private val container: AppContainer) : ActionViewModel(c
         val value = Money.parse(input) ?: throw LedgerException("金额格式不对")
         if (value == r.display) return@action
         val repo = container.repository
-        val id = repo.addValuation(r.account.id, System.currentTimeMillis(), value, null)
+        val id = repo.addValuation(r.account.id, AppClock.millis(), value, null)
         _events.tryEmit(UndoEvent("「${r.account.name.take(12)}」$noun 改为 ${Money.format(value)}") { repo.deleteValuation(id) })
     }
 
@@ -401,7 +402,7 @@ fun OverviewScreen(
             snackbarHost = { GlassSnackbarHost(snackbar, Modifier.padding(bottom = TabPageBottomInset)) },
             topBar = {
                 val accounts = state?.groups?.sumOf { it.rows.size } ?: 0
-                val today = java.time.LocalDate.now()
+                val today = AppClock.today()
                 TabHeader(
                     "我的资产",
                     "${today.monthValue}月${today.dayOfMonth}日 ${com.assetboard.domain.todo.Recurrence.weekName(today.dayOfWeek)}" +
@@ -1249,7 +1250,7 @@ private fun TileNumber(value: String, sizeFor: String, prefix: String? = null, s
 @Composable
 private fun FoodTile(f: FoodState, onFood: (record: Boolean) -> Unit, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
-    val today = java.time.LocalDate.now()
+    val today = AppClock.today()
     val week = remember(f, today) { (6 downTo 0).map { f.day(today.minusDays(it.toLong())) } }
     val day = week.last()
     Tile(

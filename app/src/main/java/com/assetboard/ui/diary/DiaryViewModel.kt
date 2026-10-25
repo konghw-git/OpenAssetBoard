@@ -1,5 +1,6 @@
 package com.assetboard.ui.diary
 
+import com.assetboard.domain.AppClock
 import androidx.lifecycle.viewModelScope
 import com.assetboard.AppContainer
 import com.assetboard.data.AppendResult
@@ -63,7 +64,7 @@ data class DayStocktake(val point: NetWorthPoint, val change: Long?)
 @OptIn(ExperimentalCoroutinesApi::class)
 class DiaryViewModel(private val container: AppContainer) : ActionViewModel(container) {
     private val diary = container.diary
-    private val _date = MutableStateFlow(LocalDate.now())
+    private val _date = MutableStateFlow(AppClock.today())
     val date: StateFlow<LocalDate> = _date.asStateFlow()
     private val _session = MutableStateFlow<DiarySession?>(null)
     val session: StateFlow<DiarySession?> = _session.asStateFlow()
@@ -123,7 +124,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
      * Sunday 18:00. Null the rest of the time, or once it has text.
      */
     val dueWeek: StateFlow<LocalDate?> = _date.flatMapLatest {
-        val now = java.time.LocalDateTime.now()
+        val now = java.time.LocalDateTime.now(AppClock.clock)
         val due = when {
             now.dayOfWeek == java.time.DayOfWeek.MONDAY -> Weeks.start(now.toLocalDate()).minusWeeks(1)
             now.dayOfWeek == java.time.DayOfWeek.SUNDAY && now.hour >= 18 -> Weeks.start(now.toLocalDate())
@@ -134,12 +135,12 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     val extracted = MutableSharedFlow<Extracted>(extraBufferCapacity = 2)
 
     /** Days in a row with text, ending today (or yesterday while today is still empty). */
-    val streak: StateFlow<Int> = diary.observeDatesWithText(LocalDate.now().minusDays(400), LocalDate.now())
-        .map { dates -> DiaryStreak.of(dates.toSet(), LocalDate.now()) }
+    val streak: StateFlow<Int> = diary.observeDatesWithText(AppClock.today().minusDays(400), AppClock.today())
+        .map { dates -> DiaryStreak.of(dates.toSet(), AppClock.today()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {
-        open(LocalDate.now())
+        open(AppClock.today())
     }
 
     fun open(d: LocalDate) = leaveThenOpen(d, dropUnsaved = false)
@@ -176,7 +177,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         _date.value = d
         pastMidnight.value = false
         weather.value = WeatherUi.Idle
-        openedAsToday = d.takeIf { it == LocalDate.now() }
+        openedAsToday = d.takeIf { it == AppClock.today() }
         _session.value = null
         statusJob?.cancel()
         loading?.cancel()
@@ -211,14 +212,14 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
 
     /** Coming back to the foreground: the midnight rule. */
     fun onResume() {
-        val today = LocalDate.now()
+        val today = AppClock.today()
         val opened = openedAsToday ?: return
         if (opened == today) return
         val s = _session.value
         if (s == null || !s.touched) open(today) else pastMidnight.value = true
     }
 
-    fun goToday() = open(LocalDate.now())
+    fun goToday() = open(AppClock.today())
 
     fun delete(onDone: () -> Unit = {}) = action {
         val s = _session.value ?: return@action
@@ -327,7 +328,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
                     ?: run {
                         // Ask for the location permission once; after that, fall back quietly.
                         if (!container.weather.hasLocationPermission() && settings.long(KEY_LOCATION_ASKED) == 0L) {
-                            settings.putLong(KEY_LOCATION_ASKED, System.currentTimeMillis())
+                            settings.putLong(KEY_LOCATION_ASKED, AppClock.millis())
                             askLocation.tryEmit(Unit)
                         }
                         container.weather.locate()

@@ -1,5 +1,6 @@
 package com.assetboard.ui.components
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -143,7 +144,7 @@ fun rememberBackupProblem(): String? {
         onPauseOrDispose {}
     }
     return remember(tree, last, failure, resumed) {
-        com.assetboard.data.BackupHealth.problem(context, tree, last, failure, System.currentTimeMillis())
+        com.assetboard.data.BackupHealth.problem(context, tree, last, failure, AppClock.millis())
     }
 }
 

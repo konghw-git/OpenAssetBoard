@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
@@ -109,7 +110,7 @@ class AppUpdater(
     /** At most once a day, quietly: only a version not set aside brings the dialog up. */
     fun checkAuto() {
         if (!settings.networkEnabled.value || !settings.autoUpdateCheck.value) return
-        val now = System.currentTimeMillis()
+        val now = AppClock.millis()
         if (now - settings.long(KEY_LAST_CHECK) < 20 * 3600_000L) return
         settings.putLong(KEY_LAST_CHECK, now)
         launchCheck { r -> r != null && r.version != settings.string(KEY_IGNORED) }

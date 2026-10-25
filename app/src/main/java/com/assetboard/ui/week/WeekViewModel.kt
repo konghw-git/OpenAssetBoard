@@ -1,5 +1,6 @@
 package com.assetboard.ui.week
 
+import com.assetboard.domain.AppClock
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.assetboard.AppContainer
@@ -79,7 +80,7 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
         open(_start.value)
     }
 
-    fun today(): LocalDate = TodoViews.localDate(System.currentTimeMillis())
+    fun today(): LocalDate = TodoViews.localDate(AppClock.millis())
 
     /** Steps to the week starting [to], saving this one first. */
     fun go(to: LocalDate) = leave(Leave.Week(Weeks.start(to))) { open(Weeks.start(to)) }
@@ -127,7 +128,7 @@ class WeekViewModel(private val container: AppContainer, private val handle: Sav
         val weights = container.db.healthDao().all()
         val ledger = container.repository.loadOnce()
         val habits = container.habits.observeAll().first()
-        val s = WeekStats.of(start, today(), diaries, checks, todos, weights, ledger, System.currentTimeMillis(), allHabits = habits)
+        val s = WeekStats.of(start, today(), diaries, checks, todos, weights, ledger, AppClock.millis(), allHabits = habits)
         if (_start.value == start) stats.value = s
     }
 

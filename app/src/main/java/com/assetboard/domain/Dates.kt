@@ -28,7 +28,7 @@ object Dates {
     fun atToPicker(at: Long): Long = dateToPicker(localDate(at))
 
     /** Today means "right now"; any other day means the end of that day. */
-    fun pickedAt(date: LocalDate, now: Long = System.currentTimeMillis()): Long =
+    fun pickedAt(date: LocalDate, now: Long = AppClock.millis()): Long =
         if (date == localDate(now)) now else endOfDay(date)
 
     fun date(at: Long): String = dateFmt.format(localDate(at))
@@ -41,7 +41,7 @@ object Dates {
 
     fun daysBetween(from: Long, to: Long): Long = ChronoUnit.DAYS.between(localDate(from), localDate(to))
 
-    fun relative(at: Long, now: Long = System.currentTimeMillis()): String {
+    fun relative(at: Long, now: Long = AppClock.millis()): String {
         val d = daysBetween(at, now)
         return when {
             d == 0L -> "今天"

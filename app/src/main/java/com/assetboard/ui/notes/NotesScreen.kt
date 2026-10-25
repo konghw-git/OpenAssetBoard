@@ -1,5 +1,6 @@
 package com.assetboard.ui.notes
 
+import com.assetboard.domain.AppClock
 import com.assetboard.ui.components.GlassSheet
 import com.assetboard.ui.components.LocalAmbient
 import androidx.compose.runtime.CompositionLocalProvider
@@ -668,11 +669,11 @@ private fun ReviewCard(note: Note, topics: List<NoteTopic>, today: LocalDate, on
     val extra = AppTheme.extra
     val shape = RoundedCornerShape(24.dp)
     val source = remember { MutableInteractionSource() }
-    val now = System.currentTimeMillis()
+    val now = AppClock.millis()
     // Since it was last written or opened, not counting today's look.
     val days = Dates.daysBetween(maxOf(note.updatedAt, note.reviewedAt?.takeIf { Dates.daysBetween(it, now) > 0 } ?: 0L), now)
     val since = if (days < 60) "$days 天没碰过了" else "${days / 30} 个多月没碰过了"
-    val seenToday = note.reviewedAt?.let { Dates.daysBetween(it, System.currentTimeMillis()) == 0L } == true
+    val seenToday = note.reviewedAt?.let { Dates.daysBetween(it, AppClock.millis()) == 0L } == true
     val topic = topics.firstOrNull { it.id == note.topicId }
     Column(
         modifier

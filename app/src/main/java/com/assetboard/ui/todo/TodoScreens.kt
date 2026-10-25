@@ -1,5 +1,6 @@
 package com.assetboard.ui.todo
 
+import com.assetboard.domain.AppClock
 import androidx.compose.foundation.gestures.scrollBy
 
 import com.assetboard.ui.components.GlassSheet
@@ -1408,7 +1409,7 @@ private fun ListEditDialog(list: TodoList, onDismiss: () -> Unit, onSave: (Strin
     )
     if (picking) {
         com.assetboard.ui.components.DatePickDialog(
-            initial = deadline?.let(LocalDate::parse) ?: LocalDate.now(), maxDate = null,
+            initial = deadline?.let(LocalDate::parse) ?: AppClock.today(), maxDate = null,
             onDismiss = { picking = false }, onPick = { deadline = it.toString(); picking = false },
         )
     }

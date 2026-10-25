@@ -1,5 +1,6 @@
 package com.assetboard.ui.diary
 
+import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -90,9 +91,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 @Composable
 fun DiaryCalendarScreen(initial: String?, onBack: () -> Unit, onPick: (LocalDate) -> Unit, onWeek: (LocalDate) -> Unit = {}) {
     val container = LocalContainer.current
-    var month by rememberSaveable { mutableStateOf((initial?.let(LocalDate::parse) ?: LocalDate.now()).withDayOfMonth(1).toString()) }
+    var month by rememberSaveable { mutableStateOf((initial?.let(LocalDate::parse) ?: AppClock.today()).withDayOfMonth(1).toString()) }
     val ym = YearMonth.from(LocalDate.parse(month))
-    val today = LocalDate.now()
+    val today = AppClock.today()
     val written by remember(month) { container.diary.observeDatesWithText(ym.atDay(1), ym.atEndOfMonth()) }
         .collectAsStateWithLifecycle(emptyList())
     val moods by remember(month) { container.diary.observeMoods(ym.atDay(1), ym.atEndOfMonth()) }

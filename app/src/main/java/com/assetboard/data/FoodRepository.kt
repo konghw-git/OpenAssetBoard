@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
@@ -51,7 +52,7 @@ data class FoodDraft(
 class FoodRepository(
     private val db: AppDatabase,
     private val gate: WriteGate,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = AppClock::millis,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
 ) {
     private val dao = db.foodDao()

@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import com.assetboard.domain.LedgerException
 import com.assetboard.domain.ensure
 import kotlinx.coroutines.CancellationException
@@ -17,7 +18,7 @@ class NoteRepository(
     private val db: AppDatabase,
     private val gate: WriteGate,
     private val editors: EditorRegistry,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = AppClock::millis,
 ) : NoteStore {
     private val dao = db.noteDao()
     private val queue = Mutex()

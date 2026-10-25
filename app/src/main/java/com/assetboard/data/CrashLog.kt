@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.domain.AppClock
 import android.app.ActivityManager
 import android.app.ApplicationExitInfo
 import android.content.Context
@@ -60,7 +61,7 @@ object CrashLog {
         val info = runCatching { context.packageManager.getPackageInfo(context.packageName, 0) }.getOrNull()
         val text = buildString {
             appendLine("日盈 Gain 诊断信息")
-            appendLine("生成于 ${time(System.currentTimeMillis())}")
+            appendLine("生成于 ${time(AppClock.millis())}")
             appendLine()
             appendLine("版本 ${info?.versionName} (${info?.longVersionCode}) · ${BuildConfig.BUILD_TYPE} · commit ${BuildConfig.COMMIT_SHA}")
             appendLine("手机 ${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
@@ -78,7 +79,7 @@ object CrashLog {
     private fun file(context: Context) = File(context.filesDir, FILE)
 
     @Synchronized
-    private fun append(context: Context, text: String, at: Long = System.currentTimeMillis()) {
+    private fun append(context: Context, text: String, at: Long = AppClock.millis()) {
         val f = file(context)
         f.appendText("[${time(at)}] $text\n\n")
         if (f.length() > MAX_BYTES) {
