@@ -42,6 +42,25 @@ class BackupFixtureTest {
         return Uri.fromFile(File(f.context.cacheDir, name).apply { writeText(text) })
     }
 
+    @Test fun formatFourteenRestoresCountdowns() = f.run {
+        val uri = fixture("format-14.json")
+        assertEquals(14, f.backup.inspect(uri).formatVersion)
+        f.backup.restore(uri)
+        val byTitle = f.db.countdownDao().all().associateBy { it.title }
+        assertEquals("2001-08-02", byTitle.getValue("生日").date)
+        assertTrue(byTitle.getValue("生日").yearly && byTitle.getValue("生日").pinned)
+        assertEquals("2026-12-26", byTitle.getValue("考研").date)
+        // The rest of the file still lands.
+        assertEquals(35_50L, f.ledger.loadOnce().flows.single { it.category == "food" }.amount)
+    }
+
+    /** A file from before countdowns reads with none. */
+    @Test fun formatThirteenHasNoCountdowns() = f.run {
+        f.db.countdownDao().insert(Countdown("x", "恢复前的", "2026-11-01", createdAt = 1, updatedAt = 1))
+        f.backup.restore(fixture("format-13.json"))
+        assertTrue(f.db.countdownDao().all().isEmpty())
+    }
+
     @Test fun formatThirteenRestoresBills() = f.run {
         val uri = fixture("format-13.json")
         assertEquals(13, f.backup.inspect(uri).formatVersion)
@@ -149,6 +168,9 @@ class BackupFixtureTest {
         f.notes.create("读书笔记\n第一章讲了复利", SourceRef.day(date("2026-10-20")))
         f.db.weekDao().insert(WeeklyReview(newId(), "2026-10-19", "这周按时跑步", bodyRev = 1, createdAt = f.now, updatedAt = f.now))
         GoalRepository(f.db, f.gate).set(1_000_000_00L)
+        val countdowns = CountdownRepository(f.db, f.gate, clock = { f.now })
+        countdowns.save(null, "生日", date("2001-08-02"), yearly = true, pinned = true)
+        countdowns.save(null, "考研", date("2026-12-26"), yearly = false, pinned = false)
         val out = File("src/test/resources/backups/format-${BackupManager.FORMAT_VERSION}.json")
         out.parentFile!!.mkdirs()
         out.writeText(f.backup.exportJson())

@@ -13,12 +13,14 @@ import java.time.LocalDate
  * Every note write goes through one serial queue (a fair mutex) under the write gate, as the
  * diary's do: pinning, changing the topic, deleting and appending can never overwrite each
  * other. Body writes are conditional on `body_rev`, and only they (and the trash) bump it.
+ * [onChanged] fires after every write that went through (it refreshes the home-screen widget).
  */
 class NoteRepository(
     private val db: AppDatabase,
     private val gate: WriteGate,
     private val editors: EditorRegistry,
     private val clock: () -> Long = AppClock::millis,
+    private val onChanged: () -> Unit = {},
 ) : NoteStore {
     private val dao = db.noteDao()
     private val queue = Mutex()
@@ -30,7 +32,7 @@ class NoteRepository(
     override fun register(editor: EditorHandle) = editors.add(editor)
     override fun unregister(editor: EditorHandle) = editors.remove(editor)
 
-    private suspend fun <T> serial(block: suspend () -> T): T = queue.withLock { gate.write { block() } }
+    private suspend fun <T> serial(block: suspend () -> T): T = queue.withLock { gate.write { block() } }.also { onChanged() }
 
     fun observeNotes(): Flow<List<Note>> = dao.observeLive()
     fun observe(id: String): Flow<Note?> = dao.observeNote(id)

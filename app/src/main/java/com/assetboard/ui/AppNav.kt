@@ -211,6 +211,9 @@ sealed interface OpenRequest {
     data object TodoToday : OpenRequest
     data object Diary : OpenRequest
     data object QuickAdd : OpenRequest
+    data object Assets : OpenRequest
+    data object Notes : OpenRequest
+    data class Note(val id: String) : OpenRequest
 }
 
 /** The tabs in pager order. */
@@ -314,6 +317,9 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit, backdrop: Backd
                 todoRequest = open
             }
             OpenRequest.Diary -> showTab(Tab.DIARY)
+            OpenRequest.Assets -> showTab(Tab.ASSETS)
+            OpenRequest.Notes -> showTab(Tab.NOTES)
+            is OpenRequest.Note -> { showTab(Tab.NOTES); openNote(open.id) }
         }
         onOpenHandled()
     }

@@ -41,15 +41,15 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
-        <!-- Quick add from the widget: a sheet over whatever is on screen. -->
+        <!-- What the widgets open over the home screen: add or change a todo, a note, a countdown. -->
         <activity
-            android:name=".QuickAddActivity"
+            android:name=".WidgetSheetActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTask"
-            android:taskAffinity="com.assetboard.quickadd"
+            android:taskAffinity="com.assetboard.widgetsheet"
             android:theme="@style/Theme.AssetBoard.Translucent"
-            android:windowSoftInputMode="adjustResize|stateAlwaysVisible" />
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".reminder.AlarmActivity"
@@ -97,17 +97,7 @@
             </intent-filter>
         </receiver>
 
-        <receiver
-            android:name=".widget.NetWorthWidgetReceiver"
-            android:exported="true"
-            android:label="@string/widget_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/net_worth_widget_info" />
-        </receiver>
+        <!-- The receivers keep their names: a widget already on a home screen is bound to its class. -->
         <receiver
             android:name=".widget.TodoWidgetReceiver"
             android:exported="true"
@@ -119,5 +109,42 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/todo_widget_info" />
         </receiver>
+        <receiver
+            android:name=".widget.NoteWidgetReceiver"
+            android:exported="true"
+            android:label="@string/note_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/note_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.CountdownWidgetReceiver"
+            android:exported="true"
+            android:label="@string/countdown_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/countdown_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.NetWorthWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/net_worth_widget_info" />
+        </receiver>
+        <!-- The widgets redrawn just after midnight. -->
+        <receiver
+            android:name=".widget.WidgetDayReceiver"
+            android:exported="false" />
     </application>
 </manifest>

@@ -1,20 +1,24 @@
 package com.assetboard.widget
 
-import com.assetboard.domain.AppClock
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
+import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
-import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.LinearProgressIndicator
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
@@ -22,7 +26,6 @@ import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
-import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -34,33 +37,38 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.text.FontWeight
-import androidx.glance.text.Text
-import androidx.glance.text.TextDecoration
-import androidx.glance.text.TextStyle
-import com.assetboard.AssetBoardApp
 import com.assetboard.MainActivity
-import com.assetboard.QuickAddActivity
+import com.assetboard.R
+import com.assetboard.WidgetSheetActivity
 import com.assetboard.data.Epoch
+import com.assetboard.data.TodoData
+import com.assetboard.data.UndoOutcome
+import com.assetboard.domain.AppClock
+import com.assetboard.domain.Countdowns
 import com.assetboard.domain.LedgerException
+import com.assetboard.domain.todo.DateBadge
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.domain.todo.ViewRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
-/** The Today view on the home screen: tap a circle to complete, the title to open, + to add. */
+/**
+ * Today on the home screen. The circle completes (or, on a row finished today, reopens) right
+ * there; the title opens a sheet over the home screen to rename, flag, move to tomorrow or
+ * delete; + opens quick add. The rows follow the database live while the widget is on screen.
+ */
 class TodoWidget : GlanceAppWidget() {
+    override val sizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val container = (context.applicationContext as AssetBoardApp).container
-        val data = runCatching { container.todos.loadOnce() }.getOrNull()
-        val today = TodoViews.localDate(AppClock.millis())
-        val rows = data?.let { TodoViews.today(it.todos, today) }.orEmpty()
-        val open = rows.count { !it.done }
-        // The token's epoch is bound here, when the widget is drawn.
-        val epoch = container.gate.epochNow()
-        val listNames = data?.lists?.associate { it.id to it.name }.orEmpty()
+        val container = context.container
+        val initial = runCatching { container.todos.loadOnce() }.getOrNull()
         provideContent {
-            GlanceTheme { Content(rows, open, epoch, listNames) }
+            val live by container.todos.data.collectAsState()
+            val pending by PendingTicks.shown.collectAsState()
+            // The token's epoch is the one current when the rows were drawn.
+            TodoContent(live ?: initial, pending, container.gate.epochNow())
         }
     }
 
@@ -68,8 +76,7 @@ class TodoWidget : GlanceAppWidget() {
         val IdKey = ActionParameters.Key<String>("id")
         val SeqKey = ActionParameters.Key<Long>("seq")
         val EpochKey = ActionParameters.Key<Long>("epoch")
-        val OpenKey = ActionParameters.Key<String>(MainActivity.EXTRA_OPEN)
-        val TodoIdKey = ActionParameters.Key<String>(MainActivity.EXTRA_ID)
+        val DoneKey = ActionParameters.Key<Boolean>("done")
 
         suspend fun refresh(context: Context) {
             runCatching { TodoWidget().updateAll(context) }
@@ -78,98 +85,157 @@ class TodoWidget : GlanceAppWidget() {
 }
 
 @Composable
-private fun Content(rows: List<ViewRow>, open: Int, epoch: Long, listNames: Map<String, String>) {
-    val c = GlanceTheme.colors
-    Column(
-        GlanceModifier.fillMaxSize().cornerRadius(24.dp).background(c.widgetBackground).padding(horizontal = 14.dp, vertical = 10.dp),
-    ) {
+private fun TodoContent(data: TodoData?, pending: Map<String, Boolean>, epoch: Long) {
+    val context = LocalContext.current
+    val size = LocalSize.current
+    val compact = size.width < 220.dp
+    val today = TodoViews.localDate(AppClock.millis())
+    val rows = data?.let { TodoViews.today(it.todos, today) }.orEmpty()
+        .map { r -> pending[r.todo.id]?.let { r.copy(done = it) } ?: r }
+    val done = rows.count { it.done }
+    val lists = data?.lists?.associate { it.id to it.name }.orEmpty()
+
+    WidgetFrame(padding = if (compact) 12.dp else 14.dp) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "今天  $open",
-                style = TextStyle(color = c.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold),
-                modifier = GlanceModifier.defaultWeight().clickable(
-                    actionStartActivity<MainActivity>(actionParametersOf(TodoWidget.OpenKey to MainActivity.OPEN_TODO_TODAY)),
-                ),
-            )
-            Box(
-                GlanceModifier.size(36.dp).cornerRadius(18.dp).background(c.primary).clickable(actionStartActivity<QuickAddActivity>()),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("+", style = TextStyle(color = c.onPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold))
+            Column(GlanceModifier.defaultWeight().clickable(appAction(context, MainActivity.OPEN_TODO_TODAY))) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    WText("今天", if (compact) 16.sp else 18.sp, WColors.ink, bold = true)
+                    if (rows.isNotEmpty()) {
+                        Spacer(GlanceModifier.width(6.dp))
+                        WText("${rows.size - done}", if (compact) 16.sp else 18.sp, WColors.primary, bold = true)
+                    }
+                }
+                val sub = when {
+                    rows.isEmpty() -> Countdowns.dateLabel(today, today)
+                    done == rows.size -> "全部完成，干得漂亮"
+                    compact -> "已完成 $done/${rows.size}"
+                    else -> Countdowns.dateLabel(today, today) + " · 已完成 $done/${rows.size}"
+                }
+                WText(sub, 11.sp, WColors.muted)
             }
+            RoundButton(R.drawable.ic_w_add, "记一条待办", R.drawable.widget_btn_green, sheetAction(context, WidgetSheetActivity.TODO_ADD))
         }
-        Spacer(GlanceModifier.height(6.dp))
-        if (rows.isEmpty()) {
-            Text("今天没有待办", style = TextStyle(color = c.onSurfaceVariant, fontSize = 13.sp), modifier = GlanceModifier.padding(vertical = 8.dp))
-        } else {
-            LazyColumn {
-                items(rows, itemId = { it.todo.id.hashCode().toLong() }) { row -> RowItem(row, epoch, listNames) }
+        if (rows.isNotEmpty()) {
+            Spacer(GlanceModifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = done.toFloat() / rows.size,
+                modifier = GlanceModifier.fillMaxWidth().height(3.dp).cornerRadius(2.dp),
+                color = WColors.primary,
+                backgroundColor = WColors.primarySoft,
+            )
+            Spacer(GlanceModifier.height(4.dp))
+            LazyColumn(GlanceModifier.fillMaxSize()) {
+                // Every row travels to the launcher in one parcel; a day of more than this is a list for the app.
+                items(rows.take(40), itemId = { it.todo.id.hashCode().toLong() and 0x7FFFFFFFL }) { row ->
+                    TodoRow(row, today, lists, epoch, compact)
+                }
             }
+        } else {
+            EmptyState(
+                "今天没有待办",
+                "点这里或右上角 + 记一条",
+                GlanceModifier.fillMaxSize(),
+                onClick = sheetAction(context, WidgetSheetActivity.TODO_ADD),
+            )
         }
     }
 }
 
 @Composable
-private fun RowItem(row: ViewRow, epoch: Long, listNames: Map<String, String>) {
-    val c = GlanceTheme.colors
+private fun TodoRow(row: ViewRow, today: LocalDate, lists: Map<String, String>, epoch: Long, compact: Boolean) {
+    val context = LocalContext.current
     val t = row.todo
-    Row(GlanceModifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-        val circle = GlanceModifier.size(22.dp).cornerRadius(11.dp).background(if (row.done) c.primary else c.outline)
+    Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        // A target bigger than the circle: thumbs on a home screen are not precise.
         Box(
-            if (row.done) circle else circle.clickable(
-                actionRunCallback<CompleteTodoAction>(
-                    actionParametersOf(TodoWidget.IdKey to t.id, TodoWidget.SeqKey to t.stateSeq, TodoWidget.EpochKey to epoch),
+            GlanceModifier.size(34.dp).cornerRadius(17.dp).clickable(
+                actionRunCallback<ToggleTodoAction>(
+                    actionParametersOf(
+                        TodoWidget.IdKey to t.id,
+                        TodoWidget.SeqKey to t.stateSeq,
+                        TodoWidget.EpochKey to epoch,
+                        TodoWidget.DoneKey to row.done,
+                    ),
                 ),
             ),
             contentAlignment = Alignment.Center,
         ) {
-            if (row.done) {
-                Text("✓", style = TextStyle(color = c.onPrimary, fontSize = 13.sp))
-            } else {
-                Box(GlanceModifier.size(18.dp).cornerRadius(9.dp).background(c.widgetBackground)) {}
+            val circle = when {
+                row.done -> R.drawable.ic_w_done
+                t.important || row.overdue -> R.drawable.ic_w_ring_alert
+                else -> R.drawable.ic_w_ring
+            }
+            androidx.glance.Image(ImageProvider(circle), if (row.done) "已完成，点一下撤销" else "完成", GlanceModifier.size(22.dp))
+        }
+        Spacer(GlanceModifier.width(4.dp))
+        Column(
+            GlanceModifier.defaultWeight().clickable(sheetAction(context, WidgetSheetActivity.TODO_EDIT, t.id)),
+        ) {
+            WText(t.title, 14.sp, if (row.done) WColors.faint else WColors.ink, medium = !row.done, strike = row.done)
+            if (!row.done && !compact) {
+                val badge = TodoViews.trailing(t, today)
+                val meta = listOfNotNull(t.remindTime, t.listId?.let { lists[it] }).joinToString(" · ")
+                if (badge != null || meta.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (badge != null) {
+                            WText(
+                                badge.text, 11.sp,
+                                when (badge.tone) {
+                                    DateBadge.Tone.ALERT -> WColors.alert
+                                    DateBadge.Tone.WARN -> WColors.warn
+                                    DateBadge.Tone.PLAIN -> WColors.muted
+                                },
+                                medium = badge.tone != DateBadge.Tone.PLAIN,
+                            )
+                            if (meta.isNotEmpty()) WText("  ·  ", 11.sp, WColors.faint)
+                        }
+                        if (meta.isNotEmpty()) WText(meta, 11.sp, WColors.muted)
+                    }
+                }
             }
         }
-        Spacer(GlanceModifier.width(10.dp))
-        Column(
-            GlanceModifier.defaultWeight().clickable(
-                actionStartActivity<MainActivity>(actionParametersOf(TodoWidget.OpenKey to MainActivity.OPEN_TODO, TodoWidget.TodoIdKey to t.id)),
-            ),
-        ) {
-            Text(
-                t.title,
-                maxLines = 1,
-                style = TextStyle(
-                    color = if (row.done) c.onSurfaceVariant else c.onSurface,
-                    fontSize = 14.sp,
-                    textDecoration = if (row.done) TextDecoration.LineThrough else null,
-                    fontWeight = if (t.important && !row.done) FontWeight.Bold else null,
-                ),
-            )
-            val sub = listOfNotNull(
-                if (row.overdue) "已过期" else null,
-                t.listId?.let { listNames[it] },
-            ).joinToString(" · ")
-            if (sub.isNotEmpty()) Text(sub, maxLines = 1, style = TextStyle(color = if (row.overdue) c.error else c.onSurfaceVariant, fontSize = 11.sp))
-        }
+        if (t.important && !row.done) WIcon(R.drawable.ic_w_flag, WColors.alert, 14.dp, GlanceModifier.padding(start = 4.dp))
     }
 }
 
-/** The circle: completes with the token the widget was drawn with. */
-class CompleteTodoAction : ActionCallback {
+/**
+ * The circle. Drawn in its new state at once ([PendingTicks]), then written with the token the
+ * row was drawn with: a row that changed since, or data restored since, is refused rather than
+ * acted on blind.
+ */
+class ToggleTodoAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        val container = (context.applicationContext as AssetBoardApp).container
+        val container = context.container
         val id = parameters[TodoWidget.IdKey] ?: return
         val seq = parameters[TodoWidget.SeqKey] ?: return
         val epoch = parameters[TodoWidget.EpochKey] ?: return
-        try {
-            withContext(Epoch(epoch)) { container.todos.complete(id, seq) }
+        val wasDone = parameters[TodoWidget.DoneKey] ?: false
+        PendingTicks.put(id, !wasDone)
+        runCatching { TodoWidget().update(context, glanceId) }
+        val problem = try {
+            withContext(Epoch(epoch)) {
+                if (wasDone) {
+                    if (container.todos.uncomplete(id) == UndoOutcome.NEEDS_CONFIRM) "这条重复待办已在别处改过，请在 App 里撤销" else null
+                } else {
+                    container.todos.complete(id, seq)
+                    null
+                }
+            }
         } catch (e: LedgerException) {
-            withContext(Dispatchers.Main) { Toast.makeText(context, e.message, Toast.LENGTH_SHORT).show() }
+            e.message
+        } finally {
+            PendingTicks.remove(id)
         }
-        TodoWidget.refresh(context)
+        if (problem != null) withContext(Dispatchers.Main) { Toast.makeText(context, problem, Toast.LENGTH_SHORT).show() }
+        runCatching { TodoWidget().update(context, glanceId) }
     }
 }
 
 class TodoWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TodoWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        WidgetDay.schedule(context)
+    }
 }

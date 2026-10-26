@@ -269,6 +269,19 @@ class MigrationTest {
         }
     }
 
+    @Test fun migrationTwelveToThirteenAddsAnEmptyCountdownTableAndKeepsTheLedger() {
+        val before = helper.createDatabase(name, 12).use { db ->
+            seedV1(db)
+            ledgerTables.associateWith { db.dump(it) }
+        }
+        helper.runMigrationsAndValidate(name, 13, true, Migrations.MIGRATION_12_13).use { db ->
+            assertTrue(db.dump("countdowns").isEmpty())
+            for (t in ledgerTables) assertEquals(before.getValue(t), db.dump(t))
+            db.put("countdowns", "id" to "c1", "title" to "生日", "date" to "2001-08-02", "yearly" to true, "pinned" to false, "created_at" to 1L, "updated_at" to 1L)
+            assertEquals(1, db.dump("countdowns").size)
+        }
+    }
+
     @Test fun migrationTenToElevenRemindsAtTheTimeAndKeepsTheTodo() {
         helper.createDatabase(name, 10).use { db ->
             db.put(

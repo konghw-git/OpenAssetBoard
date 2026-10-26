@@ -141,7 +141,7 @@ interface LedgerDao {
         Holiday::class, HolidayYear::class, AppMeta::class, HabitCheck::class, com.assetboard.domain.Habit::class,
         HealthProfile::class, BodyMeasurement::class, FoodEntry::class,
         NoteTopic::class, Note::class, NoteSource::class, NoteDraft::class,
-        WeeklyReview::class, WeeklyDraft::class,
+        WeeklyReview::class, WeeklyDraft::class, Countdown::class,
     ],
     version = AppDatabase.SCHEMA_VERSION,
     exportSchema = true,
@@ -156,9 +156,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun foodDao(): FoodDao
     abstract fun noteDao(): NoteDao
     abstract fun weekDao(): WeekDao
+    abstract fun countdownDao(): CountdownDao
 
     companion object {
-        const val SCHEMA_VERSION = 12
+        const val SCHEMA_VERSION = 13
 
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "asset-board.db")

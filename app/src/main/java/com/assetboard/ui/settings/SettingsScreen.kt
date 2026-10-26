@@ -82,6 +82,8 @@ import com.assetboard.data.BackupKind
 import com.assetboard.data.ThemeMode
 import com.assetboard.data.SettingsStore
 import androidx.compose.material.icons.outlined.BlurOn
+import androidx.compose.material.icons.outlined.HourglassTop
+import androidx.compose.material.icons.outlined.Widgets
 import com.assetboard.domain.Dates
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
@@ -322,6 +324,20 @@ fun SettingsScreen(
                         onClick = { pickDiaryTime = true },
                     )
                 }
+                RowDivider(startIndent = RowIndent)
+                ListRow(
+                    title = "倒数日",
+                    subtitle = "生日、纪念日、考试，显示在桌面小组件上",
+                    leading = { IconTile(Icons.Outlined.HourglassTop, palette.group(3)) },
+                    onClick = { context.startActivity(com.assetboard.WidgetSheetActivity.intent(context, com.assetboard.WidgetSheetActivity.COUNTDOWN_LIST)) },
+                )
+                RowDivider(startIndent = RowIndent)
+                ListRow(
+                    title = "桌面小组件",
+                    subtitle = "待办、笔记、倒数日、资产看板，在桌面上直接改",
+                    leading = { IconTile(Icons.Outlined.Widgets, palette.group(0)) },
+                    onClick = { context.startActivity(com.assetboard.WidgetSheetActivity.intent(context, com.assetboard.WidgetSheetActivity.WIDGET_GALLERY)) },
+                )
                 RowDivider(startIndent = RowIndent)
                 ListRow(
                     title = "回收站",

@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-26
+
+### Added
+
+- Four home-screen widgets, rebuilt from scratch on glass that follows the system light and dark
+  theme, each resizable with layouts for small and wide: **今天待办** (tap the circle to finish a
+  todo or undo it, tap the title for a sheet over the home screen to rename, flag, push to
+  tomorrow or delete, + to add), **笔记** (one sticky note when small, a list or two columns when
+  wide; a note opens for editing over the home screen and saves as it is typed), **倒数日** and
+  **资产看板** (net worth on the warm glass of the app's card, the change since the last stocktake,
+  a line over the stocktakes, each group's share, the goal, 盘点, and an eye that hides amounts
+  here and in the app). Widgets already placed keep working after the update. They redraw just
+  after midnight, and the launcher's picker shows a preview of each.
+- Countdowns (倒数日): a name and a day, counted down to and up from once passed; a yearly one
+  (a birthday, an anniversary) counts to its next occurrence and says which year it is. One can be
+  shown large on the widget. Managed from the widget or from Settings → 倒数日.
+- Settings → 桌面小组件 places a widget on the home screen in one tap, where the launcher allows it.
+
+### Changed
+
+- The database moves to schema 13 and backups to format 14 for the countdowns; older backups
+  restore with none.
+
+### Fixed
+
+- Taps that act on the widget itself (ticking a todo, the eye) did nothing in the release build:
+  R8 dropped the empty constructor Glance creates them through. 1.0.0's 完成 on the old todo
+  widget had the same fault.
+
 ## [1.0.0] - 2026-10-26
 
 A release about how the app looks and reads rather than what it does: nothing new to learn, and

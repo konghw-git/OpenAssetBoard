@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Glass over the wallpaper: a translucent body, two soft colour fields like the app's ambient page, a lit rim. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/widget_radius" />
+            <gradient android:angle="315" android:startColor="#E6FFFFFF" android:endColor="#CCFFF4EE" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/widget_radius" />
+            <gradient android:type="radial" android:centerX="0.92" android:centerY="0.04" android:gradientRadius="70%p" android:startColor="#50FF8A3D" android:endColor="#00FFFFFF" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/widget_radius" />
+            <gradient android:type="radial" android:centerX="0.04" android:centerY="1.0" android:gradientRadius="65%p" android:startColor="#30F2557A" android:endColor="#00FFFFFF" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/widget_radius" />
+            <stroke android:width="1dp" android:color="#F2FFFFFF" />
+        </shape>
+    </item>
+</layer-list>

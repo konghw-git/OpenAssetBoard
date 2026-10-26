@@ -71,6 +71,9 @@ class MainActivity : ComponentActivity() {
         OPEN_TODO_TODAY -> OpenRequest.TodoToday
         OPEN_DIARY -> OpenRequest.Diary
         OPEN_QUICK_ADD -> OpenRequest.QuickAdd
+        OPEN_ASSETS -> OpenRequest.Assets
+        OPEN_NOTES -> OpenRequest.Notes
+        OPEN_NOTE -> intent.getStringExtra(EXTRA_ID)?.let { OpenRequest.Note(it) }
         else -> null
     }
 
@@ -82,5 +85,8 @@ class MainActivity : ComponentActivity() {
         const val OPEN_TODO_TODAY = "todo_today"
         const val OPEN_DIARY = "diary"
         const val OPEN_QUICK_ADD = "quick_add"
+        const val OPEN_ASSETS = "assets"
+        const val OPEN_NOTES = "notes"
+        const val OPEN_NOTE = "note"
     }
 }

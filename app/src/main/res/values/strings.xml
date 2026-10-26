@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">日盈</string>
-    <string name="widget_name">净资产</string>
-    <string name="widget_description">显示净资产，一键开始盘点</string>
+    <string name="widget_name">资产看板</string>
+    <string name="widget_description">净资产、较上次盘点的变化和走势，一键盘点，可在桌面隐藏金额</string>
     <string name="todo_widget_name">今天待办</string>
-    <string name="todo_widget_description">今天要做的事，点圆圈完成，点 + 快速记一条</string>
+    <string name="todo_widget_description">点圆圈完成，点标题修改或删除，点 + 记一条，都不用打开 App</string>
+    <string name="note_widget_name">笔记</string>
+    <string name="note_widget_description">最近和置顶的笔记，点开就在桌面上改，点 + 写一篇</string>
+    <string name="countdown_widget_name">倒数日</string>
+    <string name="countdown_widget_description">离重要的日子还有几天，生日纪念日每年重复，点开就能改</string>
     <string name="shortcut_stocktake">盘点</string>
     <string name="shortcut_stocktake_long">开始一次盘点</string>
     <string name="shortcut_todo">记待办</string>

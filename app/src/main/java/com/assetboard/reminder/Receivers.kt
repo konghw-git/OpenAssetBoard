@@ -125,6 +125,9 @@ class SystemEventReceiver : BroadcastReceiver() {
             Notifier.ensureChannels(context)
             runCatching { r.syncAll(fromBoot = boot) }
             runCatching { r.scheduleDiaryReminder() }
+            // A new day or zone may have come with the change; alarms do not survive a reboot.
+            com.assetboard.widget.WidgetDay.schedule(context)
+            com.assetboard.widget.WidgetRefresh.all(context)
         }
     }
 }

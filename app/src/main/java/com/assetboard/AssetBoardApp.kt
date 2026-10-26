@@ -28,8 +28,13 @@ import com.assetboard.data.TodoRepository
 import com.assetboard.data.WeatherService
 import com.assetboard.data.WriteGate
 import com.assetboard.reminder.ReminderScheduler
+import com.assetboard.data.CountdownRepository
+import com.assetboard.widget.CountdownWidget
 import com.assetboard.widget.NetWorthWidget
+import com.assetboard.widget.NoteWidget
 import com.assetboard.widget.TodoWidget
+import com.assetboard.widget.WidgetDay
+import com.assetboard.widget.WidgetRefresh
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,7 +56,7 @@ class AppContainer(private val context: Context) {
     val db = AppDatabase.build(context)
     val settings = SettingsStore(context)
     val gate = WriteGate(db, crashOnMissingEpoch = BuildConfig.DEBUG)
-    private val refreshWidget: () -> Unit = { appScope.launch { NetWorthWidget.refresh(context) } }
+    private val refreshWidget: () -> Unit = { WidgetRefresh.request(context, appScope, ::NetWorthWidget) }
     val repository = LedgerRepository(db, gate, appScope, onChanged = refreshWidget)
 
     val holidays by lazy { HolidayRepository(context, db) }
@@ -59,13 +64,14 @@ class AppContainer(private val context: Context) {
     val todos by lazy {
         TodoRepository(db, gate, appScope, calendar = { holidays.table.value }) { ids ->
             reminders.onTodosChanged(ids)
-            appScope.launch { TodoWidget.refresh(context) }
+            WidgetRefresh.request(context, appScope, ::TodoWidget)
         }
     }
     /** Every open diary and note editor; a restore commits their unsaved text first. */
     val editors = EditorRegistry()
     val diary by lazy { DiaryRepository(db, gate, editors = editors) }
-    val notes by lazy { NoteRepository(db, gate, editors) }
+    val notes by lazy { NoteRepository(db, gate, editors) { WidgetRefresh.request(context, appScope, ::NoteWidget) } }
+    val countdowns by lazy { CountdownRepository(db, gate) { WidgetRefresh.request(context, appScope, ::CountdownWidget) } }
     val weeks by lazy { WeekRepository(db, gate, editors) }
     val habits by lazy { HabitRepository(db, gate) }
     val health by lazy { HealthRepository(db, gate) }
@@ -98,7 +104,7 @@ class AppContainer(private val context: Context) {
             effects = reminders,
             onRestored = {
                 _restoreGeneration.value++
-                refreshWidget()
+                appScope.launch { WidgetRefresh.all(context) }
             },
             weeks = weeks,
         )
@@ -114,6 +120,7 @@ class AssetBoardApp : Application() {
         CrashLog.install(this)
         if (BuildConfig.DEBUG) strictMode()
         container = AppContainer(this)
+        WidgetDay.schedule(this)
         container.appScope.launch { runCatching { CrashLog.recordExitReasons(this@AssetBoardApp, container.settings) } }
         val work = WorkManager.getInstance(this)
         work.enqueueUniquePeriodicWork(
