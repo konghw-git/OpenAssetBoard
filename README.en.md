@@ -27,15 +27,15 @@ Open it and you know exactly what you're worth; jot down what you have to do tod
 
 Most expense trackers want you to **log every transaction**. Plenty of people actually work the other way: once a month (or once a week) they open an app, correct each account's balance to the truth, and look at whether net worth went up or down. That's the whole workflow.
 
-This app is built for it. One stocktake walks every account, you change the three or five that moved, and you save — the goal is **under 60 seconds**. On top of that, investment accounts record buys, redemptions and dividends with a cumulative P&L that doesn't lie to you. Todos and a diary put "what I have to do today" and "what happened today" into the same local database.
+This app is built for it. One stocktake walks every account, you change the three or five that moved, and you save — the goal is **under 60 seconds**. On top of that, investment accounts record buys, redemptions and dividends with a cumulative P&L that doesn't lie to you. When you do want to log a bill, pull the page down, and the account's balance moves with it. Todos and a diary put "what I have to do today" and "what happened today" into the same local database.
 
 | It is | It is not |
 |---|---|
-| Net worth and allocation the moment you open it | Fast expense entry |
-| Batch stocktakes, edit balances inline | Categories, budgets, spending reports |
+| Net worth and allocation the moment you open it | Useless until you log every transaction |
+| Batch stocktakes, edit balances inline; pull down to log a bill when you want | Budgets, imported bank statements |
 | Investment flows, net invested, cumulative P&L | Market data feeds, auto valuation, rates of return |
 | Things-3-style todos with reminders that actually fire | Tags, teams, pomodoro timers |
-| One plain-text diary a day, with lunar date, weather and the day's achievements | Mood scores, images, rich text |
+| One plain-text diary a day, with lunar date, weather and the day's achievements | Images, rich text |
 
 ## Features
 
@@ -57,7 +57,7 @@ This app is built for it. One stocktake walks every account, you change the thre
 
 ### Todo
 
-- **Things 3 structure**: inbox → today → upcoming → someday, plus lists with sections. Items carry deadlines, an important flag, notes and checklists; every checklist item sits on its own strip under the todo's card and ticks with one tap.
+- **Things 3 structure**: inbox → today → upcoming → someday, plus lists with sections. Items carry deadlines, an important flag, notes and checklists; checklist items hang like nodes on a thread under the todo's card and tick with one tap.
 - **Drag todos**: hold the title and drag to reorder. Today is in your own order alone, so overdue and important todos can go anywhere; near an edge the list scrolls, faster the nearer and longer you wait, without ever losing the row; in a list, dragging across a section title moves the todo into that section. Up and down only reorders; to merge into another todo's checklist, drag below it and slide right (the badge names the target), with undo. A stationary long press selects; selected companions move together.
 - **Drag checklist items**: hold an item's text to reorder it or place it between another todo's items. The other items make room as it moves, so the gap shows where it lands; dragging near the list edge scrolls automatically. Moves preserve the item's text and checked state and can be undone. In the detail page, hold the drag handle to reorder while the text remains editable.
 - **List cards**: one card per row on phones and unfolded screens, with the deadline below the name. Swipe left to archive or right to delete, both with undo; hold and drag to reorder. Todo date tags appear below the title, before the reminder, and wrap when space is tight.
@@ -73,7 +73,7 @@ This app is built for it. One stocktake walks every account, you change the thre
 
 ### Diary
 
-- **One plain-text entry per day**, automatically annotated with the lunar date, solar term, public holidays and make-up workdays, the day's weather, and the todos and stocktake you completed.
+- **One plain-text entry per day**, automatically annotated with the lunar date, solar term, public holidays and make-up workdays, the day's weather, and the todos and stocktake you completed. You write straight on the page, with no box around the text.
 - **Nothing gets lost**: a save lands one second after you stop typing, and at least every 4.5 seconds while you type without pausing. A failed save says so and keeps your text in the editor.
 - **Calendar and search**: browse by month, search every entry, and revisit the same day in past years.
 - **Weekly review**: one per week, on the diary's timeline. The page opens with the week in numbers (diary days, daily habits, todos done, change in weight and net worth), then the week's seven entries and the notes taken from them, and the review itself at the bottom, saved as you type. Weight compares the two weeks' average weigh-ins; net worth uses account balances, including inline edits and flows, excluding the opening balance of newly tracked accounts. Each diary day links to its week, Monday and Sunday evening bring a nudge, and the calendar marks every week.
@@ -86,15 +86,19 @@ This app is built for it. One stocktake walks every account, you change the thre
 - **Extract from the diary**: tap the light bulb on a diary day and tick paragraphs, or select some text and pick 提炼到笔记 from the selection menu; save it as a new note (titled after the day unless you type one) or append it to one. The original is untouched; the note remembers where it came from and takes you back there. Weekly reviews extract the same way.
 - **Today's review**: each day one note left alone the longest comes back to the top of the list.
 - **One level of topics**: a row of filters with a fixed button at its end that opens every topic in a grid (searchable once there are many); search every note.
-- **Order and swipes**: long-press a note to drag it (or sort by last updated or created); swipe left to delete, right to pin or move to a topic. Cards are frosted glass, clear or deep (a setting). Pull the list down to start a new note.
+- **Order and swipes**: long-press a note to drag it (or sort by last updated or created); swipe left to delete, right to pin or move to a topic. A section's notes form one pane of glass, rows parted by hairlines, and a dragged note lifts out as a card of its own; the glass is clear or deep (a setting). Pull the list down to start a new note.
 - **Never loses text either**: the diary's autosave and conflict-to-draft rules; unsaved notes are committed before a restore.
+
+<img src="docs/images/32-notes.webp" width="24%" alt="Notes"> <img src="docs/images/33-note.webp" width="24%" alt="A note"> <img src="docs/images/34-extract.webp" width="24%" alt="Extract from the diary"> <img src="docs/images/35-week.webp" width="24%" alt="Weekly review">
 
 ### Shared
 
 - **Local first**: everything lives in SQLite on the phone. The backup is one JSON file written to a folder you pick and overwritten each time.
-- **Versioned backup and restore**: format v7, reads v1–v6. Restore replaces the whole database, copies the current data aside first, and runs behind a write gate so an in-flight old operation can't land in the restored data.
+- **Versioned backup and restore**: format v13, reads v1–v12. Restore replaces the whole database, copies the current data aside first, and runs behind a write gate so an in-flight old operation can't land in the restored data.
 - **Networking is optional and one switch away**: turn it off and the app makes no request at all — holidays come from built-in data and no weather is shown.
-- **Ink green, mineral neutrals and champagne accents**, with dark mode, system theme, adjustable up/down colours and a two-pane layout on foldables. Clear and deep card styles use quieter shadows and bounded motion. Amounts show their actual value immediately, then transition briefly when updated.
+- **Glass throughout**: every page sits on a few fields of colour that bloom in as it opens; cards, chips and buttons are translucent panes with a lit rim, and the tab bar is frosted glass floating over the pages. The net worth card is warm glass, amber, coral and persimmon drifting slowly under it and a spark of light running round its edge. The glass is clear or deep (a setting).
+- **Motion**: cards arrive one after another and tilt toward a holding finger, a ticked box spreads a ring of the theme colour, the net worth rolls up from zero as the overview opens, pages rise in from the right, and the tab bar's highlight glides with the pager.
+- **Ink green, mineral neutrals and champagne accents**, with dark mode, system theme, adjustable up/down colours and a two-pane layout on foldables.
 - **A clearer asset overview**: separate net worth, allocation and account details, with less repeated information and adaptive layouts for narrow screens, large text and large amounts.
 - **In-app updates**: Settings › 应用更新 downloads the latest GitHub release, checks its signature and hands it to the system installer, keeping your data; checks once a day by default, can be turned off.
 - **Launcher shortcuts** straight to stocktake, quick capture and the diary.
@@ -176,7 +180,7 @@ scripts/dev-test.sh --accept   # after an intended UI change: what this run drew
 |---|---|
 | Language / UI | Kotlin 2.4, Jetpack Compose, Material 3 |
 | Architecture | MVVM with `StateFlow`, a hand-written `AppContainer` (no DI framework) |
-| Storage | Room, with exported schemas committed and explicit 1 → 2 → 3 migrations |
+| Storage | Room, with exported schemas committed and explicit migrations 1 → 2 → … → 12 |
 | Background | WorkManager, AlarmManager, a foreground service |
 | Home screen | Jetpack Glance widgets |
 | Charts | Hand-drawn on Canvas, no chart library |
@@ -203,14 +207,14 @@ The rule is **calculation out of the UI**: every number on screen comes from a p
 | `domain/health/` | BMI, body-fat grades, body type, health trend and moving average |
 | `domain/todo/` | View membership and ordering, recurrence, reminder state, invariants |
 | `data/WriteGate.kt` | The read-write gate and the data epoch |
-| `data/BackupManager.kt` | JSON export (v6, reads v1–v5), validation, restore coordinator |
+| `data/BackupManager.kt` | JSON export (v13, reads v1–v12), validation, restore coordinator |
 | `domain/calendar/` | Lunar calendar, solar terms, festivals, the official workday table |
 
 ## Roadmap
 
 - [x] Asset overview, stocktake, net worth trend, investment flows
 - [x] Todos, diary, daily habits, trash
-- [x] Backup / restore (v6), reminders, widgets
+- [x] Backup / restore, reminders, widgets
 - [x] Health as an asset (weight, body fat, BMI), cash at hand
 - [x] Food energy log (label conversion, daily deficit)
 - [x] Notes: one level of topics, extracted from the diary, traced back to their day, searchable
