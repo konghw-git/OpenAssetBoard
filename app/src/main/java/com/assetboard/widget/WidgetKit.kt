@@ -6,6 +6,7 @@ import androidx.core.net.toUri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -16,6 +17,7 @@ import androidx.glance.ImageProvider
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
@@ -87,6 +89,16 @@ internal object WColors {
 }
 
 // ------------------------------------------------------------ fitting a cell
+
+/**
+ * The sizes a widget is laid out for, in dp. Each is composed, and the launcher shows the one
+ * that best fits the size it really draws (on Android 12 and later it measures its own view),
+ * so every layout fills its card and is sized for no more room than it has. Exact sizes took
+ * the launcher's report instead, and a vivo launcher reported about two thirds of the width it
+ * drew a 4×2 widget at: the countdown's card filled two thirds of it. At most 16 (RemoteViews
+ * takes no more), each one travelling in the same parcel.
+ */
+internal fun responsive(vararg sizes: Pair<Int, Int>) = SizeMode.Responsive(sizes.map { (w, h) -> DpSize(w.dp, h.dp) }.toSet())
 
 /**
  * The system's font scale. Text in sp grows with it and a widget's cell does not, so a layout

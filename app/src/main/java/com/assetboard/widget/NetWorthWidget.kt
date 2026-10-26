@@ -27,7 +27,6 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.LinearProgressIndicator
-import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
@@ -61,7 +60,10 @@ import kotlin.math.sqrt
  * make it up. The eye hides every amount, here and in the app alike; 盘点 starts one.
  */
 class NetWorthWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Exact
+    override val sizeMode = responsive(
+        110 to 110, 160 to 160, 160 to 300, 250 to 110, 250 to 160, 250 to 210, 250 to 260, 250 to 320,
+        290 to 110, 290 to 160, 290 to 210, 290 to 260, 290 to 320, 420 to 200, 420 to 320,
+    )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = context.container
@@ -219,7 +221,7 @@ internal fun AssetContent(b: Board, hide: Boolean, upIsRed: Boolean) {
                 val sparkW = if (wide && chartable) minOf(innerW * 0.36f, 170.dp) else 0.dp
                 val fig = figure(b.netWorth, hide, innerW - yen - (if (sparkW > 0.dp) sparkW + 8.dp else 0.dp), rest, if (wide) 30f else 26f, fs)
                 val left = rest - lineDp(fig.second, fs, latin = true)
-                val rows = if (wide) ((left - 10.dp) / rowH).toInt().coerceIn(0, minOf(4, b.groups.size)) else 0
+                val rows = ((left - 10.dp) / rowH).toInt().coerceIn(0, minOf(4, b.groups.size))
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                     Column(GlanceModifier.defaultWeight()) { Header(b, hide, upIsRed, fig, showChange, wide) }
                     if (sparkW > 0.dp) {
@@ -356,10 +358,11 @@ private fun Groups(b: Board, rows: Int, wide: Boolean, fs: Float, amount: (Strin
 }
 
 /**
- * The net worth line as a white picture the widget tints: a line over a fill fading down, and a
- * dot on today. White, so one picture serves light and dark. Kept under 900 px a side, scaled
- * down whole so it stretches back without distortion: every bitmap crosses to the launcher in a
- * parcel. The curve is monotone between points, so a jump does not overshoot into a hook.
+ * The net worth line as a mask the widget tints: a line over a fill fading down, and a dot on
+ * today. Only alpha, so one picture serves light and dark at a quarter of the bytes: each of the
+ * widget's sizes carries its own, all in one parcel under the launcher's bitmap budget. Kept
+ * under 900 px a side, scaled down whole so it stretches back without distortion. The curve is
+ * monotone between points, so a jump does not overshoot into a hook.
  */
 internal fun sparkline(context: Context, values: List<Long>, width: Dp, height: Dp): Bitmap {
     val wDp = width.value.coerceAtLeast(1f)
@@ -367,7 +370,7 @@ internal fun sparkline(context: Context, values: List<Long>, width: Dp, height: 
     val density = minOf(context.resources.displayMetrics.density, 900f / wDp, 900f / hDp)
     val w = (wDp * density).toInt().coerceAtLeast(2)
     val h = (hDp * density).toInt().coerceAtLeast(2)
-    val bmp = createBitmap(w, h)
+    val bmp = createBitmap(w, h, Bitmap.Config.ALPHA_8)
     val c = Canvas(bmp)
     val min = values.min()
     val max = values.max()

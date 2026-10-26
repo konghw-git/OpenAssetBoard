@@ -17,7 +17,6 @@ import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
@@ -51,7 +50,10 @@ import kotlin.math.abs
  * what it is given. Any of them opens for editing over the home screen.
  */
 class CountdownWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Exact
+    override val sizeMode = responsive(
+        110 to 110, 160 to 160, 160 to 220, 160 to 300, 250 to 110, 250 to 160, 250 to 220, 250 to 300,
+        290 to 160, 290 to 220, 290 to 300, 420 to 200, 420 to 300, 420 to 400,
+    )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val repo = context.container.countdowns
@@ -82,7 +84,8 @@ internal fun CountdownContent(items: List<Countdown>) {
         when {
             // Beside the list: the head rounded on the outer corner only.
             rest.isNotEmpty() && size.width >= 250.dp -> Row(GlanceModifier.fillMaxSize()) {
-                Hero(states.first(), today, (size.width * 0.42f).coerceIn(140.dp, 210.dp), size.height, R.drawable.widget_band_flame_start, add = null)
+                val heroW = (size.width * 0.42f).coerceIn(140.dp, 210.dp)
+                Hero(states.first(), today, heroW, size.height, R.drawable.widget_band_flame_start, add = null, GlanceModifier.width(heroW).fillMaxHeight())
                 Column(GlanceModifier.defaultWeight().fillMaxHeight().padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 6.dp)) {
                     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(GlanceModifier.defaultWeight().clickable(sheetAction(context, WidgetSheetActivity.COUNTDOWN_LIST))) {
@@ -97,10 +100,11 @@ internal fun CountdownContent(items: List<Countdown>) {
             }
             // Over the list, when tall and narrow.
             rest.isNotEmpty() && size.height >= 290.dp -> Column(GlanceModifier.fillMaxSize()) {
-                Hero(states.first(), today, size.width, (size.height * 0.5f).coerceIn(150.dp, 230.dp), R.drawable.widget_band_flame, add)
+                val heroH = (size.height * 0.5f).coerceIn(150.dp, 230.dp)
+                Hero(states.first(), today, size.width, heroH, R.drawable.widget_band_flame, add, GlanceModifier.fillMaxWidth().height(heroH))
                 Column(GlanceModifier.fillMaxWidth().defaultWeight().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 6.dp)) { Rows(rest, today) }
             }
-            else -> Hero(states.firstOrNull(), today, size.width, size.height, R.drawable.widget_band_flame, add.takeIf { size.width >= 160.dp })
+            else -> Hero(states.firstOrNull(), today, size.width, size.height, R.drawable.widget_band_flame, add.takeIf { size.width >= 160.dp }, GlanceModifier.fillMaxSize())
         }
     }
 }
@@ -108,18 +112,22 @@ internal fun CountdownContent(items: List<Countdown>) {
 @Composable
 private fun Rows(rest: List<CountdownState>, today: LocalDate) {
     LazyColumn(GlanceModifier.fillMaxSize()) {
-        items(rest.take(30), itemId = { it.countdown.id.hashCode().toLong() and 0x7FFFFFFFL }) { s -> CountdownRow(s, today) }
+        items(rest.take(20), itemId = { it.countdown.id.hashCode().toLong() and 0x7FFFFFFFL }) { s -> CountdownRow(s, today) }
     }
 }
 
 /**
- * The card, [width] by [height]: the title in a coloured head (with + when [add] is given), how
- * many days large, the date under it. The count is sized to the room left by the head and the
- * date at the system's font scale, so a long count or a large font shrinks it rather than cutting
- * it short.
+ * The card: the title in a coloured head (with + when [add] is given), how many days large, the
+ * date under it. The count is sized to the room left by the head and the date at the system's
+ * font scale, so a long count or a large font shrinks it rather than cutting it short.
+ *
+ * [width] and [height] are what the launcher says the card has, and only size the text: the card
+ * itself fills what it is given through [modifier]. Launchers do not all report the size they
+ * draw (a vivo one gave a 4×2 cell about two thirds of its width), and a card set to the
+ * reported size left the rest of the widget empty.
  */
 @Composable
-private fun Hero(s: CountdownState?, today: LocalDate, width: Dp, height: Dp, band: Int, add: Action?) {
+private fun Hero(s: CountdownState?, today: LocalDate, width: Dp, height: Dp, band: Int, add: Action?, modifier: GlanceModifier) {
     val context = LocalContext.current
     val fs = context.fontScale
     val open = if (s == null) sheetAction(context, WidgetSheetActivity.COUNTDOWN_ADD) else sheetAction(context, WidgetSheetActivity.COUNTDOWN_EDIT, s.countdown.id)
@@ -133,7 +141,7 @@ private fun Hero(s: CountdownState?, today: LocalDate, width: Dp, height: Dp, ba
     // The count grows with the card; a large one would look lost at the small card's size.
     val maxSp = if (huge) (area.value * 0.5f).coerceIn(72f, 120f) else if (big) 72f else 56f
     val bodyW = width - 20.dp
-    Column(GlanceModifier.width(width).height(height).clickable(open)) {
+    Column(modifier.clickable(open)) {
         Row(
             GlanceModifier.fillMaxWidth().height(bandH).background(ImageProvider(band)).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,

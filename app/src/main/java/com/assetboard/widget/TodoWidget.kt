@@ -18,7 +18,6 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.LinearProgressIndicator
-import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
@@ -59,7 +58,8 @@ import java.time.LocalDate
  * delete; + opens quick add. The rows follow the database live while the widget is on screen.
  */
 class TodoWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Exact
+    // Its layout only tells compact from not: two sizes, each with the whole list in the parcel.
+    override val sizeMode = responsive(110 to 110, 220 to 110)
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = context.container

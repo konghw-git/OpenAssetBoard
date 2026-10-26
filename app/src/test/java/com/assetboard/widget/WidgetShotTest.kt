@@ -48,21 +48,23 @@ class WidgetShotTest {
 
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
-    private fun shot(name: String, w: Int, h: Int, scale: Float = 1f, content: @Composable () -> Unit) {
+    /** [told] is the size the widget is told it has, when the launcher reports another than it draws. */
+    private fun shot(name: String, w: Int, h: Int, scale: Float = 1f, told: DpSize? = null, content: @Composable () -> Unit) {
         RuntimeEnvironment.setFontScale(scale)
         try {
-            render(w, h, content).captureRoboImage("screenshots/80-widget-$name-${w}x$h${if (scale == 1f) "" else "-f${(scale * 100).toInt()}"}.png", SHOT_OPTIONS)
+            val suffix = (if (scale == 1f) "" else "-f${(scale * 100).toInt()}") + (told?.let { "-told${it.width.value.toInt()}x${it.height.value.toInt()}" } ?: "")
+            render(w, h, told ?: DpSize(w.dp, h.dp), content).captureRoboImage("screenshots/80-widget-$name-${w}x$h$suffix.png", SHOT_OPTIONS)
         } finally {
             RuntimeEnvironment.setFontScale(1f)
         }
     }
 
-    private fun render(w: Int, h: Int, content: @Composable () -> Unit): Bitmap {
+    private fun render(w: Int, h: Int, told: DpSize, content: @Composable () -> Unit): Bitmap {
         val probe = object : GlanceAppWidget() {
             override val sizeMode = SizeMode.Exact
             override suspend fun provideGlance(context: Context, id: GlanceId) = provideContent { content() }
         }
-        val rv = runBlocking { probe.compose(context, size = DpSize(w.dp, h.dp)) }
+        val rv = runBlocking { probe.compose(context, size = told) }
         val d = context.resources.displayMetrics.density
         val pad = (16 * d).toInt()
         val frame = FrameLayout(context)
@@ -89,6 +91,8 @@ class WidgetShotTest {
         shot("countdown", 330, 440) { CountdownContent(one) }
         shot("countdown", 150, 150, scale = 1.3f) { CountdownContent(one) }
         shot("countdown", 355, 165, scale = 1.3f) { CountdownContent(one) }
+        // A vivo launcher told a 4×2 countdown about two thirds of the width it drew.
+        shot("countdown", 370, 165, told = DpSize(245.dp, 150.dp)) { CountdownContent(one) }
     }
 
     private val board = Board(
@@ -110,5 +114,6 @@ class WidgetShotTest {
         shot("asset", 355, 110, scale = 1.3f, content = draw)
         shot("asset", 355, 165, scale = 1.3f, content = draw)
         shot("asset", 355, 260, scale = 1.3f, content = draw)
+        shot("asset", 370, 260, told = DpSize(245.dp, 230.dp), content = draw)
     }
 }

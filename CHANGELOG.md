@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-26
+
+### Fixed
+
+- On launchers that report a widget smaller than they draw it (a vivo one does), the countdown's
+  card filled only part of the widget and left the rest empty, and the asset widget was laid out
+  for a narrower card than it had. Widgets now offer a set of layouts and the launcher shows the
+  one that fits the size it really draws; the countdown's card fills its widget whatever size is
+  reported. With the system font enlarged, a narrow asset widget shows its groups too.
+
 ## [1.0.2] - 2026-10-26
 
 ### Changed

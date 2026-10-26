@@ -15,7 +15,6 @@ import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.GridCells
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -47,7 +46,8 @@ import kotlinx.coroutines.flow.first
  * a list of panes, or two columns of them. Tapping one opens it for editing over the home screen.
  */
 class NoteWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Exact
+    // One sticky note, a list, or two columns.
+    override val sizeMode = responsive(110 to 110, 220 to 130, 380 to 130)
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val notes = context.container.notes
