@@ -268,7 +268,7 @@ fun TodoRow(
             .fillMaxWidth()
             .checklistTarget(todo.id)
             .graphicsLayer { scaleX = 1f + 0.03f * lift; scaleY = scaleX }
-            .glass(TodoCardShape, glass, tint, elevation = if (done) 0.dp else 6.dp + 18.dp * lift)
+            .glass(TodoCardShape, glass, tint, elevation = if (done) 0.dp else 3.dp + 21.dp * lift)
             .clip(TodoCardShape)
             .then(if (highlighted) Modifier.border(1.5.dp, cs.primary, TodoCardShape) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)

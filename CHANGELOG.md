@@ -6,6 +6,31 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-26
+
+### Changed
+
+- The glass of cards in the app is clearer, after the home screen widgets: a lighter body that
+  lets the page's colour through, a crisper even rim, and a shadow that only just lifts it, so
+  todos, checklists, the diary's day card and notes no longer read as white slabs. The page's
+  colour fields are a little stronger to show through it. Deep glass and dark mode keep their
+  density; their rims are a little clearer.
+- Notes are cards of their own again, spaced like the widget's tiles, with the topic and time at
+  the end of the title line instead of a line of their own: a screen shows more of them.
+- The asset widget's line is drawn as a monotone curve, so a jump between stocktakes no longer
+  overshoots into a hook.
+
+### Fixed
+
+- Widgets stretched to other sizes laid out badly. The countdown widget with a single countdown
+  left half of a wide card to "只有这一个" while its number and title were cut short; it now
+  takes the whole card at any size, the count sized to fit, and the list sits beside it when wide
+  or under it when tall. The asset widget spread its parts apart over blank space when tall; it
+  now gives the extra height to its line across the card and adds as many groups as fit, and one
+  cell high it sets the figure, the line and 盘点 side by side.
+- With the system font enlarged, widgets cut their last row off (盘点 among it) and shortened
+  the figure: every layout now budgets its lines at the system's font scale.
+
 ## [1.0.1] - 2026-10-26
 
 ### Added

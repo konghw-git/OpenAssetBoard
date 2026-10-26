@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -413,7 +412,7 @@ fun NotesScreen(
                             val showTopic = filter == NotesViewModel.ALL
                             val selecting = selection.isNotEmpty()
                             val stackColor = cs.primary
-                            val card: @Composable LazyItemScope.(Note, PanelPlace) -> Unit = { n, place ->
+                            val card: @Composable LazyItemScope.(Note) -> Unit = { n ->
                                 val key = noteKey(n.id)
                                 val dragged = reorder.dragging == key
                                 val stack = if (dragged) carried.size else 0
@@ -421,11 +420,12 @@ fun NotesScreen(
                                 Box(
                                     Modifier
                                         .then(if (n in carried) Modifier.foldedAway() else Modifier)
+                                        .padding(bottom = 8.dp)
                                         .zIndex(if (reorder.isLifted(key)) 1f else 0f)
                                         .graphicsLayer { translationY = reorder.translationOf(key) }
                                         .then(if (dragged) Modifier else Modifier.animateItem())
                                         // The notes carried along peek out under the one held.
-                                        .then(if (stack > 0) Modifier.drawBehind { stackUnder(stack, stackColor, side = 0f, top = 0f, corner = 22.dp.toPx()) } else Modifier),
+                                        .then(if (stack > 0) Modifier.drawBehind { stackUnder(stack, stackColor, side = 0f, top = 0f, corner = 20.dp.toPx()) } else Modifier),
                                 ) {
                                     SwipeActionsBox(
                                         key = key,
@@ -454,7 +454,6 @@ fun NotesScreen(
                                             // Where a long press cannot pick the card up, it only selects.
                                             onLongClick = if (custom) null else ({ toggle() }),
                                             selected = n.id in selection,
-                                            place = place,
                                         )
                                     }
                                     if (stack > 0) CarryBadge("${stack + 1} 篇", Modifier.align(Alignment.TopEnd).padding(end = 10.dp).graphicsLayer { translationY = -6.dp.toPx() })
@@ -462,10 +461,10 @@ fun NotesScreen(
                             }
                             if (pinned.isNotEmpty()) {
                                 item(key = "pinnedLabel") { Label("置顶", Modifier.animateItem()) }
-                                itemsIndexed(pinned, key = { _, n -> noteKey(n.id) }) { i, n -> card(n, PanelPlace.of(i, pinned.size)) }
+                                items(pinned, key = { noteKey(it.id) }) { card(it) }
                                 if (rest.isNotEmpty()) item(key = "restLabel") { Label(if (custom) "笔记" else sort.label, Modifier.animateItem().padding(top = 10.dp)) }
                             }
-                            itemsIndexed(rest, key = { _, n -> noteKey(n.id) }) { i, n -> card(n, PanelPlace.of(i, rest.size)) }
+                            items(rest, key = { noteKey(it.id) }) { card(it) }
                         }
                     }
                 }

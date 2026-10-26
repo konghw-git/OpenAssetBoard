@@ -87,13 +87,13 @@ data class GlassStyle(
 // static initialiser came out of R8 with a wide-register move the ART verifier rejects
 // (VerifyError on GlassKt.<clinit>, the app dead before its first frame); plain constants do not.
 private val LightClear = GlassStyle(
-    fill = Color(0x80FFFFFF),       // white 50%
-    sheen = Color(0x66FFFFFF),      // white 40%
+    fill = Color(0x57FFFFFF),       // white 34%
+    sheen = Color(0x3DFFFFFF),      // white 24%
     rimLight = Color(0xFFFFFFFF),
-    rimShade = Color(0x8CFFFFFF),   // white 55%
+    rimShade = Color(0xC7FFFFFF),   // white 78%
     glow = Color(0xF2FFFFFF),       // white 95%
-    edge = Color(0x0F1E3A33),       // ink 6%
-    shadow = Color(0x1C1E3A33),     // ink 11%
+    edge = Color(0x0A1E3A33),       // ink 4%
+    shadow = Color(0x121E3A33),     // ink 7%
     floatFill = Color(0x85FFFFFF),  // white 52%
     blur = 0.dp,
 )
@@ -114,7 +114,7 @@ private val DarkClear = GlassStyle(
     fill = Color(0x13FFFFFF),       // white 7.5%
     sheen = Color(0x17FFFFFF),      // white 9%
     rimLight = Color(0x57FFFFFF),   // white 34%
-    rimShade = Color(0x1FFFFFFF),   // white 12%
+    rimShade = Color(0x2EFFFFFF),   // white 18%
     glow = Color(0x38FFFFFF),       // white 22%
     edge = Color(0x47000000),       // black 28%
     shadow = Color(0x73000000),     // black 45%
@@ -202,8 +202,8 @@ internal fun DrawScope.rim(path: Path, style: GlassStyle) {
         path,
         Brush.linearGradient(
             0f to style.rimLight,
-            0.4f to style.rimLight.copy(alpha = style.rimLight.alpha * 0.25f),
-            0.75f to style.rimShade.copy(alpha = style.rimShade.alpha * 0.4f),
+            0.4f to style.rimLight.copy(alpha = style.rimLight.alpha * 0.6f),
+            0.75f to style.rimShade.copy(alpha = style.rimShade.alpha * 0.75f),
             1f to style.rimShade,
             start = Offset.Zero,
             end = Offset(size.width, size.height),
@@ -253,7 +253,7 @@ private fun DrawScope.drawAmbient(a: Ambient, w: Float, h: Float) {
         r, Offset(x, y),
     )
     val t = a.reveal.value
-    val k = (if (a.dark) 1.15f else 1f) * t
+    val k = (if (a.dark) 1.15f else 1.25f) * t
     val s = 0.82f + 0.18f * t
     orb(a.palette[0], 0.27f * k, w * 0.10f, h * 0.05f, w * 0.80f * s)
     orb(a.palette[2], 0.25f * k, w * 1.00f, h * 0.26f, w * 0.62f * s)

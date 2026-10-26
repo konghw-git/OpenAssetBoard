@@ -86,6 +86,39 @@ internal object WColors {
     fun group(index: Int) = groups[((index % groups.size) + groups.size) % groups.size]
 }
 
+// ------------------------------------------------------------ fitting a cell
+
+/**
+ * The system's font scale. Text in sp grows with it and a widget's cell does not, so a layout
+ * that fills its cell budgets its lines by it: at 1.3 a row that fits at 1.0 pushes the last one
+ * (often the button) out of the bottom, where RemoteViews clips it without a trace.
+ */
+internal val Context.fontScale: Float get() = resources.configuration.fontScale.coerceIn(0.8f, 2f)
+
+/**
+ * How tall a line of [sp] stands, in dp, at [scale]. Chinese sets in a face whose line is near
+ * 1.45 em; a line of only digits ([latin]) in one nearer 1.2.
+ */
+internal fun lineDp(sp: Float, scale: Float, latin: Boolean = false): Dp = (sp * scale * (if (latin) 1.2f else 1.45f)).dp
+
+/** How wide [text] sets at 1 sp, in em: digits about 0.6, separators half that, Chinese a whole one. */
+internal fun ems(text: String): Float = text.sumOf { c ->
+    when {
+        c == ',' || c == '.' || c == ' ' -> 0.3
+        c.code >= 0x2E80 -> 1.0
+        else -> 0.62
+    }
+}.toFloat()
+
+/** The largest size up to [max] sp at which [text] stays within [width] and a line of it within [height]. */
+internal fun fitSp(text: String, width: Dp, height: Dp, max: Float, scale: Float, min: Float = 12f): Float {
+    val latin = text.all { it.code < 0x2E80 }
+    return minOf(max, widthSp(text, width, scale), height.value / (scale * (if (latin) 1.2f else 1.45f))).coerceAtLeast(min)
+}
+
+/** The largest size at which [text] stays within [width]. */
+internal fun widthSp(text: String, width: Dp, scale: Float): Float = width.value / (ems(text).coerceAtLeast(1f) * scale)
+
 /** Text in one call: the widgets use a handful of sizes and weights, nothing else. */
 @Composable
 internal fun WText(

@@ -756,7 +756,7 @@ private fun ListCard(l: TodoList, color: Color, count: Int, selected: Boolean, t
         modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = 1f + 0.03f * lift; scaleY = scaleX }
-            .then(if (selected) Modifier.shadow(8.dp + 12.dp * lift, ListCardShape, spotColor = color) else Modifier.glass(ListCardShape, glass, elevation = 6.dp + 18.dp * lift))
+            .then(if (selected) Modifier.shadow(8.dp + 12.dp * lift, ListCardShape, spotColor = color) else Modifier.glass(ListCardShape, glass, elevation = 3.dp + 21.dp * lift))
             .clip(ListCardShape)
             .background(bg)
             .clickable(onClick = onClick)

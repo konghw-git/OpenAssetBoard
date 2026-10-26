@@ -13,6 +13,7 @@ import androidx.glance.GlanceModifier
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
+import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -23,7 +24,6 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
 import androidx.glance.background
 import androidx.glance.layout.Alignment
-import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
@@ -46,8 +46,9 @@ import kotlin.math.abs
 
 /**
  * Days to the days that matter. The first (the pinned one, else the nearest) is a card with a
- * coloured head and the count large; given room, the rest follow in a list beside it. Any of
- * them opens for editing over the home screen.
+ * coloured head and the count large; given room, the rest follow in a list beside it when wide
+ * or under it when tall. Alone, the card takes the whole widget at any size, the count sized to
+ * what it is given. Any of them opens for editing over the home screen.
  */
 class CountdownWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
@@ -69,94 +70,115 @@ class CountdownWidget : GlanceAppWidget() {
 }
 
 @Composable
-private fun CountdownContent(items: List<Countdown>) {
+internal fun CountdownContent(items: List<Countdown>) {
     val context = LocalContext.current
     val size = LocalSize.current
     val today = TodoViews.localDate(AppClock.millis())
     val states = Countdowns.ordered(items, today)
     val add = sheetAction(context, WidgetSheetActivity.COUNTDOWN_ADD)
-    val wide = size.width >= 250.dp
+    val rest = states.drop(1)
 
     WidgetFrame(background = R.drawable.widget_glass_warm, padding = 0.dp) {
-        if (!wide) {
-            Hero(states.firstOrNull(), today, GlanceModifier.fillMaxSize(), big = size.height >= 150.dp, band = R.drawable.widget_band_flame)
-            return@WidgetFrame
-        }
-        Row(GlanceModifier.fillMaxSize()) {
-            val heroWidth: Dp = minOf(size.width * 0.44f, 180.dp)
-            // Beside the list, the head is rounded on the outer corner only.
-            Hero(states.firstOrNull(), today, GlanceModifier.width(heroWidth).fillMaxHeight(), big = size.height >= 150.dp, band = R.drawable.widget_band_flame_start)
-            Column(GlanceModifier.defaultWeight().fillMaxHeight().padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 6.dp)) {
-                Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(GlanceModifier.defaultWeight().clickable(sheetAction(context, WidgetSheetActivity.COUNTDOWN_LIST))) {
-                        WText("倒数日", 15.sp, WColors.ink, bold = true)
-                        WText(if (states.isEmpty()) "记下重要的日子" else "共 ${states.size} 个", 10.sp, WColors.muted)
+        when {
+            // Beside the list: the head rounded on the outer corner only.
+            rest.isNotEmpty() && size.width >= 250.dp -> Row(GlanceModifier.fillMaxSize()) {
+                Hero(states.first(), today, (size.width * 0.42f).coerceIn(140.dp, 210.dp), size.height, R.drawable.widget_band_flame_start, add = null)
+                Column(GlanceModifier.defaultWeight().fillMaxHeight().padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 6.dp)) {
+                    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(GlanceModifier.defaultWeight().clickable(sheetAction(context, WidgetSheetActivity.COUNTDOWN_LIST))) {
+                            WText("倒数日", 15.sp, WColors.ink, bold = true)
+                            WText("共 ${states.size} 个", 10.sp, WColors.muted)
+                        }
+                        RoundButton(R.drawable.ic_w_add, "添加倒数日", R.drawable.widget_btn_flame, add, size = 28.dp, iconSize = 16.dp)
                     }
-                    RoundButton(R.drawable.ic_w_add, "添加倒数日", R.drawable.widget_btn_flame, add, size = 28.dp, iconSize = 16.dp)
-                }
-                Spacer(GlanceModifier.height(4.dp))
-                val rest = states.drop(1)
-                if (rest.isEmpty()) {
-                    EmptyState(
-                        if (states.isEmpty()) "还没有倒数日" else "只有这一个",
-                        if (states.isEmpty()) "生日、纪念日、考试" else "点 + 再记一个",
-                        GlanceModifier.fillMaxSize(),
-                        onClick = add,
-                    )
-                } else {
-                    LazyColumn(GlanceModifier.fillMaxSize()) {
-                        items(rest.take(30), itemId = { it.countdown.id.hashCode().toLong() and 0x7FFFFFFFL }) { s -> CountdownRow(s, today) }
-                    }
+                    Spacer(GlanceModifier.height(4.dp))
+                    Rows(rest, today)
                 }
             }
+            // Over the list, when tall and narrow.
+            rest.isNotEmpty() && size.height >= 290.dp -> Column(GlanceModifier.fillMaxSize()) {
+                Hero(states.first(), today, size.width, (size.height * 0.5f).coerceIn(150.dp, 230.dp), R.drawable.widget_band_flame, add)
+                Column(GlanceModifier.fillMaxWidth().defaultWeight().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 6.dp)) { Rows(rest, today) }
+            }
+            else -> Hero(states.firstOrNull(), today, size.width, size.height, R.drawable.widget_band_flame, add.takeIf { size.width >= 160.dp })
         }
     }
 }
 
-/** The card: the title in a coloured head, the count large, the date under it. */
 @Composable
-private fun Hero(s: CountdownState?, today: LocalDate, modifier: GlanceModifier, big: Boolean, band: Int) {
+private fun Rows(rest: List<CountdownState>, today: LocalDate) {
+    LazyColumn(GlanceModifier.fillMaxSize()) {
+        items(rest.take(30), itemId = { it.countdown.id.hashCode().toLong() and 0x7FFFFFFFL }) { s -> CountdownRow(s, today) }
+    }
+}
+
+/**
+ * The card, [width] by [height]: the title in a coloured head (with + when [add] is given), how
+ * many days large, the date under it. The count is sized to the room left by the head and the
+ * date at the system's font scale, so a long count or a large font shrinks it rather than cutting
+ * it short.
+ */
+@Composable
+private fun Hero(s: CountdownState?, today: LocalDate, width: Dp, height: Dp, band: Int, add: Action?) {
     val context = LocalContext.current
+    val fs = context.fontScale
     val open = if (s == null) sheetAction(context, WidgetSheetActivity.COUNTDOWN_ADD) else sheetAction(context, WidgetSheetActivity.COUNTDOWN_EDIT, s.countdown.id)
-    Column(modifier.clickable(open)) {
-        Box(
-            GlanceModifier.fillMaxWidth().height(if (big) 38.dp else 32.dp).background(ImageProvider(band)).padding(horizontal = 10.dp),
-            contentAlignment = Alignment.Center,
+    val big = height >= 150.dp
+    val huge = height >= 260.dp && width >= 200.dp
+    val headSp = if (huge) 16f else if (big) 14f else 13f
+    val dateSp = if (huge) 13f else 11f
+    val bandH = maxOf(if (huge) 44.dp else if (big) 38.dp else 32.dp, lineDp(headSp, fs) + 8.dp)
+    val dateH = if (s != null) lineDp(dateSp, fs) + (if (big) 12.dp else 9.dp) else 0.dp
+    val area = height - bandH - dateH - 8.dp
+    // The count grows with the card; a large one would look lost at the small card's size.
+    val maxSp = if (huge) (area.value * 0.5f).coerceIn(72f, 120f) else if (big) 72f else 56f
+    val bodyW = width - 20.dp
+    Column(GlanceModifier.width(width).height(height).clickable(open)) {
+        Row(
+            GlanceModifier.fillMaxWidth().height(bandH).background(ImageProvider(band)).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            val head = when {
-                s == null -> "倒数日"
-                s.isToday -> s.countdown.title + " · 今天"
-                else -> s.countdown.title + " " + s.lead
-            }
-            WText(head, if (big) 14.sp else 13.sp, WColors.white, bold = true, align = TextAlign.Center)
+            // As wide as the button, so the title stays in the middle.
+            if (add != null) Spacer(GlanceModifier.width(26.dp))
+            WText(
+                if (s == null) "倒数日" else s.countdown.title, headSp.sp, WColors.white, bold = true, align = TextAlign.Center,
+                modifier = GlanceModifier.defaultWeight().padding(horizontal = 2.dp),
+            )
+            if (add != null) RoundButton(R.drawable.ic_w_add, "添加倒数日", R.drawable.widget_btn_on_flame, add, size = 26.dp, iconSize = 15.dp)
         }
         Column(
-            GlanceModifier.fillMaxWidth().defaultWeight().padding(horizontal = 8.dp),
+            GlanceModifier.fillMaxWidth().defaultWeight().padding(horizontal = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (s == null) {
-                WText("+", 40.sp, WColors.flame, bold = true)
-                WText("记下第一个日子", 12.sp, WColors.muted)
-            } else if (s.isToday) {
-                WText("🎉", if (big) 44.sp else 34.sp, WColors.ink, align = TextAlign.Center)
-                WText("就是今天", 13.sp, WColors.flame, bold = true)
-            } else {
-                Row(verticalAlignment = Alignment.Bottom) {
+            when {
+                s == null -> {
+                    WText("+", fitSp("+", bodyW, area - lineDp(12f, fs), 48f, fs).sp, WColors.flame, bold = true)
+                    WText("记下第一个日子", 12.sp, WColors.muted)
+                }
+                s.isToday -> {
+                    WText("🎉", fitSp("🎉", bodyW, area - lineDp(13f, fs), 48f, fs).sp, WColors.ink, align = TextAlign.Center)
+                    WText("就是今天", 13.sp, WColors.flame, bold = true)
+                }
+                else -> Row(verticalAlignment = Alignment.Bottom) {
                     val n = abs(s.days).toString()
-                    val numberSize = when {
-                        n.length >= 5 -> if (big) 36.sp else 30.sp
-                        n.length == 4 -> if (big) 44.sp else 36.sp
-                        else -> if (big) 56.sp else 44.sp
-                    }
-                    WText(n, numberSize, if (s.passed) WColors.muted else WColors.ink, bold = true)
-                    WText("天", 13.sp, WColors.muted, modifier = GlanceModifier.padding(start = 3.dp, bottom = if (big) 10.dp else 7.dp))
+                    // 还有 before the count and 天 after it, a fifth of its size within bounds.
+                    val sides = { side: Float -> ((side * fs * 2 + 4) + (side * fs + 3)).dp }
+                    val first = fitSp(n, bodyW - sides(12f), area, maxSp, fs, min = 18f)
+                    val sideSp = (first * 0.2f).coerceIn(12f, 18f)
+                    // A tenth spare: large bold digits run wider than the estimate, and the row
+                    // takes what is over out of 天, which shows as an ellipsis.
+                    val numSp = fitSp(n, (bodyW - sides(sideSp)) * 0.9f, area, maxSp, fs, min = 18f)
+                    val lift = (numSp * 0.17f).dp
+                    WText(s.lead, sideSp.sp, WColors.muted, modifier = GlanceModifier.padding(end = 4.dp, bottom = lift))
+                    WText(n, numSp.sp, if (s.passed) WColors.muted else WColors.ink, bold = true)
+                    WText("天", (sideSp + 1).sp, WColors.muted, modifier = GlanceModifier.padding(start = 3.dp, bottom = lift))
                 }
             }
         }
         if (s != null) {
             WText(
-                Countdowns.subtitle(s, today), 11.sp, WColors.faint, align = TextAlign.Center,
+                Countdowns.subtitle(s, today), dateSp.sp, WColors.faint, align = TextAlign.Center,
                 modifier = GlanceModifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, bottom = if (big) 12.dp else 9.dp),
             )
         }
