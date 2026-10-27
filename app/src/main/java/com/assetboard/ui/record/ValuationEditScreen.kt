@@ -53,6 +53,7 @@ import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.AccountAvatar
 import com.assetboard.ui.components.CalcKeys
 import com.assetboard.ui.components.ConfirmDialog
+import com.assetboard.ui.components.amount
 import com.assetboard.ui.components.DateField
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.ListRow
@@ -73,6 +74,8 @@ class ValuationEditViewModel(
     private val repo = container.repository
 
     var loaded by mutableStateOf(false)
+    /** The account is gone (deleted, or restored away): there is nothing to edit. */
+    var missing by mutableStateOf(false)
     var account by mutableStateOf<Account?>(null)
     var groupColor by mutableStateOf(0)
     var isLiability by mutableStateOf(false)
@@ -85,7 +88,7 @@ class ValuationEditViewModel(
     init {
         viewModelScope.launch {
             val l = repo.ledger.filterNotNull().first()
-            val a = l.accountById[accountId] ?: return@launch
+            val a = l.accountById[accountId] ?: run { missing = true; loaded = true; return@launch }
             account = a
             groupColor = l.groupById[a.groupId]?.colorIndex ?: 0
             isLiability = l.isLiability(a.id)
@@ -152,6 +155,17 @@ fun ValuationEditScreen(accountId: String, valuationId: String?, onBack: () -> U
             )
         },
     ) { padding ->
+        if (vm.loaded && vm.missing) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("账户不存在", style = MaterialTheme.typography.titleMedium)
+                    Text("它可能已被删除，或恢复备份后不在了。", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(onClick = onBack) { Text("返回") }
+                }
+            }
+            return@GlassScaffold
+        }
         if (!vm.loaded || a == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@GlassScaffold
@@ -193,11 +207,11 @@ fun ValuationEditScreen(accountId: String, valuationId: String?, onBack: () -> U
                 val parsed = Money.parse(vm.input)
                 if (implied != null) {
                     Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("此前推算 ${Money.format(implied)}", style = MaterialTheme.typography.bodySmall.merge(NumberStyle), color = cs.onSurfaceVariant)
+                        Text("此前推算 ${amount(Money.format(implied))}", style = MaterialTheme.typography.bodySmall.merge(NumberStyle), color = cs.onSurfaceVariant)
                         if (parsed != null && parsed != implied) {
                             val d = parsed - implied
                             Spacer(Modifier.width(8.dp))
-                            Pill(Money.format(d, signed = true), extra.signed(if (vm.isLiability) -d else d))
+                            Pill(amount(Money.format(d, signed = true)), extra.signed(if (vm.isLiability) -d else d))
                         }
                     }
                 }

@@ -56,13 +56,12 @@ object Bills {
     fun signed(f: MoneyFlow): Long = if (f.kind == FlowKind.INCOME) f.amount else -f.amount
 
     /**
-     * The instant a bill on [date] is recorded at: right now for today; for another day, that day
-     * at [timeOfDay]'s time (the bill's own when it is being edited, otherwise the clock's), so a
-     * back-filled bill neither lands on the day's last second, where a stocktake of that day
-     * sits, nor in the future.
+     * The instant a bill on [date] is recorded at: that day at [timeOfDay]'s time (the bill's own
+     * when it is being edited, otherwise the clock's), so a back-filled bill neither lands on the
+     * day's last second, where a stocktake of that day sits, nor in the future. For today with the
+     * clock's time, that is right now.
      */
     fun at(date: LocalDate, now: Long, timeOfDay: Long = now, zone: ZoneId = ZoneId.systemDefault()): Long {
-        if (date == Instant.ofEpochMilli(now).atZone(zone).toLocalDate()) return now
         val time = Instant.ofEpochMilli(timeOfDay).atZone(zone).toLocalTime()
         return date.atTime(time).atZone(zone).toInstant().toEpochMilli()
     }

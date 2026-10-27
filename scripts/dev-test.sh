@@ -99,7 +99,9 @@ if [ "$mode" = all ]; then
     exit 1
   fi
   # Nothing is deleted first: an unchanged tree's results come back from Gradle's cache.
-  ./gradlew "${args[@]}" testDebugUnitTest -Proborazzi.test.compare=true lintRelease "${filters[@]}" \
+  # Task options (--tests, --rerun) bind to the task just before them, so they follow
+  # testDebugUnitTest; after lintRelease they would silently do nothing to the tests.
+  ./gradlew "${args[@]}" testDebugUnitTest "${filters[@]}" -Proborazzi.test.compare=true lintRelease \
     > /tmp/asset-board-test.log 2>&1 || status=$?
   # The cache brings back the results, not the images drawn (too big to keep): any left here are
   # another run's, so --accept must not take them.

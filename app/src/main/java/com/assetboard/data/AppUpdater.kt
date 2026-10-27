@@ -45,7 +45,12 @@ sealed interface UpdateState {
     data class Downloading(val release: Release, val progress: Float) : UpdateState
     /** [backupFailed] is why the backup before installing did not work; the install waited for the user. */
     data class Ready(val release: Release, val file: File, val backupFailed: String? = null) : UpdateState
-    data class Failed(val message: String, val release: Release? = null) : UpdateState
+    data class Failed(
+        val message: String,
+        val release: Release? = null,
+        /** A package already downloaded and verified: 重试 installs it rather than downloading it again. */
+        val file: File? = null,
+    ) : UpdateState
 }
 
 @Serializable
@@ -189,9 +194,15 @@ class AppUpdater(
     private suspend fun latest(): Release? = withContext(Dispatchers.IO) {
         try {
             fromApi()
-        } catch (e: IOException) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Any failure, not only a network one: a 200 whose JSON is not what we expect
+            // (a proxy's page, a changed API) must fall back to the release page too.
             try {
                 fromPage()
+            } catch (page: CancellationException) {
+                throw page
             } catch (page: Exception) {
                 throw e
             }
@@ -311,6 +322,8 @@ class AppUpdater(
                     if (n < 0) break
                     out.write(buf, 0, n)
                     total += n
+                    // A server that never ends would fill the cache: no APK is this large.
+                    if (total > MAX_APK_BYTES) throw IOException("安装包异常大，已停止下载")
                     val pct = if (size > 0) (total * 100 / size).toInt() else -1
                     if (pct != shown) {
                         shown = pct
@@ -367,7 +380,8 @@ class AppUpdater(
             // main thread, and only while the app is in front.
             withContext(Dispatchers.Main.immediate) {
                 if (!inForeground()) {
-                    _state.value = UpdateState.Failed("备份已完成。回到 app 后再点一次安装", downloading())
+                    // The verified package stays: 重试 installs it, no second download.
+                    _state.value = UpdateState.Failed("备份已完成。回到 app 后再点一次安装", downloading(), file)
                     return@withContext
                 }
                 try {
@@ -378,7 +392,7 @@ class AppUpdater(
                             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK),
                     )
                 } catch (e: Exception) {
-                    _state.value = UpdateState.Failed("无法打开系统安装器：" + (e.message ?: e.javaClass.simpleName), downloading())
+                    _state.value = UpdateState.Failed("无法打开系统安装器：" + (e.message ?: e.javaClass.simpleName), downloading(), file)
                 }
             }
         }
@@ -531,6 +545,7 @@ class AppUpdater(
 
     companion object {
         private const val DIR = "updates"
+        private const val MAX_APK_BYTES = 300L * 1024 * 1024
         private const val KEY_LAST_CHECK = "update_last_check"
         private const val KEY_IGNORED = "update_ignored"
         private const val KEY_MIRROR = "update_mirror"

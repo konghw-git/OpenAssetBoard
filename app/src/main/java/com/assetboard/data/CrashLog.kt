@@ -1,12 +1,15 @@
 package com.assetboard.data
 
 import com.assetboard.domain.AppClock
+import com.assetboard.domain.LedgerException
 import android.app.ActivityManager
 import android.app.ApplicationExitInfo
 import android.content.Context
 import android.os.Build
 import androidx.annotation.RequiresApi
 import com.assetboard.BuildConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
@@ -63,9 +66,10 @@ object CrashLog {
 
     /**
      * Everything 导出诊断 shares: the build, the phone, the settings that bear on reminders and
-     * backups (never any of the user's records), and the log. Written to a file to share.
+     * backups (never any of the user's records), and the log. Written to a file to share, off the
+     * main thread; a cache that cannot be written throws rather than taking the app down.
      */
-    fun diagnostics(context: Context, settings: SettingsStore): File {
+    suspend fun diagnostics(context: Context, settings: SettingsStore): File = withContext(Dispatchers.IO) {
         val info = runCatching { context.packageManager.getPackageInfo(context.packageName, 0) }.getOrNull()
         val text = buildString {
             appendLine("日盈 Gain 诊断信息")
@@ -80,8 +84,9 @@ object CrashLog {
             appendLine("—— 记录 ——")
             append(read(context).ifBlank { "（没有记录）\n" })
         }
-        val dir = File(context.cacheDir, "diagnostics").apply { mkdirs() }
-        return File(dir, "rizing-diagnostics.txt").apply { writeText(text) }
+        val dir = File(context.cacheDir, "diagnostics")
+        if (!dir.isDirectory && !dir.mkdirs()) throw LedgerException("无法创建诊断文件")
+        File(dir, "rizing-diagnostics.txt").apply { writeText(text) }
     }
 
     private fun file(context: Context) = File(context.filesDir, FILE)

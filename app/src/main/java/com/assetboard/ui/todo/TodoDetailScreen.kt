@@ -76,6 +76,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -149,7 +151,7 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
             source = t?.repeatSourceId?.let { d?.todoById?.get(it) },
             loaded = d != null,
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, DetailState(null, emptyList(), emptyList(), emptyList(), null, false))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DetailState(null, emptyList(), emptyList(), emptyList(), null, false))
 
     val events = MutableSharedFlow<UndoEvent>(extraBufferCapacity = 4)
     val confirmRecord = MutableStateFlow(false)
@@ -237,11 +239,26 @@ fun TodoDetailScreen(todoId: String, onBack: () -> Unit, onOpenTodo: (String) ->
     }
 }
 
+/** A view model store that lives exactly as long as this todo's content is composed. */
+@Composable
+private fun rememberDetailOwner(todoId: String): ViewModelStoreOwner {
+    val owner = remember(todoId) {
+        object : ViewModelStoreOwner {
+            override val viewModelStore = ViewModelStore()
+        }
+    }
+    DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
+    return owner
+}
+
 /** The todo's page: title and notes, checklist, schedule, list. [inSheet] drops the back arrow for a close. */
 @Composable
 fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) -> Unit, inSheet: Boolean, modifier: Modifier = Modifier) {
     val container = LocalContainer.current
-    val vm: TodoDetailViewModel = viewModel(key = "todo-$todoId") { TodoDetailViewModel(container, todoId) }
+    // A store of its own, dropped when the page or sheet goes: the home screen's store would
+    // otherwise keep one ViewModel, and its mapping of every todo change, per todo ever opened.
+    val owner = rememberDetailOwner(todoId)
+    val vm: TodoDetailViewModel = viewModel(viewModelStoreOwner = owner) { TodoDetailViewModel(container, todoId) }
     val state by vm.state.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val confirmRecord by vm.confirmRecord.collectAsStateWithLifecycle()
@@ -557,6 +574,11 @@ private fun Checklist(todoId: String, items: List<ChecklistItem>, editable: Bool
                 CheckCircle(item.done, false, onToggle = { if (editable) vm.toggleItem(item.id) })
                 var text by remember(item.id) { mutableStateOf(item.text) }
                 var focused by remember(item.id) { mutableStateOf(false) }
+                // Emptied, the row falls back to the words the database has: a blank item would
+                // read as lost while completing still copied the old text.
+                val commitText = {
+                    if (text.isBlank()) text = item.text else if (text != item.text) vm.editItem(item.id, text)
+                }
                 BasicTextField(
                     value = text,
                     onValueChange = { text = it.replace("\n", "") },
@@ -567,10 +589,10 @@ private fun Checklist(todoId: String, items: List<ChecklistItem>, editable: Bool
                         textDecoration = if (item.done) TextDecoration.LineThrough else null,
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { vm.editItem(item.id, text) }),
+                    keyboardActions = KeyboardActions(onDone = { commitText() }),
                     cursorBrush = SolidColor(cs.primary),
                     modifier = Modifier.weight(1f).onFocusChanged { f ->
-                        if (focused && !f.isFocused && text != item.text && text.isNotBlank()) vm.editItem(item.id, text)
+                        if (focused && !f.isFocused) commitText()
                         focused = f.isFocused
                     },
                 )

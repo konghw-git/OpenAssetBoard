@@ -79,6 +79,7 @@ import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.MoneyText
 import com.assetboard.ui.components.Pill
 import com.assetboard.ui.components.SectionCard
+import com.assetboard.ui.components.amount
 import com.assetboard.ui.theme.AppTheme
 import com.assetboard.ui.theme.NumberStyle
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -280,7 +281,7 @@ fun StocktakeScreen(snapshotId: String?, onBack: () -> Unit) {
             if (impact.isEmpty()) append("\n\n各账户当前余额不受影响。")
             else {
                 append("\n\n以下账户的当前余额会变化：")
-                impact.forEach { append("\n· ${it.name}：${Money.format(it.before)} → ${Money.format(it.after)}") }
+                impact.forEach { append("\n· ${it.name}：${amount(Money.format(it.before))} → ${amount(Money.format(it.after))}") }
             }
         }
         ConfirmDialog(
@@ -312,13 +313,13 @@ private fun SummaryCard(ui: StocktakeUi, onPickDate: () -> Unit) {
         MoneyText(ui.netAfter, style = MaterialTheme.typography.headlineMedium)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
             Text(
-                if (ui.editing) "原 " + Money.format(ui.netBefore) else "盘点前 " + Money.format(ui.netBefore),
+                if (ui.editing) "原 " + amount(Money.format(ui.netBefore)) else "盘点前 " + amount(Money.format(ui.netBefore)),
                 style = MaterialTheme.typography.bodySmall.merge(NumberStyle),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (diff != 0L) {
                 Spacer(Modifier.width(8.dp))
-                Pill(Money.format(diff, signed = true), extra.signed(diff))
+                Pill(amount(Money.format(diff, signed = true)), extra.signed(diff))
             }
         }
         if (!ui.editing && Dates.daysBetween(ui.at, AppClock.millis()) > 0) {
@@ -372,7 +373,7 @@ private fun StockRowItem(r: StockRow, onInput: (String, String) -> Unit) {
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(r.account.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val sub = if (r.changed) "原 " + Money.format(r.original) else r.account.purpose.orEmpty()
+            val sub = if (r.changed) "原 " + amount(Money.format(r.original)) else r.account.purpose.orEmpty()
             if (sub.isNotEmpty() || !r.included) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     sub,
@@ -407,7 +408,7 @@ private fun StockRowItem(r: StockRow, onInput: (String, String) -> Unit) {
             if (r.changed) {
                 val d = r.stored(r.parsed!!) - r.stored(r.original)
                 Text(
-                    Money.format(d, signed = true),
+                    amount(Money.format(d, signed = true)),
                     style = MaterialTheme.typography.labelMedium.merge(NumberStyle),
                     color = extra.signed(d),
                     modifier = Modifier.padding(top = 3.dp, end = 4.dp),

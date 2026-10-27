@@ -160,7 +160,7 @@ open class ActionViewModel(container: AppContainer) : ViewModel() {
     /** viewModelScope plus the bound epoch; launch every write from here. */
     protected fun launchBound(block: suspend CoroutineScope.() -> Unit) = viewModelScope.launch(epoch, block = block)
 
-    protected fun action(onSuccess: () -> Unit = {}, block: suspend () -> Unit) {
+    protected fun action(onSuccess: () -> Unit = {}, onFailure: () -> Unit = {}, block: suspend () -> Unit) {
         viewModelScope.launch(epoch) {
             try {
                 block()
@@ -168,8 +168,10 @@ open class ActionViewModel(container: AppContainer) : ViewModel() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: LedgerException) {
+                onFailure()
                 error.value = e.message
             } catch (e: Exception) {
+                onFailure()
                 error.value = e.message ?: e.toString()
             }
         }

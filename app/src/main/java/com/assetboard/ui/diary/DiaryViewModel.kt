@@ -21,13 +21,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import com.assetboard.data.Weeks
 import com.assetboard.data.WeeklyReview
@@ -134,10 +137,20 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val extracted = MutableSharedFlow<Extracted>(extraBufferCapacity = 2)
 
-    /** Days in a row with text, ending today (or yesterday while today is still empty). */
-    val streak: StateFlow<Int> = diary.observeDatesWithText(AppClock.today().minusDays(400), AppClock.today())
-        .map { dates -> DiaryStreak.of(dates.toSet(), AppClock.today()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    /**
+     * Days in a row with text, ending today (or yesterday while today is still empty). The day is
+     * re-read while the streak is on screen: fixed at construction, it froze when the tab stayed
+     * open across midnight, and counted the next day against a query that did not include it.
+     */
+    val streak: StateFlow<Int> = flow {
+        while (true) {
+            emit(AppClock.today())
+            delay(60_000)
+        }
+    }.distinctUntilChanged().flatMapLatest { today ->
+        diary.observeDatesWithText(today.minusDays(400), today)
+            .map { dates -> DiaryStreak.of(dates.toSet(), today) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {
         open(AppClock.today())

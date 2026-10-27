@@ -20,8 +20,9 @@ class MaintenanceWorker(context: Context, params: WorkerParameters) : CoroutineW
         val lastCheck = settings.long(KEY_HOLIDAY_CHECK)
         val weekly = AppClock.millis() - lastCheck > 6 * 24 * 3600_000L
         if (settings.holidayUpdateAllowed && weekly && (today.monthValue >= 11 || !container.holidays.table.value.hasYear(today.year))) {
-            runCatching { container.holidays.updateOnline(today) }
-            settings.putLong(KEY_HOLIDAY_CHECK, AppClock.millis())
+            // Only a download that landed starts the six-day wait; a failure is retried tomorrow.
+            val updated = runCatching { container.holidays.updateOnline(today) }.getOrDefault(false)
+            if (updated) settings.putLong(KEY_HOLIDAY_CHECK, AppClock.millis())
         }
         runCatching { container.reminders.syncAll(fromBoot = false) }
         return Result.success()

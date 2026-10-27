@@ -117,6 +117,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
@@ -273,6 +274,10 @@ fun TodoHomeScreen(
     var listDialog by remember { mutableStateOf<String?>(null) }
     var sectionDialog by remember { mutableStateOf<Pair<String, String>?>(null) } // (section id or "", name)
     val listState = rememberLazyListState()
+    // The unfolded layout's side column, where the dial and the field are then.
+    val sideState = rememberLazyListState()
+    // Which of the two the screen is showing; the side column is the one to scroll on a wide screen.
+    val sideColumn = remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val backdrop = rememberBackdrop()
     val ambient = rememberAmbient()
@@ -287,8 +292,9 @@ fun TodoHomeScreen(
     fun openComposer() {
         editingId = null
         composer = true
-        // Bring the dial back so the field sits just under it.
-        if (listState.firstVisibleItemIndex > DIAL_ITEM) scope.launch { listState.animateScrollToItem(DIAL_ITEM) }
+        // Bring the dial back so the field sits just under it (in the side column on a wide screen).
+        val st = if (sideColumn.value) sideState else listState
+        if (st.firstVisibleItemIndex > DIAL_ITEM) scope.launch { st.animateScrollToItem(DIAL_ITEM) }
     }
     fun closeComposer() {
         focusManager.clearFocus()
@@ -396,11 +402,14 @@ fun TodoHomeScreen(
         onMove = vm::moveChecklist,
     )
     var listOrder by remember(shownLists) { mutableStateOf(shownLists) }
-    // The unfolded layout's side column, where the lists are then.
-    val sideState = rememberLazyListState()
     val todayRows = remember(d, today) { d?.let { TodoViews.today(it.todos, today) }.orEmpty() }
     val doneToday = todayRows.count { it.done }
-    val dialGone by remember { derivedStateOf { listState.firstVisibleItemIndex > DIAL_ITEM } }
+    val dialGone by remember {
+        derivedStateOf {
+            val st = if (sideColumn.value) sideState else listState
+            st.firstVisibleItemIndex > DIAL_ITEM
+        }
+    }
     // Pulling the list down past its top is the hub's +: it opens the field under the dial. Not
     // while the field is already open (the list just stops), nor while selecting or dragging.
     val pull = rememberPullToCreate(enabled = !composer && selection.isEmpty() && reorder.dragging == null && checklistDrag.item == null) {
@@ -498,6 +507,7 @@ fun TodoHomeScreen(
         CompositionLocalProvider(LocalAmbient provides ambient, LocalChecklistDrag provides checklistDrag) {
         BoxWithConstraints(Modifier.fillMaxSize().checklistDragHost(checklistDrag)) {
             val wide = maxWidth >= 600.dp
+            SideEffect { sideColumn.value = wide }
             val listReorder = rememberReorderState(
                 if (wide) sideState else listState,
                 onMove = { from, to ->

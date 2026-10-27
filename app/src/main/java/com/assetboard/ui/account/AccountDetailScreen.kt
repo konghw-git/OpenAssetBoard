@@ -82,7 +82,10 @@ import com.assetboard.ui.components.ChartRange
 import com.assetboard.ui.components.ChartSeries
 import com.assetboard.ui.components.Dot
 import com.assetboard.ui.components.LineChart
+import com.assetboard.ui.components.LocalHideAmounts
+import com.assetboard.ui.components.MASKED
 import com.assetboard.ui.components.MoneyText
+import com.assetboard.ui.components.amount
 import com.assetboard.ui.components.Pill
 import com.assetboard.ui.components.RangeChips
 import com.assetboard.ui.components.RowDivider
@@ -125,9 +128,11 @@ data class AccountDetail(
     val timeline: List<TimelineEntry>,
 )
 
-fun buildDetail(l: LedgerData, accountId: String): AccountDetail? {
+fun buildDetail(l: LedgerData, accountId: String, hideAmounts: Boolean = false): AccountDetail? {
     val a = l.accountById[accountId] ?: return null
     val isLiab = l.isLiability(a.id)
+    // The subtitles are plain sentences, so their amounts are masked here rather than by MoneyText.
+    val money: (Long) -> String = { if (hideAmounts) MASKED else Money.format(it) }
     val snapshotOfValuation = l.snapshotItems.associate { it.valuationId to it.snapshotId }
     val valuationEntries = l.valuationsOf(a.id).map { v ->
         val implied = l.impliedBefore(v)
@@ -144,7 +149,7 @@ fun buildDetail(l: LedgerData, accountId: String): AccountDetail? {
             else -> if (a.isInvestment) "更新市值" else if (isLiab) "更新欠款" else "更新余额"
         }
         val subtitle = buildList {
-            if (baseline && a.isInvestment && a.baselineCost != null) add("成本 " + Money.format(l.toDisplay(a.id, a.baselineCost)))
+            if (baseline && a.isInvestment && a.baselineCost != null) add("成本 " + money(l.toDisplay(a.id, a.baselineCost)))
             v.note?.takeIf { it.isNotBlank() && it != "期初" }?.let(::add)
         }.joinToString(" · ").ifEmpty { null }
         TimelineEntry(
@@ -169,7 +174,7 @@ fun buildDetail(l: LedgerData, accountId: String): AccountDetail? {
         val other = (if (outgoing) f.toAccountId else f.fromAccountId)?.let { l.accountById[it]?.name } ?: "外部"
         val fee = if (f.fee > 0) {
             val bearer = if ((f.feeOn.name == "FROM") == outgoing) "本账户承担" else "对方承担"
-            "手续费 ${Money.format(f.fee)}（$bearer）"
+            "手续费 ${money(f.fee)}（$bearer）"
         } else null
         TimelineEntry(
             key = "f" + f.id, at = f.at, type = EntryType.FLOW,
@@ -233,7 +238,8 @@ fun AccountDetailScreen(
     onOpenStocktake: (String) -> Unit,
 ) {
     val ledger by LocalContainer.current.repository.ledger.collectAsStateWithLifecycle()
-    val detail = remember(ledger, accountId) { ledger?.let { buildDetail(it, accountId) } }
+    val hide = LocalHideAmounts.current
+    val detail = remember(ledger, accountId, hide) { ledger?.let { buildDetail(it, accountId, hide) } }
     val cs = MaterialTheme.colorScheme
     val billVm = billViewModel("account")
     val snackbar = remember { SnackbarHostState() }
@@ -292,6 +298,8 @@ fun AccountDetailScreen(
                                 e.type == EntryType.BASELINE -> onEdit()
                                 e.bill -> billEditing = e.flowId
                                 e.flowId != null -> onOpenFlow(e.flowId)
+                                // A stocktake entry is edited in that stocktake; its own page says so.
+                                e.type == EntryType.STOCKTAKE && e.snapshotId != null -> onOpenStocktake(e.snapshotId)
                                 e.valuationId != null -> onOpenValuation(e.valuationId)
                             }
                         }
@@ -473,7 +481,7 @@ private fun TimelineRow(e: TimelineEntry, onClick: () -> Unit) {
                 MoneyText(e.amount, fontWeight = FontWeight.SemiBold)
                 if (e.delta != null && e.delta != 0L) {
                     Text(
-                        Money.format(e.delta, signed = true),
+                        amount(Money.format(e.delta, signed = true)),
                         style = MaterialTheme.typography.labelMedium.merge(NumberStyle),
                         color = e.netEffect?.let { extra.signed(it) } ?: Color.Unspecified,
                     )

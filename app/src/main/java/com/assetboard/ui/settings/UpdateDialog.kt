@@ -101,7 +101,14 @@ fun UpdatePrompt() {
                 } else {
                     TextButton(onClick = { updater.install(s.file) }) { Text(if (updater.canInstall()) "安装" else "去允许安装") }
                 }
-                is UpdateState.Failed -> TextButton(onClick = { s.release?.let(updater::download) ?: updater.checkNow() }) { Text("重试") }
+                is UpdateState.Failed -> TextButton(onClick = {
+                    // A package that was already downloaded is installed as it is, not fetched again.
+                    when {
+                        s.file != null -> updater.install(s.file, skipBackup = true)
+                        s.release != null -> updater.download(s.release)
+                        else -> updater.checkNow()
+                    }
+                }) { Text("重试") }
                 UpdateState.Checking -> {}
                 else -> TextButton(onClick = updater::dismiss) { Text("好") }
             }

@@ -58,8 +58,10 @@ class BillsTest {
         val now = at("2026-10-25", "18:30")
         assertEquals(now, Bills.at(LocalDate.of(2026, 10, 25), now, zone = zone))
         assertEquals(at("2026-10-23", "18:30"), Bills.at(LocalDate.of(2026, 10, 23), now, zone = zone))
-        // An edited bill moved to another day keeps its own time of day.
+        // An edited bill moved to another day keeps its own time of day — today included, where
+        // it is not reset to the moment the sheet happened to be open.
         assertEquals(at("2026-10-22", "08:15"), Bills.at(LocalDate.of(2026, 10, 22), now, timeOfDay = at("2026-10-24", "08:15"), zone = zone))
+        assertEquals(at("2026-10-25", "08:15"), Bills.at(LocalDate.of(2026, 10, 25), now, timeOfDay = at("2026-10-24", "08:15"), zone = zone))
     }
 
     @Test fun aMonthAddsUpByCategoryAndByDay() {

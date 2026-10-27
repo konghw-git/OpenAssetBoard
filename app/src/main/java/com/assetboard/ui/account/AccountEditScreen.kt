@@ -69,6 +69,7 @@ import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.ListPickerDialog
 import com.assetboard.ui.components.ListRow
 import com.assetboard.ui.components.RowDivider
+import com.assetboard.ui.components.amount
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
 import com.assetboard.ui.components.SelectField
@@ -87,6 +88,9 @@ class AccountEditViewModel(
 
     var loaded by mutableStateOf(false)
     var original by mutableStateOf<Account?>(null)
+
+    /** The id was given but no such account exists any more (deleted or restored away). */
+    var missing by mutableStateOf(false)
     var groups by mutableStateOf<List<AccountGroup>>(emptyList())
     var canDelete by mutableStateOf(false)
     var balanceDisplay by mutableStateOf(0L)
@@ -128,6 +132,8 @@ class AccountEditViewModel(
                 balanceDisplay = l.toDisplay(a.id, l.currentBalance(a.id))
                 baselineDisplay = l.toDisplay(a.id, l.valuationsOf(a.id).firstOrNull { it.at == a.baselineAt }?.value ?: 0L)
                 canDelete = repo.canDelete(a.id)
+            } else if (accountId != null) {
+                missing = true
             } else if (groupId == null || groups.none { it.id == groupId }) {
                 groupId = groups.firstOrNull()?.id
             }
@@ -169,10 +175,12 @@ class AccountEditViewModel(
             action(onSaved) { repo.updateAccount(id, draft()) }
             return
         }
-        action {
+        // The gate is set before the write starts, so a second tap cannot slip in; a failure
+        // (a bad amount, a rejected write) has to release it or 保存 stays disabled for good.
+        saving = true
+        action(onFailure = { saving = false }) {
             val base = Money.parse(baselineInput) ?: throw LedgerException("期初金额格式不对")
             val cost = costInput.takeIf { it.isNotBlank() }?.let { Money.parse(it) ?: throw LedgerException("期初成本格式不对") }
-            saving = true
             val newId = repo.createAccount(draft(), baselineAt, base, cost)
             onCreated(newId)
         }
@@ -237,6 +245,17 @@ fun AccountEditScreen(
     ) { padding ->
         if (!vm.loaded) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            return@GlassScaffold
+        }
+        if (vm.missing) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("账户不存在", style = MaterialTheme.typography.titleMedium)
+                    Text("它可能已被删除，或恢复备份后不在了。", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(onClick = onBack) { Text("返回") }
+                }
+            }
             return@GlassScaffold
         }
         Column(
@@ -328,8 +347,8 @@ fun AccountEditScreen(
                     ListRow(
                         title = Dates.dateTime(a.baselineAt),
                         subtitle = buildString {
-                            append((if (vm.isLiability) "欠款 " else "余额 ") + Money.format(vm.baselineDisplay))
-                            if (a.isInvestment && a.baselineCost != null) append(" · 成本 " + Money.format(if (vm.isLiability) -a.baselineCost else a.baselineCost))
+                            append((if (vm.isLiability) "欠款 " else "余额 ") + amount(Money.format(vm.baselineDisplay)))
+                            if (a.isInvestment && a.baselineCost != null) append(" · 成本 " + amount(Money.format(if (vm.isLiability) -a.baselineCost else a.baselineCost)))
                         },
                         trailing = { TextButton(onClick = { baselineDialog = true }) { Text("修改") } },
                     )
@@ -440,7 +459,7 @@ fun AccountEditScreen(
             title = { Text("停用账户？") },
             text = {
                 Text(
-                    "余额仍为 ${Money.format(vm.balanceDisplay)}，停用后不计入净资产。" +
+                    "余额仍为 ${amount(Money.format(vm.balanceDisplay))}，停用后不计入净资产。" +
                         "\n\n如果这笔钱已经转走，请先记一笔转出，否则净资产会凭空少掉这笔钱。",
                 )
             },

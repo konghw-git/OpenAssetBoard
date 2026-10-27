@@ -6,6 +6,66 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-27
+
+### Fixed
+
+- A new account whose save was rejected (an empty name, a bad opening amount) left 保存 disabled
+  for good; the gate opens again after a failure.
+- 测试强提醒 in the reminder guide rang nothing: the test now rings without naming a todo.
+- Dissolving several checklists at once could give two rows the same place in the list; each
+  group now reads the order it really has and takes a place of its own.
+- The restore confirmation named only some of what an older backup clears: custom habits (also
+  when the file keeps the built-in five), countdowns and 记账 records are called out, along with
+  the fields older formats cannot carry.
+- Hidden amounts still showed in sentences written outside the money components: an account's
+  cost and fee, a stocktake's before and difference, the overview's undo bar, the bill list's
+  delete bar, the valuation page's implied figure and the diary's stocktake tile.
+- A restore whose screen went away mid-write could leave the app bound to the old data epoch,
+  refusing every save until a restart: the commit and the epoch hand-over are no longer
+  cancellable.
+- A strong reminder re-posted after a reboot lost its "unhandled" note when its notification
+  timed out first; the note no longer depends on the ringing notification still being up.
+- Two quick taps on 保存 in 记一笔 or 记账 could record the same flow or bill twice; both wait for
+  the write now.
+- Every todo opened in the detail sheet kept a view model, and its mapping of every todo change,
+  until the tab was destroyed; each now has a store that goes with the sheet.
+- The diary's 连续记录 froze when the tab stayed open across midnight; the day is re-read while
+  the streak is on screen.
+- 导出诊断 wrote its file on the main thread and crashed if the cache could not be written; it now
+  runs off the main thread and reports the failure.
+- Retrying an update whose install had to wait for the foreground downloaded the package again;
+  重试 installs the verified one it already has.
+- Opening an account or a valuation whose account no longer exists crashed or spun forever; both
+  pages now say 账户不存在.
+- The bill categories' bars stayed at their minimum width after switching 支出/收入 when a share
+  happened to match the old one.
+- A stocktake row in an account's timeline opened the valuation page, which says to edit it in
+  the stocktake; it now opens that stocktake.
+- Moving a bill to today reset its time of day; it keeps its time now, as it does for any other
+  day.
+- Emptying a checklist item's text dropped the edit silently while completing still copied the
+  old words; the row falls back to the saved text.
+- A meal with only sodium recorded hid the whole nutrients card; sodium alone shows it now.
+- On a wide screen the + and the dial's hub scrolled the todo list instead of the side column, so
+  the field could open off screen.
+- A failed holiday download still started the six-day wait; only a download that lands does, and
+  the settings page says when it failed.
+- Backup restore read the picked file without a size limit, and an update download had none
+  either; a mis-picked file is refused and the download stops at 300 MB.
+- A 200 from the update API whose JSON was not what was expected failed the check instead of
+  falling back to the release page.
+- The diary reminder's next alarm added 24 hours instead of a calendar day, landing wrong across
+  a clock change.
+
+### Changed
+
+- `scripts/dev-test.sh --all --rerun` never reran the tests: the task options sat after
+  `lintRelease` and bound to lint, so the script reported cached results. They follow
+  `testDebugUnitTest` now.
+- `docs/backup-format.md` matches the code: the export runs in a write transaction, only the
+  latest pre-restore copy is kept, and the restore steps are in their real order.
+
 ## [1.0.3] - 2026-10-26
 
 ### Fixed

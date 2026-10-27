@@ -166,8 +166,14 @@ class FlowEditViewModel(
         toId = f
     }
 
+    /** A second tap while the first is still writing would record the same flow twice. */
+    var saving by mutableStateOf(false)
+        private set
+
     fun save(onDone: () -> Unit) {
-        action(onDone) {
+        if (saving) return
+        saving = true
+        action(onSuccess = onDone, onFailure = { saving = false }) {
             val amount = Money.parse(amountInput) ?: throw LedgerException("金额格式不对")
             val fee = if (feeInput.isBlank()) 0L else Money.parse(feeInput) ?: throw LedgerException("手续费格式不对")
             repo.saveFlow(
@@ -210,7 +216,7 @@ fun FlowEditScreen(accountId: String?, flowId: String?, initialKind: String?, on
             TopAppBar(
                 title = { Text(if (vm.isNew) "记一笔" + vm.kind.label else "编辑流水") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                actions = { TextButton(onClick = { vm.save(onBack) }, enabled = vm.loaded) { Text("保存") } },
+                actions = { TextButton(onClick = { vm.save(onBack) }, enabled = vm.loaded && !vm.saving) { Text("保存") } },
                 colors = glassBarColors(),
             )
         },

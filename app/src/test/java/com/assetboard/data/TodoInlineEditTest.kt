@@ -137,6 +137,24 @@ class TodoInlineEditTest {
         made.forEach { assertNull(f.todos.todo(it)) }
     }
 
+    @Test fun dissolvingTwoChecklistsAtOnceKeepsEveryRowInADistinctPlace() = f.run {
+        val before = f.todos.create(TodoDraft("前面"))
+        val a = f.todos.create(TodoDraft("甲"))
+        repeat(3) { f.todos.addChecklistItem(a, "甲${it + 1}") }
+        val b = f.todos.create(TodoDraft("乙"))
+        repeat(3) { f.todos.addChecklistItem(b, "乙${it + 1}") }
+        val after = f.todos.create(TodoDraft("后面"))
+        val (made, _) = f.todos.dissolve(listOf(a, b))
+        assertEquals(6, made.size)
+        val rows = f.todos.loadOnce().todos
+        val orders = rows.map { it.sortOrder }
+        assertEquals("每行都要有自己的位置", orders.size, orders.toSet().size)
+        assertEquals(
+            listOf("前面", "甲1", "甲2", "甲3", "乙1", "乙2", "乙3", "后面"),
+            rows.sortedBy { it.sortOrder }.map { it.title },
+        )
+    }
+
     @Test fun dissolvingLeavesTodosWithoutAChecklistAlone() = f.run {
         val plain = f.todos.create(TodoDraft("单独"))
         val id = f.todos.create(TodoDraft("一组"))

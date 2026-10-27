@@ -84,6 +84,7 @@ import com.assetboard.domain.todo.Recurrence
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.GlassScaffold
 import com.assetboard.ui.components.GlassSnackbarHost
+import com.assetboard.ui.components.LocalHideAmounts
 import com.assetboard.ui.components.PullToCreateBox
 import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SegmentedControl
@@ -127,6 +128,7 @@ fun BillScreen(onBack: () -> Unit, onAddAccount: () -> Unit) {
     val vm = billViewModel("page")
     val ledger by container.repository.ledger.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    val hide = LocalHideAmounts.current
     UndoMessages(vm.events, snackbar, vm::undo)
     val now = java.time.YearMonth.now(AppClock.clock)
     var monthText by rememberSaveable { mutableStateOf(now.toString()) }
@@ -204,7 +206,7 @@ fun BillScreen(onBack: () -> Unit, onAddAccount: () -> Unit) {
                                 key = "bill:${f.id}",
                                 group = swipe,
                                 shape = BillRowShape,
-                                onDelete = { vm.delete(f, hide = false) },
+                                onDelete = { vm.delete(f, hide = hide) },
                             ) {
                                 BillRow(f, l, onClick = { swipe.closeAll(); editing = f.id })
                             }
@@ -291,7 +293,9 @@ private fun SharesCard(m: Bills.Month, income: Boolean, only: String?, onKind: (
             val share = if (total > 0) s.total.toFloat() / total else 0f
             // Each bar grows out from nothing when it first shows, then follows its share.
             val grown = remember(s.category.key, income) { Animatable(0f) }
-            LaunchedEffect(share) { grown.animateTo(share, spring(dampingRatio = 0.8f, stiffness = 120f)) }
+            // Keyed on the bar as well: switching 支出 / 收入 makes a new one, and an effect keyed
+            // only on a share that happens to match the old one would never grow it.
+            LaunchedEffect(share, grown) { grown.animateTo(share, spring(dampingRatio = 0.8f, stiffness = 120f)) }
             val dim = only != null && only != s.category.key
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onOnly(s.category.key) }.padding(vertical = 6.dp).appear(i, enabled = i < 8),

@@ -316,7 +316,7 @@ private fun FoodContent(
     ) {
         item { Box(Modifier.appear(0)) { DayHero(s, day, today, onRecord, onToday = { onSelect(today) }, onProfile, onWeigh) } }
         item { Box(Modifier.appear(1)) { EntriesCard(day, today, onOpen, onDelete, onAgain) } }
-        if (day.totals.hasMacros) item { Box(Modifier.appear(2)) { NutrientsCard(day) } }
+        if (day.totals.hasNutrients) item { Box(Modifier.appear(2)) { NutrientsCard(day) } }
         item { Box(Modifier.appear(3)) { WeekCard(s, today, date, onSelect) } }
         item {
             Text(

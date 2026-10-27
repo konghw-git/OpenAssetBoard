@@ -115,7 +115,8 @@ class BillViewModel(private val container: AppContainer) : ActionViewModel(conta
     fun lastAccount(income: Boolean): String? = settings.string(lastKey(income))
 
     /** [before] is the bill as it was when edited, null for a new one. */
-    fun save(bill: MoneyFlow, before: MoneyFlow?, hide: Boolean, onDone: () -> Unit) = action(onDone) {
+    fun save(bill: MoneyFlow, before: MoneyFlow?, hide: Boolean, onDone: () -> Unit, onFailure: () -> Unit = {}) =
+        action(onSuccess = onDone, onFailure = onFailure) {
         repo.saveFlow(bill)
         settings.putString(lastKey(bill.kind == FlowKind.INCOME), Bills.accountOf(bill))
         val what = describe(bill, hide)
@@ -188,6 +189,8 @@ fun BillSheet(
     var picking by rememberSaveable { mutableStateOf(false) }
     var pickingDate by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    // A second tap while the first is still writing would record the same bill twice.
+    var committing by remember { mutableStateOf(false) }
     val shake = remember { Animatable(0f) }
     val pop = remember { Animatable(1f) }
 
@@ -219,6 +222,7 @@ fun BillSheet(
     }
 
     fun commit(again: Boolean) {
+        if (committing) return
         val b = bill()
         if (b == null) {
             haptic.performHapticFeedback(HapticFeedbackType.Reject)
@@ -229,7 +233,9 @@ fun BillSheet(
         }
         focus.clearFocus()
         haptic.performHapticFeedback(HapticFeedbackType.Confirm)
-        vm.save(b, existing, hide) {
+        committing = true
+        vm.save(b, existing, hide, onDone = {
+            committing = false
             if (again) {
                 saved++
                 input = ""
@@ -237,7 +243,7 @@ fun BillSheet(
             } else {
                 onDismiss()
             }
-        }
+        }, onFailure = { committing = false })
     }
 
     GlassSheet(onDismissRequest = onDismiss) {

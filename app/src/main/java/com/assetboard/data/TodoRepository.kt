@@ -700,11 +700,16 @@ class TodoRepository(
         ensure(groups.none { (t, _) -> t.kind != TodoKind.ORDINARY || t.completedAt != null }) { "重复待办和已完成的待办不能解散" }
         val batch = newId()
         val made = mutableListOf<String>()
-        for ((t, items) in groups) {
+        // In the order the views show them, and each read again: an earlier group's items have
+        // already moved this one down, so its place is no longer the one read at the start.
+        var nextFree = Int.MIN_VALUE
+        for ((snapshot, items) in groups.sortedBy { (t, _) -> t.sortOrder }) {
+            val t = dao.todo(snapshot.id)?.takeIf { it.deletedAt == null } ?: continue
+            val base = maxOf(t.sortOrder, nextFree)
             // The items take the todo's place in the order all views share; what came after moves down to make room.
             val room = items.size - 1
             if (room > 0) {
-                for (o in dao.allTodos()) if (o.sortOrder > t.sortOrder) dao.updateTodo(o.copy(sortOrder = o.sortOrder + room, revision = o.revision + 1))
+                for (o in dao.allTodos()) if (o.sortOrder > base) dao.updateTodo(o.copy(sortOrder = o.sortOrder + room, revision = o.revision + 1))
             }
             items.forEachIndexed { i, item ->
                 val n = Todo(
@@ -716,13 +721,14 @@ class TodoRepository(
                     someday = t.someday,
                     deadline = t.deadline,
                     important = t.important,
-                    sortOrder = t.sortOrder + i,
+                    sortOrder = base + i,
                     createdAt = now,
                     completedAt = if (item.done) now else null,
                 )
                 insert(ReminderState.afterManualEdit(n, now, zone()))
                 made += n.id
             }
+            nextFree = base + items.size
             trashTodo(t, batch)
         }
         made to batch

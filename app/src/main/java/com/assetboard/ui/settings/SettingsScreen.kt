@@ -101,6 +101,7 @@ import com.assetboard.ui.components.SectionCard
 import com.assetboard.ui.components.SectionHeader
 import com.assetboard.ui.components.tilt
 import com.assetboard.ui.theme.AppTheme
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import com.assetboard.ui.components.verticalScrollWithIndicator
@@ -111,8 +112,8 @@ class SettingsViewModel(container: AppContainer) : RestoreViewModel(container) {
     fun backupNow() = action { message.value = "已备份，覆盖了 " + container.backup.backupNow(BackupKind.MANUAL) }
 
     fun updateHolidays() = action {
-        container.holidays.updateOnline()
-        message.value = "节假日数据已检查"
+        val updated = container.holidays.updateOnline()
+        message.value = if (updated) "节假日数据已检查" else "没能更新节假日数据，请检查网络后再试"
     }
 
     fun reset(scope: ResetScope) = action {
@@ -191,6 +192,7 @@ fun SettingsScreen(
     var editMirror by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf<ResetScope?>(null) }
     val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     ErrorDialog(error) { vm.error.value = null }
     RestoreConfirm(vm)
     LaunchedEffect(message) {
@@ -398,7 +400,13 @@ fun SettingsScreen(
                     title = "导出诊断",
                     subtitle = "版本、机型和崩溃记录，不含你的数据，可发给开发者排查",
                     leading = { IconTile(Icons.Outlined.BugReport, palette.group(3)) },
-                    onClick = { shareDiagnostics(context, settings) },
+                    onClick = {
+                        // Off the main thread, and a cache that cannot be written says so.
+                        scope.launch {
+                            runCatching { shareDiagnostics(context, settings) }
+                                .onFailure { snackbar.showSnackbar("无法生成诊断文件：${it.message ?: "写入失败"}") }
+                        }
+                    },
                 )
             }
 
@@ -459,7 +467,7 @@ fun SettingsScreen(
 }
 
 /** The diagnostics as a text file, to whatever the user shares it with. */
-private fun shareDiagnostics(context: android.content.Context, settings: SettingsStore) {
+private suspend fun shareDiagnostics(context: android.content.Context, settings: SettingsStore) {
     val file = com.assetboard.data.CrashLog.diagnostics(context, settings)
     val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
     val send = Intent(Intent.ACTION_SEND)

@@ -172,6 +172,7 @@ import com.assetboard.ui.components.ConfirmDialog
 import com.assetboard.ui.components.DatePickDialog
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.SectionCard
+import com.assetboard.ui.components.amount
 import com.assetboard.ui.theme.AppTheme
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
@@ -526,8 +527,8 @@ private fun DayCard(
             DayTile(
                 Icons.Outlined.Checklist,
                 if (last != null && stocktakes.size > 1) "盘点 ${stocktakes.size} 次" else "当天盘点",
-                last?.let { "¥" + Money.short(it.point.netWorth) } ?: if (date == today) "去盘点" else "没有盘点",
-                note = last?.let { s -> s.change?.takeIf { it != 0L }?.let { Money.format(it, signed = true) } ?: Dates.time(s.point.snapshot.at) },
+                last?.let { amount("¥" + Money.short(it.point.netWorth)) } ?: if (date == today) "去盘点" else "没有盘点",
+                note = last?.let { s -> s.change?.takeIf { it != 0L }?.let { amount(Money.format(it, signed = true)) } ?: Dates.time(s.point.snapshot.at) },
                 tint = cs.primary,
                 muted = last == null,
                 modifier = tile,

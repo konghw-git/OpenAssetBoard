@@ -71,7 +71,8 @@ object Energy {
         val fatMg: Long,
         val carbMg: Long,
         val sodiumMg: Long,
-        val hasMacros: Boolean,
+        /** Any entry recorded something the nutrients card shows — sodium counts, it is shown there too. */
+        val hasNutrients: Boolean,
         val partial: Boolean,
     )
 
@@ -81,7 +82,7 @@ object Energy {
         fatMg = entries.sumOf { fatOf(it) ?: 0L },
         carbMg = entries.sumOf { carbOf(it) ?: 0L },
         sodiumMg = entries.sumOf { sodiumOf(it) ?: 0L },
-        hasMacros = entries.any { it.proteinMg != null || it.fatMg != null || it.carbMg != null },
+        hasNutrients = entries.any { it.proteinMg != null || it.fatMg != null || it.carbMg != null || it.sodiumMg != null },
         partial = entries.any { it.proteinMg == null || it.fatMg == null || it.carbMg == null },
     )
 

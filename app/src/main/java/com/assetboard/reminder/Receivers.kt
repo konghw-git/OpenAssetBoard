@@ -73,13 +73,13 @@ class ReminderActionReceiver : BroadcastReceiver() {
                 return
             }
             if (action == UNHANDLED) {
-                // Only if the boot-time ringing notification is still up, unanswered; a page that
-                // took it over has cancelled this timer, but a late one must not stop its ring.
-                val up = nm.activeNotifications.any { it.id == nid && it.notification.channelId == Notifier.CH_STRONG_BOOT }
+                // The boot-time note may already have timed out (both are five minutes), so it is
+                // not required to still be up: an open todo nobody answered gets the silent note
+                // either way. A page that took the reminder over has cancelled this timer.
                 val t = container.todos.todo(token.id)
                 val open = t != null && t.stateSeq == token.seq && TodoViews.isOpen(t)
-                if (up && open && t != null) {
-                    if (RingService.ringingFor == token.id) RingService.stop(context)
+                // A ring already going (the page opened just as this fired) is left alone.
+                if (open && t != null && RingService.ringingFor != token.id && token.epoch == container.gate.epochNow()) {
                     nm.notify(nid, Notifier.unhandled(context, t.title, token))
                 }
                 return

@@ -53,7 +53,8 @@ class RingService : Service() {
         // Then checked before anything sounds: the todo may be done, edited or gone by now.
         val container = ReminderScheduler.container(this)
         container.appScope.launch {
-            val live = container.reminders.stillLive(t)
+            // The test from the guide names no todo: it rings whatever the database says.
+            val live = t.id == ReminderScheduler.TEST_ID || container.reminders.stillLive(t)
             handler.post {
                 when {
                     live -> ring(t, title)

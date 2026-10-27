@@ -76,7 +76,10 @@ fun RestoreConfirm(vm: RestoreViewModel) {
             (if (p.formatVersion < 9 && p.currentFoodEntries > 0) "这份备份不含饮食记录，恢复后当前 ${p.currentFoodEntries} 条饮食记录会清空。" else "") +
             (if (p.formatVersion < 5 && p.currentNotes > 0) "这份备份不含笔记，恢复后当前 ${p.currentNotes} 篇笔记会清空。" else "") +
             (if (p.formatVersion < 6 && p.currentWeeks > 0) "这份备份不含周复盘，恢复后当前 ${p.currentWeeks} 篇周复盘会清空。" else "") +
-            (if (p.formatVersion < 8 && p.habits == 0) "这份备份不含自定义的每日打卡，恢复后会回到内置的五项。" else "") +
+            (if (p.habits == 0 && p.currentHabits > 0) "这份备份不含自定义的每日打卡，恢复后当前 ${p.currentHabits} 项自定义打卡会被清掉，回到内置的五项。" else "") +
+            (if (p.formatVersion < 14 && p.currentCountdowns > 0) "这份备份不含倒数日，恢复后当前 ${p.currentCountdowns} 个倒数日会清空。" else "") +
+            (if (p.formatVersion < 13 && p.currentBills > 0) "这份备份不含记账，恢复后当前 ${p.currentBills} 条支出和收入记录会清空。" else "") +
+            (if (p.formatVersion < 12 && (p.currentDiaries > 0 || p.currentHabits > 0)) "这份备份来自旧版本，日记心情、打卡休息日、打卡标准和提前提醒会回到默认值。" else "") +
             (if (p.formatVersion < 7) "这份备份不含目标资产，恢复后目标会被清空。" else "") +
             "\n\n当前的全部数据会被替换。恢复前会自动另存一份当前数据。"
     }

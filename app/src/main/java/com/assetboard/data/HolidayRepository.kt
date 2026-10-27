@@ -67,9 +67,10 @@ class HolidayRepository(private val context: Context, private val db: AppDatabas
 
     /**
      * From November on, looks for next year's schedule (and refreshes the current one). Failures
-     * are silent; the weekly worker simply tries again.
+     * are silent and reported by the return value (whether anything landed); the weekly worker
+     * tries again rather than waiting out the six-day window.
      */
-    suspend fun updateOnline(today: LocalDate = AppClock.today()) = withContext(Dispatchers.IO) {
+    suspend fun updateOnline(today: LocalDate = AppClock.today()): Boolean = withContext(Dispatchers.IO) {
         // November on: next year's schedule, and this year's again, as it can still change.
         val years = buildList {
             if (today.monthValue >= 11) add(today.year + 1)
@@ -81,6 +82,7 @@ class HolidayRepository(private val context: Context, private val db: AppDatabas
             if (runCatching { store(text, source = "online") }.getOrDefault(false)) changed = true
         }
         if (changed) reload()
+        changed
     }
 
     private fun download(url: String): String {

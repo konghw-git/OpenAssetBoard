@@ -16,6 +16,7 @@ import com.assetboard.domain.ensure
 import com.assetboard.domain.todo.TodoInvariants
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.sync.Mutex
@@ -98,8 +99,14 @@ data class BackupPreview(
     val currentNotes: Int = 0,
     val weeks: Int = 0,
     val currentWeeks: Int = 0,
-    /** The habits the backup itself carries; empty in files before format 8. */
+    /** The habits the backup itself carries; empty in files before format 8 and for the five built in. */
     val habits: Int = 0,
+    val currentHabits: Int = 0,
+    /** Countdowns (format 14) and bills (format 13) each side carries. */
+    val countdowns: Int = 0,
+    val currentCountdowns: Int = 0,
+    val bills: Int = 0,
+    val currentBills: Int = 0,
     /** Whether the backup names a net worth goal; files before format 7 do not. */
     val hasGoal: Boolean = false,
 )
@@ -279,8 +286,23 @@ class BackupManager(
             ?: throw LedgerException("无法写入备份文件")
     }
 
-    private fun read(uri: Uri): String =
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } ?: throw LedgerException("无法读取文件")
+    /** A backup is a few megabytes; anything of this size is a mis-picked file, not a backup. */
+    private fun read(uri: Uri): String {
+        val input = context.contentResolver.openInputStream(uri) ?: throw LedgerException("无法读取文件")
+        return input.use { stream ->
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            var total = 0L
+            while (true) {
+                val n = stream.read(buf)
+                if (n < 0) break
+                total += n
+                if (total > MAX_BACKUP_BYTES) throw LedgerException("文件太大，不像是备份，可能选错了")
+                out.write(buf, 0, n)
+            }
+            out.toByteArray().decodeToString()
+        }
+    }
 
     private fun parse(text: String): BackupFile {
         val file = try {
@@ -312,6 +334,11 @@ class BackupManager(
             weeks = file.weeklyReviews.count { it.deletedAt == null && it.body.isNotBlank() },
             currentWeeks = db.weekDao().all().count { it.deletedAt == null && it.body.isNotBlank() },
             habits = file.habits.size,
+            currentHabits = db.habitDao().habits().size,
+            countdowns = file.countdowns.size,
+            currentCountdowns = db.countdownDao().all().size,
+            bills = file.flows.count { it.kind.isBill },
+            currentBills = db.dao().flows().count { it.kind.isBill },
             hasGoal = file.netWorthGoal != null,
         )
     }
@@ -449,13 +476,19 @@ class BackupManager(
             val file = load()
             val savedTo = savePreRestoreCopy()
             val oldIds = db.todoDao().allTodos().map { it.id }
-            val epoch = db.withTransaction {
-                overwrite(file)
-                if (failInsideRestoreTransaction) throw IllegalStateException("模拟写入失败")
-                gate.bumpEpochInTransaction()
+            // The transaction and the hand-over are not cancellable: a caller that goes away while
+            // the write is landing (the screen's viewModelScope cancelled mid-restore) would
+            // otherwise resume with a cancellation, after the commit, and leave the app bound to
+            // the old epoch. Cancellation before this point still aborts, as before.
+            withContext(NonCancellable) {
+                val epoch = db.withTransaction {
+                    overwrite(file)
+                    if (failInsideRestoreTransaction) throw IllegalStateException("模拟写入失败")
+                    gate.bumpEpochInTransaction()
+                }
+                gate.epochCommitted(epoch)
+                committed = true
             }
-            gate.epochCommitted(epoch)
-            committed = true
             // Set before the effects and cleared after them: a cancellation or crash in between
             // still gets the reminders rebuilt on the next app start.
             settings.setRescheduleNeeded(true)
@@ -705,6 +738,7 @@ class BackupManager(
 
     companion object {
         const val FORMAT_VERSION = 14
+        private const val MAX_BACKUP_BYTES = 64L * 1024 * 1024
 
         /**
          * [file] with each account's current balance as its only valuation at [now], and one

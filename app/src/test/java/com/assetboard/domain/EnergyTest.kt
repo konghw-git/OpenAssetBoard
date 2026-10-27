@@ -28,11 +28,14 @@ class EnergyTest {
         amount: Int? = 500,
         energyCal: Long = 40_870,
         protein: Long? = 600,
+        fat: Long? = 1_600,
+        carb: Long? = 6_000,
+        sodium: Long? = 40,
         at: Long = 0,
         id: String = name + date + at,
     ) = FoodEntry(
         id = id, date = date, eatenAt = at, name = name, per = per, amount = amount, unit = per?.let { FoodUnit.ML },
-        energyCal = energyCal, inKj = true, proteinMg = protein, fatMg = 1_600, carbMg = 6_000, sodiumMg = 40, createdAt = at, updatedAt = at,
+        energyCal = energyCal, inKj = true, proteinMg = protein, fatMg = fat, carbMg = carb, sodiumMg = sodium, createdAt = at, updatedAt = at,
     )
 
     @Test fun theLabelAddsUp() {
@@ -152,9 +155,12 @@ class EnergyTest {
     @Test fun totalsSayWhenSomeNutrientsAreMissing() {
         val t = Energy.totals(listOf(entry(), entry(protein = null, at = 1)))
         assertEquals(3_000L, t.proteinMg)
-        assertTrue(t.hasMacros)
+        assertTrue(t.hasNutrients)
         assertTrue(t.partial)
         assertFalse(Energy.totals(listOf(entry())).partial)
+        // Sodium alone still has something to show: the card carries it.
+        assertTrue(Energy.totals(listOf(entry(protein = null, fat = null, carb = null))).hasNutrients)
+        assertFalse(Energy.totals(listOf(entry(protein = null, fat = null, carb = null, sodium = null))).hasNutrients)
     }
 
     @Test fun theAverageDeficitCountsRecordedDaysBeforeToday() {

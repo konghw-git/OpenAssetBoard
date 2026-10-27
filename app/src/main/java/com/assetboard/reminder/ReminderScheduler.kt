@@ -294,8 +294,9 @@ class ReminderScheduler(private val context: Context, private val container: App
         val minutes = settings.diaryReminderMinutes.value
         val zone = ZoneId.systemDefault()
         val now = AppClock.millis()
-        var at = AppClock.today().atTime(LocalTime.of(minutes / 60, minutes % 60)).atZone(zone).toInstant().toEpochMilli()
-        if (at <= now) at += 24 * 3600_000L
+        val today = AppClock.today().atTime(LocalTime.of(minutes / 60, minutes % 60)).atZone(zone).toInstant().toEpochMilli()
+        // Tomorrow by the calendar, not by 24 hours: a day is 23 or 25 hours when the clocks change.
+        val at = if (today <= now) java.time.Instant.ofEpochMilli(today).atZone(zone).plusDays(1).toInstant().toEpochMilli() else today
         am.setWindow(AlarmManager.RTC_WAKEUP, at, 5 * 60_000L, pi)
     }
 

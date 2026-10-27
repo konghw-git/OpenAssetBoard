@@ -199,6 +199,7 @@ import com.assetboard.ui.components.ListRow
 import com.assetboard.ui.components.MoneyText
 import com.assetboard.ui.components.LocalHideAmounts
 import kotlinx.coroutines.launch
+import com.assetboard.ui.components.MASKED
 import com.assetboard.ui.components.amount
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -318,7 +319,9 @@ class OverviewViewModel(private val container: AppContainer) : ActionViewModel(c
             _events.tryEmit(UndoEvent("已删除$name") { repo.restoreAccount(gone) })
         } else {
             repo.setDisabled(r.account.id, true)
-            val note = if (r.counted && r.display != 0L) "，${Money.format(r.display)} 不再计入" else ""
+            // The undo bar is a sentence, not a MoneyText: it is masked here when amounts are hidden.
+            val shown = if (container.settings.hideAmounts.value) MASKED else Money.format(r.display)
+            val note = if (r.counted && r.display != 0L) "，$shown 不再计入" else ""
             _events.tryEmit(UndoEvent("已停用$name$note") { repo.setDisabled(r.account.id, false) })
         }
     }
@@ -329,7 +332,8 @@ class OverviewViewModel(private val container: AppContainer) : ActionViewModel(c
         if (value == r.display) return@action
         val repo = container.repository
         val id = repo.addValuation(r.account.id, AppClock.millis(), value, null)
-        _events.tryEmit(UndoEvent("「${r.account.name.take(12)}」$noun 改为 ${Money.format(value)}") { repo.deleteValuation(id) })
+        val shown = if (container.settings.hideAmounts.value) MASKED else Money.format(value)
+        _events.tryEmit(UndoEvent("「${r.account.name.take(12)}」$noun 改为 $shown") { repo.deleteValuation(id) })
     }
 
     fun undo(e: UndoEvent) {
