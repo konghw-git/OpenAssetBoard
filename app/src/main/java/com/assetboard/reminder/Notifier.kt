@@ -12,21 +12,35 @@ import android.net.Uri
 import androidx.core.app.NotificationCompat
 import com.assetboard.MainActivity
 import com.assetboard.R
+import com.assetboard.data.Profile
 import com.assetboard.data.Todo
 
 /** Who a reminder or one of its buttons is about: the token checked before anything is written. */
-data class ReminderToken(val id: String, val seq: Long, val epoch: Long) {
-    fun into(intent: Intent): Intent = intent.putExtra(EXTRA_ID, id).putExtra(EXTRA_SEQ, seq).putExtra(EXTRA_EPOCH, epoch)
+data class ReminderToken(
+    val id: String,
+    val seq: Long,
+    val epoch: Long,
+    /** The local profile that scheduled it; a token from another profile is dropped. */
+    val profile: String = Profile.LOCAL_ID,
+) {
+    fun into(intent: Intent): Intent =
+        intent.putExtra(EXTRA_ID, id).putExtra(EXTRA_SEQ, seq).putExtra(EXTRA_EPOCH, epoch).putExtra(EXTRA_PROFILE, profile)
 
     companion object {
         const val EXTRA_ID = "todo_id"
         const val EXTRA_SEQ = "todo_seq"
         const val EXTRA_EPOCH = "data_epoch"
+        const val EXTRA_PROFILE = "profile_id"
 
         fun from(intent: Intent): ReminderToken? {
             val id = intent.getStringExtra(EXTRA_ID) ?: return null
             if (!intent.hasExtra(EXTRA_SEQ) || !intent.hasExtra(EXTRA_EPOCH)) return null
-            return ReminderToken(id, intent.getLongExtra(EXTRA_SEQ, -1), intent.getLongExtra(EXTRA_EPOCH, -1))
+            return ReminderToken(
+                id,
+                intent.getLongExtra(EXTRA_SEQ, -1),
+                intent.getLongExtra(EXTRA_EPOCH, -1),
+                intent.getStringExtra(EXTRA_PROFILE) ?: Profile.LOCAL_ID,
+            )
         }
     }
 }

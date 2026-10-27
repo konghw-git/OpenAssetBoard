@@ -2,6 +2,7 @@ package com.assetboard.data
 
 import android.content.Context
 import androidx.core.content.edit
+import com.assetboard.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,6 +56,16 @@ class SettingsStore(context: Context) {
     val autoUpdateCheck = bool(KEY_AUTO_UPDATE, true)
     /** Amounts read **** on the overview, wherever an amount is shown as such, and on the widget. */
     val hideAmounts = bool(KEY_HIDE_AMOUNTS, false)
+
+    /** The self-hosted server the account page signs in to; a fork sets its own default. */
+    private val _syncServerUrl = MutableStateFlow(prefs.getString(KEY_SYNC_SERVER, null) ?: BuildConfig.SYNC_BASE_URL)
+    val syncServerUrl: StateFlow<String> = _syncServerUrl.asStateFlow()
+
+    fun setSyncServerUrl(url: String) {
+        val value = url.trim()
+        prefs.edit { putString(KEY_SYNC_SERVER, value) }
+        _syncServerUrl.value = value
+    }
 
     fun setBool(flow: MutableStateFlow<Boolean>, value: Boolean) {
         val key = when (flow) {
@@ -150,6 +161,7 @@ class SettingsStore(context: Context) {
         private const val KEY_AUTO_UPDATE = "auto_update_check"
         private const val KEY_RESCHEDULE = "reschedule_needed"
         private const val KEY_HIDE_AMOUNTS = "hide_amounts"
+        private const val KEY_SYNC_SERVER = "sync_server_url"
         private const val KEY_BACKUP_ERROR = "backup_error"
         private const val KEY_BACKUP_ERROR_AT = "backup_error_at"
     }

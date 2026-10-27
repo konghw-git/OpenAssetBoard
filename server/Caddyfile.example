@@ -1,0 +1,14 @@
+# Add this block to the Caddyfile that already serves Sub2API and Monitor, then:
+#   docker exec sub2api-caddy caddy validate --config /etc/caddy/Caddyfile
+#   docker exec sub2api-caddy caddy reload   --config /etc/caddy/Caddyfile
+#
+# Do not replace the existing file wholesale; add only this block.
+khw-asset.216-158-79-137.sslip.io {
+    tls {
+        issuer acme {
+            dir https://acme-v02.api.letsencrypt.org/directory
+        }
+    }
+    encode zstd gzip
+    reverse_proxy assetboard:8090
+}

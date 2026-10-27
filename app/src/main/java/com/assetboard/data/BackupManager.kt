@@ -22,7 +22,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.encodeToJsonElement
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * Format 2 adds the todo and diary tables, format 3 the daily habit checks, format 4 the health
@@ -140,6 +145,8 @@ class BackupManager(
     private val onRestored: () -> Unit,
     private val clock: () -> Long = AppClock::millis,
     private val weeks: WeekRepository = WeekRepository(db, gate, editors, clock),
+    /** Names this profile's backup files apart from the first install's and other accounts'. */
+    private val profileId: String = Profile.LOCAL_ID,
 ) {
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = false }
 
@@ -147,6 +154,48 @@ class BackupManager(
     @Volatile internal var failInsideRestoreTransaction = false
 
     suspend fun exportJson(): String = json.encodeToString(BackupFile.serializer(), current())
+
+    /**
+     * One consistent read for sync: the exact text uploaded, a content hash that ignores [BackupFile.exportedAt]
+     * and list order (two devices that hold the same rows agree), and whether there is anything at all.
+     */
+    data class SyncSnapshot(val json: String, val contentHash: String, val exportedAt: Long, val isEmpty: Boolean)
+
+    suspend fun exportForSync(): SyncSnapshot = withContext(Dispatchers.IO) {
+        val file = current()
+        SyncSnapshot(
+            json = json.encodeToString(BackupFile.serializer(), file),
+            contentHash = contentHash(file),
+            exportedAt = file.exportedAt,
+            isEmpty = isEmpty(file),
+        )
+    }
+
+    private fun contentHash(file: BackupFile): String {
+        val element = json.encodeToJsonElement(BackupFile.serializer(), file.copy(exportedAt = 0))
+        val canonical = canonicalize(element).toString()
+        return MessageDigest.getInstance("SHA-256")
+            .digest(canonical.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
+    /** Arrays are order-independent for hashing: a restored database may return the same rows in another order. */
+    private fun canonicalize(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> JsonObject(element.entries.associate { (key, value) -> key to canonicalize(value) })
+        is JsonArray -> JsonArray(element.map(::canonicalize).sortedBy { it.toString() })
+        else -> element
+    }
+
+    private fun isEmpty(file: BackupFile): Boolean =
+        file.groups.isEmpty() && file.accounts.isEmpty() && file.snapshots.isEmpty() &&
+            file.valuations.isEmpty() && file.snapshotItems.isEmpty() && file.flows.isEmpty() &&
+            file.todoLists.isEmpty() && file.todoSections.isEmpty() && file.todos.isEmpty() &&
+            file.checklistItems.isEmpty() && file.diaryEntries.isEmpty() && file.diaryDrafts.isEmpty() &&
+            file.habitChecks.isEmpty() && file.habits.isEmpty() && file.healthProfile == null &&
+            file.bodyMeasurements.isEmpty() && file.foodEntries.isEmpty() && file.noteTopics.isEmpty() &&
+            file.notes.isEmpty() && file.noteSources.isEmpty() && file.noteDrafts.isEmpty() &&
+            file.weeklyReviews.isEmpty() && file.weeklyDrafts.isEmpty() && file.netWorthGoal == null &&
+            file.countdowns.isEmpty()
 
     /** Everything a backup holds, read in one transaction. */
     private suspend fun current(): BackupFile {
@@ -213,15 +262,27 @@ class BackupManager(
         }
     }
 
+    /** A sync must not start while a restore holds the gate; a normal backup does not block it. */
+    fun canSync(): Boolean = !gate.frozen.value
+
+    /** The first install keeps the names it has always used; every other profile gets its own. */
+    private val legacyNames: Boolean get() = profileId == Profile.LOCAL_ID
+
+    private fun fileName(kind: BackupKind): String =
+        if (legacyNames) kind.fileName else "asset-board-$profileId-${kind.fileName.removePrefix("asset-board-")}"
+
     private suspend fun writeBackup(kind: BackupKind): String {
         val tree = settings.backupTreeUri.value ?: throw LedgerException("请先选择备份目录")
         val dir = runCatching { DocumentFile.fromTreeUri(context, Uri.parse(tree)) }.getOrNull()
             ?.takeIf { it.canWrite() } ?: throw LedgerException("备份目录不可写，请重新选择")
-        val name = replaceInFolder(dir, kind.fileName, exportJson())
-        val legacy = if (kind == BackupKind.PRE_RESTORE) legacyPreRestore else legacyBackup
-        dir.listFiles().filter { f -> f.name?.let(legacy::matches) == true }.forEach { runCatching { it.delete() } }
+        val target = fileName(kind)
+        val name = replaceInFolder(dir, target, exportJson())
+        if (legacyNames) {
+            val legacy = if (kind == BackupKind.PRE_RESTORE) legacyPreRestore else legacyBackup
+            dir.listFiles().filter { f -> f.name?.let(legacy::matches) == true }.forEach { runCatching { it.delete() } }
+        }
         // Leftovers of runs that failed before this one; after it, the new file is complete.
-        staleParts(dir, kind.fileName).forEach { runCatching { it.delete() } }
+        staleParts(dir, target).forEach { runCatching { it.delete() } }
         if (kind != BackupKind.PRE_RESTORE) settings.setLastBackupAt(clock())
         return name
     }
@@ -316,8 +377,16 @@ class BackupManager(
     }
 
     suspend fun inspect(uri: Uri): BackupPreview = withContext(Dispatchers.IO) {
-        val file = parse(read(uri))
-        BackupPreview(
+        preview(parse(read(uri)))
+    }
+
+    /** The same preview for a snapshot that just came down from the server. */
+    suspend fun inspectJson(text: String): BackupPreview = withContext(Dispatchers.IO) {
+        preview(parse(text))
+    }
+
+    private suspend fun preview(file: BackupFile): BackupPreview {
+        return BackupPreview(
             formatVersion = file.formatVersion,
             exportedAt = file.exportedAt,
             accounts = file.accounts.size,
@@ -438,6 +507,11 @@ class BackupManager(
      */
     suspend fun restore(uri: Uri): String = withContext(Dispatchers.IO) {
         val text = read(uri)
+        replaceAll { parse(text).also(::validate) }
+    }
+
+    /** The same full-overwrite restore for a snapshot that came down from the sync server. */
+    suspend fun restoreFromJson(text: String): String = withContext(Dispatchers.IO) {
         replaceAll { parse(text).also(::validate) }
     }
 
@@ -611,6 +685,12 @@ class BackupManager(
         }
     }
 
+    /**
+     * A profile switch holds the gate the same way a restore does, but does not overwrite
+     * anything: unsaved editor text must land before the database is closed.
+     */
+    suspend fun flushEditorsForSwitch() = flushEditors()
+
     /** (row id, new body_rev), or null when the version condition does not hold. */
     private suspend fun writeBody(p: PendingText): Pair<String, Long>? = when (p) {
         is PendingText.Diary -> writeDiaryBody(p)
@@ -698,14 +778,15 @@ class BackupManager(
 
     // ------------------------------------------------------------ pre-restore copies
 
-    private val localCopies get() = File(context.filesDir, "prerestore")
+    private val localCopies
+        get() = File(context.filesDir, if (legacyNames) "prerestore" else "prerestore-$profileId")
 
     private suspend fun savePreRestoreCopy(): String =
         if (settings.backupTreeUri.value != null) {
             backupNow(BackupKind.PRE_RESTORE)
         } else {
             val dir = localCopies.apply { mkdirs() }
-            val f = File(dir, BackupKind.PRE_RESTORE.fileName)
+            val f = File(dir, fileName(BackupKind.PRE_RESTORE))
             val part = File(dir, f.name + ".partial")
             try {
                 part.writeText(exportJson())
@@ -723,7 +804,8 @@ class BackupManager(
 
     /** The copy in the backup folder and the one in private storage, newest first. */
     suspend fun preRestoreCopies(): List<PreRestoreCopy> = withContext(Dispatchers.IO) {
-        fun isCopy(name: String?) = name == BackupKind.PRE_RESTORE.fileName || name?.let(legacyPreRestore::matches) == true
+        fun isCopy(name: String?) =
+            name == fileName(BackupKind.PRE_RESTORE) || (legacyNames && name?.let(legacyPreRestore::matches) == true)
         val local = localCopies.listFiles().orEmpty().filter { isCopy(it.name) }
             .map { PreRestoreCopy(it.name, Uri.fromFile(it), inBackupFolder = false, savedAt = it.lastModified()) }
         val folder = settings.backupTreeUri.value?.let { tree ->

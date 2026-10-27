@@ -52,6 +52,7 @@ import com.assetboard.ui.account.AccountEditScreen
 import com.assetboard.ui.overview.OverviewScreen
 import com.assetboard.ui.record.FlowEditScreen
 import com.assetboard.ui.settings.SettingsScreen
+import com.assetboard.ui.sync.AccountScreen
 import com.assetboard.ui.stocktake.StocktakeScreen
 import com.assetboard.ui.theme.AssetBoardTheme
 import com.assetboard.ui.trend.TrendScreen
@@ -383,6 +384,11 @@ class ScreenshotTest {
     @Test fun settings() {
         val c = demoContainer()
         shot("10-settings", c) { SettingsScreen(noop, noop) }
+    }
+
+    @Test fun syncAccount() {
+        val c = demoContainer()
+        shot("90-sync-account", c) { AccountScreen(onBack = noop) }
     }
 
     /**

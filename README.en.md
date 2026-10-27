@@ -6,9 +6,9 @@
 
 *Act every day, gain every day.*
 
-**A fully local Android app: a personal asset board, a Things-style todo manager, a one-entry-a-day diary, and notes.**
+**A local-first Android app: a personal asset board, a Things-style todo manager, a one-entry-a-day diary, and notes.**
 
-Open it and you know exactly what you're worth; jot down what you have to do today and what happened today. No account, no cloud, no ads.
+Open it and you know exactly what you're worth; jot down what you have to do today and what happened today. No account, no cloud, no ads by default; sign in to your own server when you want sync.
 
 [![Release](https://img.shields.io/github/v/release/konghw-git/OpenAssetBoard?style=flat-square&color=1E5B4F)](https://github.com/konghw-git/OpenAssetBoard/releases/latest)
 [![License](https://img.shields.io/github/license/konghw-git/OpenAssetBoard?style=flat-square)](LICENSE)
@@ -93,7 +93,8 @@ This app is built for it. One stocktake walks every account, you change the thre
 
 ### Shared
 
-- **Local first**: everything lives in SQLite on the phone. The backup is one JSON file written to a folder you pick and overwritten each time.
+- **Local first**: everything lives in SQLite on the phone by default. The backup is one JSON file written to a folder you pick and overwritten each time.
+- **Optional account and sync**: an administrator creates the account on your own server; once you sign in, the whole backup is synced over HTTPS to that server. One phone can switch between accounts, each with its own local database; without signing in, everything stays local. Conflicts are never merged automatically — you choose which copy to keep. See [`server/README.md`](server/README.md).
 - **Versioned backup and restore**: format v13, reads v1–v12. Restore replaces the whole database, copies the current data aside first, and runs behind a write gate so an in-flight old operation can't land in the restored data.
 - **Networking is optional and one switch away**: turn it off and the app makes no request at all — holidays come from built-in data and no weather is shown.
 - **Glass throughout**: every page sits on a few fields of colour that bloom in as it opens; cards, chips and buttons are translucent panes with a lit rim, and the tab bar is frosted glass floating over the pages. The net worth card is warm glass, amber, coral and persimmon drifting slowly under it and a spark of light running round its edge. The glass is clear or deep (a setting).
@@ -133,13 +134,15 @@ Download the latest `OpenAssetBoard-x.y.z.apk` from [Releases](https://github.co
 
 ## Data and privacy
 
-- The **contents** of your assets, todos and diary never leave the phone. No accounts, no server, no sync, no telemetry, no ads.
+- **By default, the contents of your assets, todos and diary stay on the phone.** Every feature works without an account; there is no telemetry and no advertising.
+- **Account sync is an optional, self-hosted service.** Only after you sign in is the whole backup JSON uploaded over HTTPS to **your own server**. Snapshots on that server are plaintext (no end-to-end encryption), and an administrator creates the accounts; signing out keeps the data on the phone. Without signing in, nothing is sent to a server.
 - Every write goes through a write gate (`WriteGate`): restores reject new writes while they run, and an operation carrying a stale data epoch cannot write into restored data.
-- **Networking is on by default**, but you can switch it off, and only three things ever make a request:
+- **Networking is on by default**, but you can switch it off. It is used only for:
   - To attach the day's weather when you write a diary entry, rough coordinates go to [Open-Meteo](https://open-meteo.com/) (open, no API key). Coordinates only — never your text.
   - From November each year, a weekly check for next year's public holidays: one public JSON from [NateScarlet/holiday-cn](https://github.com/NateScarlet/holiday-cn).
   - Update checks: at most once a day, the latest release's details from this repository; the APK is downloaded only when you ask. Nothing is uploaded.
-- The backup file is plain JSON in a folder you choose, **unencrypted**. Keep it somewhere you trust.
+  - Syncing after you sign in: only to the server address you enter on the login page. No such request exists while signed out.
+- The backup file is plain JSON in a folder you choose, **unencrypted**. Snapshots on the server are unencrypted too; keep the VPS and its backups safe.
 
 ## Build from source
 

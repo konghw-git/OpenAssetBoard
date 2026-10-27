@@ -60,7 +60,7 @@ class ReminderScheduler(private val context: Context, private val container: App
      * completed, edited or restored away while the alarm or the page was on its way.
      */
     suspend fun stillLive(token: ReminderToken): Boolean = runCatching {
-        if (token.epoch != container.gate.epochNow()) return@runCatching false
+        if (token.profile != container.profile.id || token.epoch != container.gate.epochNow()) return@runCatching false
         val t = container.todos.todo(token.id) ?: return@runCatching false
         t.stateSeq == token.seq && TodoViews.isOpen(t)
     }.getOrDefault(false)
@@ -100,12 +100,19 @@ class ReminderScheduler(private val context: Context, private val container: App
     }
 
     override suspend fun afterRestore(oldTodoIds: List<String>) {
-        RingService.stop(context)
-        nm.cancelAll()
-        for (id in oldTodoIds) cancelAlarm(id)
+        cancelEverything(oldTodoIds)
         syncAll(fromBoot = false)
         scheduleDiaryReminder()
         TodoWidget.refresh(context)
+    }
+
+    /** Before another profile's database opens: nothing from this one may ring or stay posted. */
+    fun cancelEverything(oldTodoIds: List<String>) {
+        RingService.stop(context)
+        nm.cancelAll()
+        for (id in oldTodoIds) cancelAlarm(id)
+        cancelDiaryReminder()
+        cancelTestAlarms()
     }
 
     private suspend fun sync(ids: Set<String>, fromBoot: Boolean) = lock.withLock {
@@ -126,8 +133,8 @@ class ReminderScheduler(private val context: Context, private val container: App
         if (t == null || !TodoViews.isOpen(t)) return
         when (val plan = ReminderState.plan(t, now)) {
             ReminderPlan.None -> Unit
-            is ReminderPlan.At -> setAlarm(t, plan.at, ReminderToken(t.id, t.stateSeq, epoch))
-            is ReminderPlan.Late -> deliver(t, ReminderToken(t.id, t.stateSeq, epoch), plan.lateMinutes, fromBoot)
+            is ReminderPlan.At -> setAlarm(t, plan.at, ReminderToken(t.id, t.stateSeq, epoch, container.profile.id))
+            is ReminderPlan.Late -> deliver(t, ReminderToken(t.id, t.stateSeq, epoch, container.profile.id), plan.lateMinutes, fromBoot)
             is ReminderPlan.Missed -> {
                 addMissed(MissedReminder(t.id, t.title, plan.at, notificationsOff = false))
                 markReminded(t)
@@ -151,6 +158,7 @@ class ReminderScheduler(private val context: Context, private val container: App
      * more than a day is written off as missed, as [syncOne] would have.
      */
     suspend fun fire(token: ReminderToken) = lock.withLock {
+        if (token.profile != container.profile.id) return@withLock
         val t = container.todos.todo(token.id) ?: return@withLock
         if (token.epoch != container.gate.epochNow() || t.stateSeq != token.seq || !TodoViews.isOpen(t)) return@withLock
         val now = AppClock.millis()
@@ -212,6 +220,20 @@ class ReminderScheduler(private val context: Context, private val container: App
             am.cancel(it)
             it.cancel()
         }
+        cancelUnhandledAlarm(id)
+    }
+
+    private fun cancelUnhandledAlarm(id: String) {
+        val intent = Intent(context, ReminderActionReceiver::class.java)
+            .setAction(ReminderActionReceiver.UNHANDLED)
+            .setData(Uri.parse("assetboard://unhandled/$id"))
+        PendingIntent.getBroadcast(
+            context, Notifier.notificationId(id) xor 0x1000, intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+        )?.let {
+            am.cancel(it)
+            it.cancel()
+        }
     }
 
     private fun setAlarm(t: Todo, at: Long, token: ReminderToken) {
@@ -257,7 +279,7 @@ class ReminderScheduler(private val context: Context, private val container: App
 
     /** A reminder 15 seconds from now that touches no data; it shows exactly like a real one. */
     fun scheduleTest(strong: Boolean) {
-        val token = ReminderToken(TEST_ID, 0, container.gate.epochNow())
+        val token = ReminderToken(TEST_ID, 0, container.gate.epochNow(), container.profile.id)
         val intent = token.into(Intent(context, ReminderReceiver::class.java).setAction(ReminderReceiver.ACTION_TEST).setData(Uri.parse("assetboard://test/$strong")))
             .putExtra(ReminderReceiver.EXTRA_STRONG, strong)
         val pi = PendingIntent.getBroadcast(context, if (strong) 7_201 else 7_200, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -272,7 +294,7 @@ class ReminderScheduler(private val context: Context, private val container: App
     }
 
     fun fireTest(strong: Boolean) {
-        val token = ReminderToken(TEST_ID, 0, container.gate.epochNow())
+        val token = ReminderToken(TEST_ID, 0, container.gate.epochNow(), container.profile.id)
         if (strong) {
             RingService.start(context, token, "测试强提醒")
         } else {
@@ -298,6 +320,32 @@ class ReminderScheduler(private val context: Context, private val container: App
         // Tomorrow by the calendar, not by 24 hours: a day is 23 or 25 hours when the clocks change.
         val at = if (today <= now) java.time.Instant.ofEpochMilli(today).atZone(zone).plusDays(1).toInstant().toEpochMilli() else today
         am.setWindow(AlarmManager.RTC_WAKEUP, at, 5 * 60_000L, pi)
+    }
+
+    fun cancelDiaryReminder() {
+        PendingIntent.getBroadcast(
+            context, Notifier.DIARY_NOTIFICATION_ID,
+            Intent(context, DiaryReminderReceiver::class.java),
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+        )?.let {
+            am.cancel(it)
+            it.cancel()
+        }
+    }
+
+    private fun cancelTestAlarms() {
+        for ((code, strong) in listOf(7_200 to false, 7_201 to true)) {
+            val intent = Intent(context, ReminderReceiver::class.java)
+                .setAction(ReminderReceiver.ACTION_TEST)
+                .setData(Uri.parse("assetboard://test/$strong"))
+            PendingIntent.getBroadcast(
+                context, code, intent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+            )?.let {
+                am.cancel(it)
+                it.cancel()
+            }
+        }
     }
 
     // ------------------------------------------------------------ missed reminders

@@ -1,0 +1,8 @@
+bin/
+data/
+*.db
+*.db-wal
+*.db-shm
+README.md
+compose.example.yaml
+Caddyfile.example

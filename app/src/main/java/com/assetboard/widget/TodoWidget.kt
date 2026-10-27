@@ -47,6 +47,7 @@ import com.assetboard.domain.Countdowns
 import com.assetboard.domain.LedgerException
 import com.assetboard.domain.todo.DateBadge
 import com.assetboard.domain.todo.TodoViews
+import com.assetboard.data.Profile
 import com.assetboard.domain.todo.ViewRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -67,8 +68,8 @@ class TodoWidget : GlanceAppWidget() {
         provideContent {
             val live by container.todos.data.collectAsState()
             val pending by PendingTicks.shown.collectAsState()
-            // The token's epoch is the one current when the rows were drawn.
-            TodoContent(live ?: initial, pending, container.gate.epochNow())
+            // The token's profile and epoch are the ones current when the rows were drawn.
+            TodoContent(live ?: initial, pending, container.profile.id, container.gate.epochNow())
         }
     }
 
@@ -76,6 +77,7 @@ class TodoWidget : GlanceAppWidget() {
         val IdKey = ActionParameters.Key<String>("id")
         val SeqKey = ActionParameters.Key<Long>("seq")
         val EpochKey = ActionParameters.Key<Long>("epoch")
+        val ProfileKey = ActionParameters.Key<String>("profile")
         val DoneKey = ActionParameters.Key<Boolean>("done")
 
         suspend fun refresh(context: Context) {
@@ -85,7 +87,7 @@ class TodoWidget : GlanceAppWidget() {
 }
 
 @Composable
-private fun TodoContent(data: TodoData?, pending: Map<String, Boolean>, epoch: Long) {
+private fun TodoContent(data: TodoData?, pending: Map<String, Boolean>, profile: String, epoch: Long) {
     val context = LocalContext.current
     val size = LocalSize.current
     val compact = size.width < 220.dp
@@ -127,7 +129,7 @@ private fun TodoContent(data: TodoData?, pending: Map<String, Boolean>, epoch: L
             LazyColumn(GlanceModifier.fillMaxSize()) {
                 // Every row travels to the launcher in one parcel; a day of more than this is a list for the app.
                 items(rows.take(40), itemId = { it.todo.id.hashCode().toLong() and 0x7FFFFFFFL }) { row ->
-                    TodoRow(row, today, lists, epoch, compact)
+                    TodoRow(row, today, lists, profile, epoch, compact)
                 }
             }
         } else {
@@ -142,7 +144,7 @@ private fun TodoContent(data: TodoData?, pending: Map<String, Boolean>, epoch: L
 }
 
 @Composable
-private fun TodoRow(row: ViewRow, today: LocalDate, lists: Map<String, String>, epoch: Long, compact: Boolean) {
+private fun TodoRow(row: ViewRow, today: LocalDate, lists: Map<String, String>, profile: String, epoch: Long, compact: Boolean) {
     val context = LocalContext.current
     val t = row.todo
     Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -154,6 +156,7 @@ private fun TodoRow(row: ViewRow, today: LocalDate, lists: Map<String, String>, 
                         TodoWidget.IdKey to t.id,
                         TodoWidget.SeqKey to t.stateSeq,
                         TodoWidget.EpochKey to epoch,
+                        TodoWidget.ProfileKey to profile,
                         TodoWidget.DoneKey to row.done,
                     ),
                 ),
@@ -209,6 +212,10 @@ class ToggleTodoAction : ActionCallback {
         val id = parameters[TodoWidget.IdKey] ?: return
         val seq = parameters[TodoWidget.SeqKey] ?: return
         val epoch = parameters[TodoWidget.EpochKey] ?: return
+        // A widget placed by a build from before profiles has no profile key; it belongs to the
+        // original local database, which is still the same profile.
+        val profile = parameters[TodoWidget.ProfileKey] ?: Profile.LOCAL_ID
+        if (profile != container.profile.id) return
         val wasDone = parameters[TodoWidget.DoneKey] ?: false
         PendingTicks.put(id, !wasDone)
         runCatching { TodoWidget().update(context, glanceId) }

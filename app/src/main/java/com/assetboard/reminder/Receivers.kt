@@ -33,7 +33,8 @@ class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val token = ReminderToken.from(intent) ?: return
         if (intent.action == ACTION_TEST) {
-            ReminderScheduler.container(context).reminders.fireTest(intent.getBooleanExtra(EXTRA_STRONG, false))
+            val container = ReminderScheduler.container(context)
+            if (token.profile == container.profile.id) container.reminders.fireTest(intent.getBooleanExtra(EXTRA_STRONG, false))
             return
         }
         async(context) { runCatching { ReminderScheduler.container(context).reminders.fire(token) } }
@@ -68,6 +69,11 @@ class ReminderActionReceiver : BroadcastReceiver() {
             val container = ReminderScheduler.container(context)
             val nm = context.getSystemService(NotificationManager::class.java)
             val nid = Notifier.notificationId(token.id)
+            if (token.profile != container.profile.id) {
+                // A notification belonging to a profile that is no longer open.
+                nm.cancel(nid)
+                return
+            }
             if (token.id == ReminderScheduler.TEST_ID) {
                 nm.cancel(nid)
                 return

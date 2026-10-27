@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,8 +43,10 @@ class WidgetSheetActivity : ComponentActivity() {
             finish()
             return
         }
-        val container = (application as AssetBoardApp).container
+        val app = application as AssetBoardApp
         setContent {
+            val session by app.sessionGeneration.collectAsStateWithLifecycle()
+            val container = remember(session) { app.container }
             val theme by container.settings.themeMode.collectAsStateWithLifecycle()
             val upIsRed by container.settings.upIsRed.collectAsStateWithLifecycle()
             val glass by container.settings.glass.collectAsStateWithLifecycle()
@@ -54,7 +57,7 @@ class WidgetSheetActivity : ComponentActivity() {
                 LocalHideAmounts provides hideAmounts,
             ) {
                 AssetBoardTheme(theme, upIsRed) {
-                    request?.let { r -> key(generation) { WidgetSheets(r, onClose = ::close) } }
+                    request?.let { r -> key(session, generation) { WidgetSheets(r, onClose = ::close) } }
                 }
             }
         }

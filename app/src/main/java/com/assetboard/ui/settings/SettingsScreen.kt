@@ -40,9 +40,11 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Autorenew
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Icon
@@ -164,6 +166,7 @@ fun SettingsScreen(
     onTrash: () -> Unit = {},
     onPreRestore: () -> Unit = {},
     onGuide: () -> Unit = {},
+    onSyncAccount: () -> Unit = {},
 ) {
     val container = LocalContainer.current
     val settings = container.settings
@@ -176,6 +179,7 @@ fun SettingsScreen(
     val lastBackup by settings.lastBackupAt.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val account by container.account.state.collectAsStateWithLifecycle()
     val networkOn by settings.networkEnabled.collectAsStateWithLifecycle()
     val weatherOn by settings.weatherEnabled.collectAsStateWithLifecycle()
     val holidayOn by settings.holidayUpdateEnabled.collectAsStateWithLifecycle()
@@ -301,6 +305,50 @@ fun SettingsScreen(
             }
 
             SectionCard(Modifier.appear(2)) {
+                SectionHeader("账号与同步")
+                if (account.signedIn) {
+                    ListRow(
+                        title = account.username ?: "已登录",
+                        subtitle = if (account.conflict != null) {
+                            "有冲突需要处理"
+                        } else {
+                            "云端版本 ${account.revision}" +
+                                (account.lastSyncAt?.let { " · 上次同步 " + Dates.relative(it) } ?: " · 还没有同步过")
+                        },
+                        leading = { IconTile(Icons.Outlined.Person, palette.group(4)) },
+                        onClick = onSyncAccount,
+                    )
+                    RowDivider(startIndent = RowIndent)
+                    ListRow(
+                        title = "立即同步",
+                        subtitle = when {
+                            account.busy -> "同步中…"
+                            !networkOn -> "已关闭联网，无法同步"
+                            else -> "上传本机改动，或下载云端的新版本"
+                        },
+                        leading = { IconTile(Icons.Outlined.Sync, palette.group(1)) },
+                        onClick = { if (networkOn) container.appScope.launch { container.account.syncNow() } },
+                    )
+                } else {
+                    ListRow(
+                        title = "登录账号",
+                        subtitle = "登录后同步到你自己的服务器；不登录只在本机",
+                        leading = { IconTile(Icons.Outlined.Person, palette.group(4)) },
+                        onClick = onSyncAccount,
+                    )
+                }
+                account.error?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.error,
+                        modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 2.dp, bottom = 4.dp),
+                    )
+                }
+                Footnote("账号由服务器管理员创建，没有注册和找回密码。")
+            }
+
+            SectionCard(Modifier.appear(3)) {
                 SectionHeader("待办与日记")
                 ListRow(
                     title = "提醒设置检查",
@@ -349,7 +397,7 @@ fun SettingsScreen(
                 )
             }
 
-            SectionCard(Modifier.appear(3)) {
+            SectionCard(Modifier.appear(4)) {
                 SectionHeader("联网")
                 SwitchRow(Icons.Outlined.Public, palette.group(1), "允许联网", "关闭后不发起任何网络请求：节假日用内置数据，不显示天气", networkOn) {
                     settings.setBool(settings.networkEnabled, it)
@@ -372,10 +420,10 @@ fun SettingsScreen(
                         )
                     }
                 }
-                Footnote("资产、待办、日记的内容永远不会离开手机。")
+                Footnote("不登录账号时，资产、待办、日记只在本机；登录后整份数据会同步到你自己的服务器。")
             }
 
-            SectionCard(Modifier.appear(4)) {
+            SectionCard(Modifier.appear(5)) {
                 SectionHeader("应用更新")
                 ListRow(
                     title = "检查更新",
@@ -410,7 +458,7 @@ fun SettingsScreen(
                 )
             }
 
-            SectionCard(Modifier.appear(5)) {
+            SectionCard(Modifier.appear(6)) {
                 SectionHeader("账户")
                 ListRow(
                     title = "分组管理",
@@ -420,7 +468,7 @@ fun SettingsScreen(
                 )
             }
 
-            SectionCard(Modifier.appear(6)) {
+            SectionCard(Modifier.appear(7)) {
                 SectionHeader("数据初始化")
                 ResetScope.entries.forEachIndexed { i, scope ->
                     if (i > 0) RowDivider(startIndent = RowIndent)
@@ -436,7 +484,7 @@ fun SettingsScreen(
                 Footnote("账户里混进了别人的数据、又已经改成自己的余额时，用「清空资产历史」。执行前都会自动另存一份当前数据，可在「恢复前副本」里一键还原。")
             }
 
-            AboutCard(BuildConfigInfo.versionName(context), lastBackup, Modifier.appear(7), onBackup = { if (tree == null) pickTree.launch(null) else vm.backupNow() })
+            AboutCard(BuildConfigInfo.versionName(context), lastBackup, Modifier.appear(8), onBackup = { if (tree == null) pickTree.launch(null) else vm.backupNow() })
         }
     }
 
@@ -550,7 +598,7 @@ private fun AboutCard(version: String, lastBackup: Long?, modifier: Modifier = M
                 Text(" Gain", style = MaterialTheme.typography.titleSmall, color = extra.onHeroMuted, modifier = Modifier.padding(bottom = 2.dp))
             }
             Text("日日行动，日日有盈", style = MaterialTheme.typography.labelMedium, color = extra.onHero.copy(alpha = 0.85f))
-            Text("$version · 数据只保存在本机", style = MaterialTheme.typography.bodySmall, color = extra.onHeroMuted)
+            Text("$version · 数据默认只保存在本机", style = MaterialTheme.typography.bodySmall, color = extra.onHeroMuted)
             Text(
                 lastBackup?.let { "上次备份 " + Dates.relative(it) + " " + Dates.time(it) } ?: "还没有备份过",
                 style = MaterialTheme.typography.bodySmall, color = extra.onHeroMuted,

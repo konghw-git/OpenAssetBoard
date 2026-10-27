@@ -1,0 +1,38 @@
+# Runs beside the existing Sub2API stack on the same Docker network so Caddy can reach it.
+# Nothing is published to the host: only Caddy talks to assetboard:8090.
+#
+#   install -d -o 10001 -g 10001 ./data
+#   docker compose -f compose.example.yaml up -d --build
+#
+# See README.md for the Caddy site block and the backup routine.
+services:
+  assetboard:
+    build: .
+    image: assetboard-server:0.1.0
+    container_name: assetboard
+    restart: unless-stopped
+    environment:
+      ASSETBOARD_ADDR: ":8090"
+      ASSETBOARD_DATA_DIR: "/data"
+      # Only enable this behind Caddy; otherwise clients could forge X-Forwarded-For.
+      ASSETBOARD_TRUST_PROXY: "true"
+    volumes:
+      - ./data:/data
+    networks:
+      - sub2api
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Argon2 needs 32 MiB per concurrent login (two allowed), and a 32 MiB snapshot is
+    # buffered while it is validated; 512 MiB leaves room without touching the host.
+    mem_limit: 512m
+    pids_limit: 256
+
+networks:
+  sub2api:
+    external: true
+    name: sub2api_sub2api-network

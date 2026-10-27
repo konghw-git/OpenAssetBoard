@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-27
+
+### Added
+
+- Optional, self-hosted account sync: sign in from Settings › 账号与同步 to keep the whole backup on
+  your own server over HTTPS. Without an account the app stays fully local. One phone can switch
+  between accounts, each with its own local database. A conflict is never merged automatically:
+  the user chooses whether to keep the phone's copy or the server's.
+- The server in `server/`: a Go + SQLite account and snapshot service with administrator-created
+  accounts, Argon2id passwords, rotating refresh tokens, per-user snapshots and the last ten
+  revisions, together with Docker and Caddy deployment files.
+
 ## [1.0.4] - 2026-10-27
 
 ### Fixed

@@ -11,3 +11,5 @@ captures/
 keystore.properties
 # Screenshot baselines: recorded and checked on this machine (see the README).
 /app/screenshots/
+# Local server operations notes: deployment details, never commit.
+/SERVER-OPS.md

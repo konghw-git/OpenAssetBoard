@@ -11,7 +11,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.assetboard.data.ThemeMode
@@ -31,9 +33,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (savedInstanceState == null) open = requestOf(intent)
-        val container = (application as AssetBoardApp).container
-        if (savedInstanceState == null) container.updater.checkAuto()
+        val app = application as AssetBoardApp
         setContent {
+            // A profile switch swaps the container and bumps this; the whole shell is rebuilt
+            // with fresh ViewModels bound to the new database's epoch.
+            val session by app.sessionGeneration.collectAsStateWithLifecycle()
+            val container = remember(session) { app.container }
+            LaunchedEffect(session) {
+                if (savedInstanceState == null) container.updater.checkAuto()
+            }
             val theme by container.settings.themeMode.collectAsStateWithLifecycle()
             val upIsRed by container.settings.upIsRed.collectAsStateWithLifecycle()
             val glass by container.settings.glass.collectAsStateWithLifecycle()
@@ -54,7 +62,7 @@ class MainActivity : ComponentActivity() {
                 LocalHideAmounts provides hideAmounts,
             ) {
                 AssetBoardTheme(theme, upIsRed) {
-                    AppNav(open = open, onOpenHandled = { open = null })
+                    key(session) { AppNav(open = open, onOpenHandled = { open = null }) }
                 }
             }
         }

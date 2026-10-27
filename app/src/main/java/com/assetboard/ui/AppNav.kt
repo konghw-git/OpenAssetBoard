@@ -133,6 +133,7 @@ import com.assetboard.ui.settings.UpdatePrompt
 import com.assetboard.ui.settings.SettingsScreen
 import com.assetboard.ui.settings.TrashScreen
 import com.assetboard.ui.stocktake.StocktakeScreen
+import com.assetboard.ui.sync.AccountScreen
 import com.assetboard.ui.todo.TodoHomeScreen
 import com.assetboard.ui.trend.TrendScreen
 import kotlinx.coroutines.CancellationException
@@ -186,6 +187,7 @@ object Routes {
     const val GROUPS = "groups"
     const val TRASH = "trash"
     const val PRE_RESTORE = "pre_restore"
+    const val SYNC_ACCOUNT = "sync_account"
     const val REMINDER_GUIDE = "reminder_guide"
     const val BILLS = "bills"
     const val DIARY_SEARCH = "diary_search"
@@ -500,8 +502,10 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit, backdrop: Backd
                         onTrash = { nav.navigate(Routes.TRASH) },
                         onPreRestore = { nav.navigate(Routes.PRE_RESTORE) },
                         onGuide = { nav.navigate(Routes.REMINDER_GUIDE) },
+                        onSyncAccount = { nav.navigate(Routes.SYNC_ACCOUNT) },
                     )
                 }
+                composable(Routes.SYNC_ACCOUNT) { AccountScreen(onBack = back) }
                 composable(Routes.GROUPS) {
                     GroupsScreen(onBack = back)
                 }

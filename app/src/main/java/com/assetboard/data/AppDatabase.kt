@@ -161,8 +161,9 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         const val SCHEMA_VERSION = 13
 
-        fun build(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "asset-board.db")
+        /** [name] is null only in tests and for a pre-profile install; the app names every profile's file. */
+        fun build(context: Context, name: String? = null): AppDatabase =
+            Room.databaseBuilder(context, AppDatabase::class.java, name ?: "asset-board.db")
                 .addMigrations(*Migrations.ALL)
                 .build()
     }

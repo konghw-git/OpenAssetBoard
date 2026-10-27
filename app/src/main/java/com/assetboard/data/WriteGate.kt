@@ -65,6 +65,19 @@ class WriteGate(
 
     fun bound(): Epoch = Epoch(epochNow())
 
+    /**
+     * A database opened for a profile starts with no epoch of its own. Give it one no other
+     * profile on this device has used, before any alarm or widget token can be minted from it.
+     */
+    fun ensureEpochAtLeast(value: Long) {
+        if (epochNow() >= value) return
+        db.openHelper.writableDatabase.execSQL(
+            "INSERT OR REPLACE INTO app_meta(`key`, value) VALUES(?, ?)",
+            arrayOf(KEY_EPOCH, value.toString()),
+        )
+        cachedEpoch = value
+    }
+
     /** Runs [block] in one transaction under the read side of the gate, after the epoch check. */
     suspend fun <T> write(block: suspend () -> T): T {
         val epoch = coroutineContext[Epoch]
