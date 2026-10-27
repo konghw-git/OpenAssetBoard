@@ -5,7 +5,13 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -28,15 +34,48 @@ class AccountManagerTest {
         var downloadText: String? = null
         val uploads = mutableListOf<Pair<Long, String>>()
         var logouts = 0
+        var probeError: Exception? = null
+        var probeCount = 0
+        var loginError: Exception? = null
+        private val loginCount = AtomicInteger()
+        val loginCalls: Int get() = loginCount.get()
+        /** A blocking first login, like an HttpURLConnection read that ignores cancellation. */
+        var slowFirstLogin = false
+        var loginGate: CompletableDeferred<Unit>? = null
+        var changePasswordError: Exception? = null
+        var changePasswordSession = ServerSession("new-access", "new-refresh", 900, RemoteUser("a", "alice"))
+        val passwordChanges = mutableListOf<Triple<String, String, String>>()
 
-        override suspend fun login(serverUrl: String, username: String, password: String) =
-            ServerSession("access", "refresh", 900, user)
+        override suspend fun probe(serverUrl: String): Long {
+            probeCount++
+            probeError?.let { throw it }
+            return 32
+        }
+
+        override suspend fun login(serverUrl: String, username: String, password: String): ServerSession {
+            val call = loginCount.incrementAndGet()
+            if (slowFirstLogin && call == 1) Thread.sleep(400)
+            loginGate?.await()
+            loginError?.let { throw it }
+            return ServerSession("access-$call", "refresh-$call", 900, user)
+        }
 
         override suspend fun refresh(serverUrl: String, refreshToken: String) =
             ServerSession("access2", "refresh2", 900, user)
 
         override suspend fun logout(serverUrl: String, refreshToken: String) {
             logouts++
+        }
+
+        override suspend fun changePassword(
+            serverUrl: String,
+            access: String,
+            oldPassword: String,
+            newPassword: String,
+        ): ServerSession {
+            passwordChanges += Triple(serverUrl, oldPassword, newPassword)
+            changePasswordError?.let { throw it }
+            return changePasswordSession
         }
 
         override suspend fun meta(serverUrl: String, access: String) = meta
@@ -165,6 +204,149 @@ class AccountManagerTest {
             assertEquals(1L, saved.lastRevision)
             assertEquals("cloud", saved.lastSyncedHash)
             assertTrue(fake.uploads.isEmpty())
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun anUnreachableServerIsReportedBeforeTheCredentialsAreSent() = runBlocking {
+        val store = ProfileStore(context)
+        val local = store.active()
+        val fake = FakeGateway().apply {
+            probeError = ApiException("连接服务器超时，请更换网络（Wi‑Fi 或移动数据）后重试", code = "network")
+        }
+        val container = AppContainer(context, local, local.dbFile, store, {}, fake)
+        try {
+            container.account.login("https://example.com", "alice", "password")
+
+            val state = container.account.state.value
+            assertEquals(0, fake.loginCalls)
+            assertEquals(1, fake.probeCount)
+            assertFalse(state.signedIn)
+            assertFalse(state.loginBusy)
+            assertEquals(false, state.check.ok)
+            assertTrue(state.error!!.contains("更换网络"))
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun leavingTheLoginPageCancelsTheWaitingAttempt() = runBlocking {
+        val store = ProfileStore(context)
+        val local = store.active()
+        val fake = FakeGateway().apply { loginGate = CompletableDeferred() }
+        val container = AppContainer(context, local, local.dbFile, store, {}, fake)
+        try {
+            val job = launch { container.account.login("https://example.com", "alice", "password") }
+            withTimeout(5_000) {
+                while (fake.loginCalls == 0) delay(10)
+            }
+            assertTrue(container.account.state.value.loginBusy)
+
+            container.account.cancelLogin()
+            job.join()
+
+            val state = container.account.state.value
+            assertFalse("coming back must show the form, not a stale spinner", state.loginBusy)
+            assertFalse(state.signedIn)
+            assertNull(state.error)
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun aCancelledAttemptCannotOverwriteTheNextOne() = runBlocking {
+        val store = ProfileStore(context)
+        val local = store.active()
+        val fake = FakeGateway().apply { slowFirstLogin = true }
+        val container = AppContainer(context, local, local.dbFile, store, {}, fake)
+        try {
+            // The first request is still in a blocking read when the user cancels and retries.
+            val first = launch(Dispatchers.IO) {
+                container.account.login("https://example.com", "alice", "password")
+            }
+            withTimeout(5_000) { while (fake.loginCalls == 0) delay(10) }
+            container.account.cancelLogin()
+
+            val second = launch(Dispatchers.IO) {
+                container.account.login("https://example.com", "alice", "password")
+            }
+            withTimeout(5_000) { while (!container.account.state.value.signedIn) delay(10) }
+            second.join()
+            first.join()
+
+            // The first answer came back after cancel and must not replace the second session.
+            assertEquals("refresh-2", SessionStore(context, local.id).load())
+            assertTrue(container.account.state.value.signedIn)
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun aWrongPasswordEndsTheAttemptInsteadOfLeavingItBusy() = runBlocking {
+        val store = ProfileStore(context)
+        val local = store.active()
+        val fake = FakeGateway().apply {
+            loginError = ApiException("invalid credentials", status = 401, code = "invalid_credentials")
+        }
+        val container = AppContainer(context, local, local.dbFile, store, {}, fake)
+        try {
+            container.account.login("https://example.com", "alice", "wrong-password")
+
+            val state = container.account.state.value
+            assertFalse(state.loginBusy)
+            assertFalse(state.signedIn)
+            assertEquals("用户名或密码错误", state.error)
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun changingThePasswordSavesTheNewSessionAndStaysSignedIn() = runBlocking {
+        val store = ProfileStore(context)
+        val local = store.active()
+        val fake = FakeGateway()
+        val container = AppContainer(context, local, local.dbFile, store, {}, fake)
+        try {
+            container.account.login("https://example.com", "alice", "password")
+
+            val failure = container.account.changePassword("old-password", "new-password-456")
+
+            assertNull(failure)
+            assertEquals(
+                Triple("https://example.com", "old-password", "new-password-456"),
+                fake.passwordChanges.single(),
+            )
+            assertEquals("new-refresh", SessionStore(context, local.id).load())
+            assertTrue(container.account.state.value.signedIn)
+            assertEquals("密码已修改，其他设备需要重新登录", container.account.state.value.message)
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun aWrongOldPasswordKeepsTheUserSignedIn() = runBlocking {
+        val store = ProfileStore(context)
+        val local = store.active()
+        val fake = FakeGateway().apply {
+            changePasswordError = ApiException("旧密码不正确", status = 401, code = "invalid_old_password")
+        }
+        val container = AppContainer(context, local, local.dbFile, store, {}, fake)
+        try {
+            container.account.login("https://example.com", "alice", "password")
+
+            val failure = container.account.changePassword("not-the-old-one", "new-password-456")
+
+            assertEquals("旧密码不正确", failure)
+            assertTrue(container.account.state.value.signedIn)
+            assertFalse(container.account.state.value.busy)
+            assertNull(container.account.state.value.error)
         } finally {
             container.close()
         }

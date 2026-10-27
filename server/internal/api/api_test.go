@@ -292,6 +292,144 @@ func (e *testEnv) refreshWith(token string) response {
 	return e.do(http.MethodPost, "/v1/auth/refresh", body, nil)
 }
 
+func (e *testEnv) changePassword(access, oldPassword, newPassword string) response {
+	e.t.Helper()
+	body, _ := json.Marshal(changePasswordRequest{OldPassword: oldPassword, NewPassword: newPassword})
+	return e.do(http.MethodPost, "/v1/auth/password", body, map[string]string{
+		"Authorization": "Bearer " + access,
+		"Content-Type":  "application/json",
+	})
+}
+
+func TestChangePasswordRevokesEveryOtherSession(t *testing.T) {
+	e := newTestEnv(t, nil)
+	e.createUser("alice", "password123")
+	accessA, refreshA := e.login("alice", "password123")
+	// A second device already signed in.
+	accessB, refreshB := e.login("alice", "password123")
+
+	r := e.changePassword(accessA, "password123", "new-password-456")
+	if r.status != http.StatusOK {
+		t.Fatalf("change status = %d body %s", r.status, r.body)
+	}
+	var tr tokenResponse
+	decodeBody(t, r, &tr)
+	if tr.AccessToken == "" || tr.RefreshToken == "" || tr.User.Username != "alice" {
+		t.Fatalf("change response = %+v", tr)
+	}
+
+	// Both old sessions are gone, including the one that made the change.
+	if r := e.get(accessA, "/v1/me", nil); r.status != http.StatusUnauthorized {
+		t.Fatalf("old access A = %d", r.status)
+	}
+	if r := e.refreshWith(refreshA); r.status != http.StatusUnauthorized {
+		t.Fatalf("old refresh A = %d", r.status)
+	}
+	if r := e.get(accessB, "/v1/me", nil); r.status != http.StatusUnauthorized {
+		t.Fatalf("old access B = %d", r.status)
+	}
+	if r := e.refreshWith(refreshB); r.status != http.StatusUnauthorized {
+		t.Fatalf("old refresh B = %d", r.status)
+	}
+
+	// The pair returned by the change keeps this device signed in.
+	if r := e.get(tr.AccessToken, "/v1/me", nil); r.status != http.StatusOK {
+		t.Fatalf("new access = %d body %s", r.status, r.body)
+	}
+	if r := e.refreshWith(tr.RefreshToken); r.status != http.StatusOK {
+		t.Fatalf("new refresh = %d body %s", r.status, r.body)
+	}
+
+	// The old password no longer works; the new one does.
+	if r := e.tryLogin("alice", "password123"); r.status != http.StatusUnauthorized {
+		t.Fatalf("login with old password = %d", r.status)
+	}
+	if r := e.tryLogin("alice", "new-password-456"); r.status != http.StatusOK {
+		t.Fatalf("login with new password = %d body %s", r.status, r.body)
+	}
+}
+
+func TestChangePasswordRejectsAWrongOldPassword(t *testing.T) {
+	e := newTestEnv(t, nil)
+	e.createUser("alice", "password123")
+	access, _ := e.login("alice", "password123")
+
+	r := e.changePassword(access, "not-the-password", "new-password-456")
+	if r.status != http.StatusUnauthorized {
+		t.Fatalf("status = %d body %s", r.status, r.body)
+	}
+	var envelope errorEnvelope
+	decodeBody(t, r, &envelope)
+	if envelope.Error.Code != "invalid_old_password" {
+		t.Fatalf("code = %q", envelope.Error.Code)
+	}
+	// A wrong old password does not end the session and does not change the password.
+	if r := e.get(access, "/v1/me", nil); r.status != http.StatusOK {
+		t.Fatalf("status after wrong old password = %d", r.status)
+	}
+	if r := e.tryLogin("alice", "password123"); r.status != http.StatusOK {
+		t.Fatalf("old password no longer works: %d", r.status)
+	}
+}
+
+func TestChangePasswordValidatesTheNewOne(t *testing.T) {
+	e := newTestEnv(t, nil)
+	e.createUser("alice", "password123")
+	access, _ := e.login("alice", "password123")
+
+	for _, tc := range []struct {
+		name   string
+		newPw  string
+		status int
+		code   string
+	}{
+		{"too short", "short", http.StatusBadRequest, "invalid_password"},
+		{"same as old", "password123", http.StatusBadRequest, "same_password"},
+	} {
+		r := e.changePassword(access, "password123", tc.newPw)
+		if r.status != tc.status {
+			t.Fatalf("%s status = %d body %s", tc.name, r.status, r.body)
+		}
+		var envelope errorEnvelope
+		decodeBody(t, r, &envelope)
+		if envelope.Error.Code != tc.code {
+			t.Fatalf("%s code = %q", tc.name, envelope.Error.Code)
+		}
+	}
+}
+
+func TestChangePasswordIsRateLimited(t *testing.T) {
+	e := newTestEnv(t, nil)
+	e.createUser("alice", "password123")
+	access, _ := e.login("alice", "password123")
+
+	for i := 0; i < 5; i++ {
+		if r := e.changePassword(access, "wrong-old", "new-password-456"); r.status != http.StatusUnauthorized {
+			t.Fatalf("attempt %d status = %d", i+1, r.status)
+		}
+	}
+	r := e.changePassword(access, "wrong-old", "new-password-456")
+	if r.status != http.StatusTooManyRequests || r.header.Get("Retry-After") == "" {
+		t.Fatalf("sixth attempt = %d, headers %v", r.status, r.header)
+	}
+	// The correct old password is locked out too until the window passes.
+	if r := e.changePassword(access, "password123", "new-password-456"); r.status != http.StatusTooManyRequests {
+		t.Fatalf("correct old password while limited = %d", r.status)
+	}
+	e.clock.Advance(6 * time.Minute)
+	if r := e.changePassword(access, "password123", "new-password-456"); r.status != http.StatusOK {
+		t.Fatalf("after window = %d body %s", r.status, r.body)
+	}
+}
+
+func TestChangePasswordRequiresAuth(t *testing.T) {
+	e := newTestEnv(t, nil)
+	body, _ := json.Marshal(changePasswordRequest{OldPassword: "password123", NewPassword: "new-password-456"})
+	if r := e.do(http.MethodPost, "/v1/auth/password", body, nil); r.status != http.StatusUnauthorized {
+		t.Fatalf("without token = %d", r.status)
+	}
+}
+
 func TestLogoutRevokesFamily(t *testing.T) {
 	e := newTestEnv(t, nil)
 	e.createUser("alice", "password123")

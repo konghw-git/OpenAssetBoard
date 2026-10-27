@@ -38,21 +38,25 @@ type Config struct {
 	LoginWindow    time.Duration
 	LoginIPLimit   int
 	LoginUserLimit int
+	// PasswordUserLimit bounds how often one signed-in user may try to change their password
+	// with a wrong old password, so a stolen access token cannot be turned into a password.
+	PasswordUserLimit int
 }
 
 type Server struct {
-	store       *store.Store
-	hasher      *auth.Hasher
-	accessTTL   time.Duration
-	refreshTTL  time.Duration
-	maxBlob     int64
-	trustProxy  bool
-	now         func() time.Time
-	log         *slog.Logger
-	version     string
-	ipLimiter   *rateLimiter
-	userLimiter *rateLimiter
-	dummyHash   string
+	store           *store.Store
+	hasher          *auth.Hasher
+	accessTTL       time.Duration
+	refreshTTL      time.Duration
+	maxBlob         int64
+	trustProxy      bool
+	now             func() time.Time
+	log             *slog.Logger
+	version         string
+	ipLimiter       *rateLimiter
+	userLimiter     *rateLimiter
+	passwordLimiter *rateLimiter
+	dummyHash       string
 }
 
 func New(cfg Config) (*Server, error) {
@@ -89,23 +93,27 @@ func New(cfg Config) (*Server, error) {
 	if cfg.LoginUserLimit <= 0 {
 		cfg.LoginUserLimit = 5
 	}
+	if cfg.PasswordUserLimit <= 0 {
+		cfg.PasswordUserLimit = 5
+	}
 	dummy, err := cfg.Hasher.Hash("dummy-password-that-is-never-valid")
 	if err != nil {
 		return nil, fmt.Errorf("prepare login timing hash: %w", err)
 	}
 	return &Server{
-		store:       cfg.Store,
-		hasher:      cfg.Hasher,
-		accessTTL:   cfg.AccessTTL,
-		refreshTTL:  cfg.RefreshTTL,
-		maxBlob:     cfg.MaxBlobBytes,
-		trustProxy:  cfg.TrustProxy,
-		now:         cfg.Now,
-		log:         cfg.Logger,
-		version:     cfg.Version,
-		ipLimiter:   newRateLimiter(cfg.LoginIPLimit, cfg.LoginWindow),
-		userLimiter: newRateLimiter(cfg.LoginUserLimit, cfg.LoginWindow),
-		dummyHash:   dummy,
+		store:           cfg.Store,
+		hasher:          cfg.Hasher,
+		accessTTL:       cfg.AccessTTL,
+		refreshTTL:      cfg.RefreshTTL,
+		maxBlob:         cfg.MaxBlobBytes,
+		trustProxy:      cfg.TrustProxy,
+		now:             cfg.Now,
+		log:             cfg.Logger,
+		version:         cfg.Version,
+		ipLimiter:       newRateLimiter(cfg.LoginIPLimit, cfg.LoginWindow),
+		userLimiter:     newRateLimiter(cfg.LoginUserLimit, cfg.LoginWindow),
+		passwordLimiter: newRateLimiter(cfg.PasswordUserLimit, cfg.LoginWindow),
+		dummyHash:       dummy,
 	}, nil
 }
 
@@ -115,6 +123,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/auth/login", s.login)
 	mux.HandleFunc("POST /v1/auth/refresh", s.refresh)
 	mux.HandleFunc("POST /v1/auth/logout", s.logout)
+	mux.Handle("POST /v1/auth/password", s.requireAuth(s.changePassword))
 	mux.Handle("GET /v1/me", s.requireAuth(s.me))
 	mux.Handle("GET /v1/sync/meta", s.requireAuth(s.syncMeta))
 	mux.Handle("GET /v1/sync", s.requireAuth(s.getSync))
@@ -249,6 +258,11 @@ type refreshRequest struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
+type changePasswordRequest struct {
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
+}
+
 type userDTO struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
@@ -367,6 +381,72 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tokenResponse{
 		AccessToken:  access,
 		RefreshToken: newRefresh,
+		ExpiresIn:    int64(s.accessTTL.Seconds()),
+		User:         userDTO{ID: user.ID, Username: user.Username},
+	})
+}
+
+// changePassword lets a signed-in user replace their own password after proving the old one.
+// Every other session ends; this device gets a brand-new token pair in the response so the
+// user does not have to sign in again with what they just typed.
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request, user store.User) {
+	var req changePasswordRequest
+	if !decodeJSON(w, r, &req, 1<<20) {
+		return
+	}
+	now := s.now()
+	key := "passwd:" + user.ID
+	if ok, retry := s.passwordLimiter.allow(key, now); !ok {
+		tooMany(w, retry)
+		return
+	}
+	if !auth.ValidPassword(req.NewPassword) {
+		writeError(w, http.StatusBadRequest, "invalid_password", "new password must be 8-256 bytes")
+		return
+	}
+	ok, err := s.hasher.Verify(user.PasswordHash, req.OldPassword)
+	if err != nil {
+		s.log.Error("stored password hash is unreadable", "user", user.ID)
+		writeError(w, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "invalid_old_password", "old password is incorrect")
+		return
+	}
+	// Checked after the old password: telling someone who mistyped both fields that the two
+	// match would be less useful than "the old password is wrong".
+	if req.NewPassword == req.OldPassword {
+		writeError(w, http.StatusBadRequest, "same_password", "new password must differ from the old one")
+		return
+	}
+	hash, err := s.hasher.Hash(req.NewPassword)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	if err := s.store.SetPassword(r.Context(), user.ID, hash); err != nil {
+		s.log.Error("set password", "user", user.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	// A password change ends every open session; otherwise a token from before the change
+	// keeps working. The pair issued below is the one exception, for this device.
+	if err := s.store.RevokeUserTokens(r.Context(), user.ID, now); err != nil {
+		s.log.Error("revoke user tokens", "user", user.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	s.passwordLimiter.reset(key)
+	access, refresh, err := s.issueTokens(r.Context(), user.ID, now)
+	if err != nil {
+		s.log.Error("issue tokens after password change", "user", user.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, tokenResponse{
+		AccessToken:  access,
+		RefreshToken: refresh,
 		ExpiresIn:    int64(s.accessTTL.Seconds()),
 		User:         userDTO{ID: user.ID, Username: user.Username},
 	})

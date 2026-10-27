@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-27
+
+### Added
+
+- The account page checks the server before signing in: it shows the round trip, and an
+  unreachable server is reported in seconds with "change networks" guidance instead of leaving
+  the login button on 登录中 until a long request timeout. The check can be repeated from the
+  page.
+- The account page can change the password with the old one. The server ends every session and
+  returns a fresh token pair for this device, so other devices sign out while this one stays
+  signed in. A wrong old password is shown beside the dialog's fields and does not sign out.
+- The server's `POST /v1/auth/password` endpoint, with the old password checked against its
+  Argon2id hash and wrong attempts rate-limited per user.
+
+### Fixed
+
+- Leaving the account page during a sign-in left the login button on 登录中 when it was opened
+  again, even after the request had failed. Leaving now cancels the wait; a failed sign-in ends
+  in the error dialog, and the busy state can no longer survive the page.
+- Connection failures now say what actually happened (unknown host, timeout, TLS failure,
+  refused connection) instead of one generic message, and login requests use short timeouts
+  rather than the long ones meant for snapshot transfers.
+
 ## [1.1.0] - 2026-10-27
 
 ### Added

@@ -80,6 +80,7 @@ assetboard-server version
 | `POST` | `/v1/auth/login` | 否 | `{username,password}` → 令牌与用户 |
 | `POST` | `/v1/auth/refresh` | 否 | `{refreshToken}` → 新的一对令牌 |
 | `POST` | `/v1/auth/logout` | 否 | `{refreshToken}`，撤销整个令牌家族，204 |
+| `POST` | `/v1/auth/password` | 是 | `{oldPassword,newPassword}`，修改密码，返回新的令牌与用户 |
 | `GET` | `/v1/me` | 是 | 当前用户 |
 | `GET` | `/v1/sync/meta` | 是 | 版本、哈希、格式版本、大小；没有快照时 `revision: 0` |
 | `GET` | `/v1/sync` | 是 | 最新快照原文；没有时 404 |
@@ -87,7 +88,7 @@ assetboard-server version
 | `GET` | `/v1/sync/revisions` | 是 | 最近版本列表，新的在前 |
 | `GET` | `/v1/sync/revisions/{n}` | 是 | 指定版本原文 |
 
-登录成功返回：
+登录成功返回（修改密码成功也返回同样结构的一对新令牌）：
 
 ```json
 {
@@ -97,6 +98,8 @@ assetboard-server version
   "user": {"id":"…","username":"alice"}
 }
 ```
+
+改密码的错误码：新密码不合法为 400 `invalid_password`，新旧相同为 400 `same_password`，旧密码错误为 401 `invalid_old_password`。
 
 ### 上传与冲突
 
@@ -133,7 +136,7 @@ X-Updated-At: 1793075494
 - 令牌：32 字节随机数，数据库只存 SHA-256；不是 JWT，删除一行即可撤销。
   - 访问令牌 15 分钟。
   - 刷新令牌 30 天，每次使用都轮换；**旧刷新令牌再次出现会撤销整个家族**（视为泄露）。
-  - 改密码、禁用账号会撤销该用户全部会话。
+  - 改密码、禁用账号会撤销该用户全部会话。App 内改密码需要旧密码；成功后这次请求会拿到一对新令牌，当前设备保持登录，其他设备需要重新登录。旧密码错误按用户限流（默认 5 次 / 5 分钟）。
 - 登录限流：每用户名 5 次 / 5 分钟，每 IP 20 次 / 5 分钟（进程内固定窗口）。
 - 用户名 3–32 位（字母、数字、`.` `_` `-`，不区分大小写）；密码 8–256 字节。
 - 服务只应在 TLS 后面运行；容器不发布端口，由 Caddy 通过 Docker 网络访问。

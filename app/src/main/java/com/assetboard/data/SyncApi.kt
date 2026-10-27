@@ -6,8 +6,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.IOException
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
 @Serializable
 data class RemoteUser(val id: String, val username: String)
@@ -37,6 +41,12 @@ private data class LoginBody(val username: String, val password: String)
 private data class RefreshBody(val refreshToken: String)
 
 @Serializable
+private data class ChangePasswordBody(val oldPassword: String, val newPassword: String)
+
+@Serializable
+private data class HealthBody(val status: String = "", val version: String = "")
+
+@Serializable
 private data class UploadResult(val revision: Long)
 
 @Serializable
@@ -56,11 +66,14 @@ class ApiException(
     val revision: Long? = null,
 ) : LedgerException(message)
 
-/** The four calls the account manager makes, small enough to fake in a test. */
+/** The calls the account manager makes, small enough to fake in a test. */
 interface SyncGateway {
+    /** Round-trip to `/healthz`, in milliseconds; a fast way to tell "wrong network" from "wrong password". */
+    suspend fun probe(serverUrl: String): Long
     suspend fun login(serverUrl: String, username: String, password: String): ServerSession
     suspend fun refresh(serverUrl: String, refreshToken: String): ServerSession
     suspend fun logout(serverUrl: String, refreshToken: String)
+    suspend fun changePassword(serverUrl: String, access: String, oldPassword: String, newPassword: String): ServerSession
     suspend fun meta(serverUrl: String, access: String): RemoteMeta
     suspend fun download(serverUrl: String, access: String): String?
     suspend fun upload(serverUrl: String, access: String, baseRevision: Long, snapshotJson: String, contentHash: String): Long
@@ -73,10 +86,35 @@ interface SyncGateway {
 class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGateway {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    override suspend fun probe(serverUrl: String): Long = withContext(Dispatchers.IO) {
+        val started = System.nanoTime()
+        val raw = request(
+            serverUrl, "GET", "/healthz", null, null,
+            connectTimeout = 5_000, readTimeout = 5_000,
+        )
+        if (raw.status != 200) {
+            throw ApiException(
+                if (raw.status >= 500) {
+                    "服务器暂时不可用（状态码 ${raw.status}），请稍后再试"
+                } else {
+                    "服务器没有正常响应（状态码 ${raw.status}），请检查服务器地址"
+                },
+            )
+        }
+        // A captive portal or a different service on this address can answer 200 with anything;
+        // only the real server returns this shape, so the probe also validates the address.
+        val health = runCatching { json.decodeFromString(HealthBody.serializer(), raw.body) }.getOrNull()
+        if (health?.status != "ok") throw ApiException("这个地址不是日盈服务器，请检查服务器地址")
+        (System.nanoTime() - started) / 1_000_000
+    }
+
     override suspend fun login(serverUrl: String, username: String, password: String): ServerSession = withContext(Dispatchers.IO) {
         val raw = request(
             serverUrl, "POST", "/v1/auth/login",
             json.encodeToString(LoginBody.serializer(), LoginBody(username.trim(), password)), null,
+            // A login is a small request: if it has not been answered in seconds the user is
+            // better off being told to try another network than watching a spinner.
+            connectTimeout = 6_000, readTimeout = 12_000,
         )
         if (raw.status != 200) fail(raw)
         decode(raw) { json.decodeFromString(ServerSession.serializer(), raw.body) }
@@ -86,6 +124,7 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
         val raw = request(
             serverUrl, "POST", "/v1/auth/refresh",
             json.encodeToString(RefreshBody.serializer(), RefreshBody(refreshToken)), null,
+            connectTimeout = 6_000, readTimeout = 12_000,
         )
         if (raw.status != 200) fail(raw)
         decode(raw) { json.decodeFromString(ServerSession.serializer(), raw.body) }
@@ -95,12 +134,30 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
         val raw = request(
             serverUrl, "POST", "/v1/auth/logout",
             json.encodeToString(RefreshBody.serializer(), RefreshBody(refreshToken)), null,
+            connectTimeout = 5_000, readTimeout = 5_000,
         )
         if (raw.status >= 500) fail(raw)
     }
 
+    override suspend fun changePassword(
+        serverUrl: String,
+        access: String,
+        oldPassword: String,
+        newPassword: String,
+    ): ServerSession = withContext(Dispatchers.IO) {
+        val raw = request(
+            serverUrl, "POST", "/v1/auth/password",
+            json.encodeToString(ChangePasswordBody.serializer(), ChangePasswordBody(oldPassword, newPassword)), access,
+            connectTimeout = 6_000, readTimeout = 12_000,
+        )
+        // A server deployed before this endpoint existed; saying so is clearer than "404".
+        if (raw.status == 404) throw ApiException("服务器版本过旧，还不支持在 App 内修改密码", 404)
+        if (raw.status != 200) fail(raw)
+        decode(raw) { json.decodeFromString(ServerSession.serializer(), raw.body) }
+    }
+
     override suspend fun meta(serverUrl: String, access: String): RemoteMeta = withContext(Dispatchers.IO) {
-        val raw = request(serverUrl, "GET", "/v1/sync/meta", null, access)
+        val raw = request(serverUrl, "GET", "/v1/sync/meta", null, access, connectTimeout = 8_000, readTimeout = 15_000)
         if (raw.status == 404) return@withContext RemoteMeta()
         if (raw.status != 200) fail(raw)
         decode(raw) { json.decodeFromString(RemoteMeta.serializer(), raw.body) }
@@ -108,7 +165,7 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
 
     /** The snapshot, or null when the account has none yet. */
     override suspend fun download(serverUrl: String, access: String): String? = withContext(Dispatchers.IO) {
-        val raw = request(serverUrl, "GET", "/v1/sync", null, access)
+        val raw = request(serverUrl, "GET", "/v1/sync", null, access, connectTimeout = 10_000, readTimeout = 120_000)
         when (raw.status) {
             200 -> raw.body
             404 -> null
@@ -126,6 +183,7 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
         val raw = request(
             serverUrl, "PUT", "/v1/sync", snapshotJson, access,
             mapOf("If-Match" to baseRevision.toString(), "X-Content-Hash" to contentHash),
+            connectTimeout = 10_000, readTimeout = 120_000,
         )
         if (raw.status == 409) {
             val conflict = runCatching { json.decodeFromString(ConflictBody.serializer(), raw.body) }.getOrNull()
@@ -151,8 +209,15 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
     private fun fail(raw: Raw): Nothing {
         val detail = runCatching { json.decodeFromString(ErrorBody.serializer(), raw.body).error }.getOrNull()
         val message = when {
-            raw.status == 400 -> "请求无效，请更新 app 后再试"
-            raw.status == 401 -> "登录已过期，请重新登录"
+            raw.status == 400 -> when (detail?.code) {
+                "invalid_password" -> "新密码需要 8 到 256 个字符"
+                "same_password" -> "新密码不能与旧密码相同"
+                else -> "请求无效，请更新 app 后再试"
+            }
+            raw.status == 401 -> when (detail?.code) {
+                "invalid_old_password" -> "旧密码不正确"
+                else -> "登录已过期，请重新登录"
+            }
             raw.status == 403 -> "没有权限访问这个账号"
             raw.status == 413 -> "数据太大，服务器无法接收"
             raw.status == 429 -> "尝试太频繁，请稍后再试"
@@ -171,6 +236,8 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
         body: String?,
         access: String?,
         extra: Map<String, String> = emptyMap(),
+        connectTimeout: Int = 10_000,
+        readTimeout: Int = 120_000,
     ): Raw {
         if (!networkAllowed()) throw ApiException("已关闭联网，无法同步")
         val base = normalize(serverUrl)
@@ -181,9 +248,8 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
         }
         try {
             connection.requestMethod = method
-            connection.connectTimeout = 15_000
-            // A full snapshot over a slow mobile link; the server bounds its side at five minutes.
-            connection.readTimeout = 120_000
+            connection.connectTimeout = connectTimeout
+            connection.readTimeout = readTimeout
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Accept", "application/json")
             if (access != null) connection.setRequestProperty("Authorization", "Bearer $access")
@@ -198,10 +264,25 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
             val text = stream?.use { it.readBytes().decodeToString() }.orEmpty()
             return Raw(status, text)
         } catch (e: IOException) {
-            throw ApiException("无法连接服务器，请检查网络（${e.message ?: "连接失败"}）")
+            throw networkFailure(e)
         } finally {
             connection.disconnect()
         }
+    }
+
+    /**
+     * The phone usually gets one of a few failures; each one has a different next step, so the
+     * message says which. The code marks these as connectivity problems rather than answers.
+     */
+    private fun networkFailure(e: IOException): ApiException {
+        val message = when (e) {
+            is UnknownHostException -> "无法解析服务器地址，请检查网络或服务器地址是否正确"
+            is SocketTimeoutException -> "连接服务器超时，请更换网络（Wi‑Fi 或移动数据）后重试"
+            is SSLException -> "安全连接失败，请检查手机时间，或更换网络后重试"
+            is ConnectException -> "无法连接服务器，请更换网络（Wi‑Fi 或移动数据）后重试"
+            else -> "无法连接服务器，请检查网络（${e.message ?: "连接失败"}）"
+        }
+        return ApiException(message, code = "network")
     }
 
     /** HTTPS everywhere except a loopback development server. */

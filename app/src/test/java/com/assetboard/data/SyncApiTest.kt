@@ -67,6 +67,27 @@ class SyncApiTest {
         }
     }
 
+    @Test fun probeMeasuresTheHealthEndpoint() = withServer(
+        { it.reply(200, """{"status":"ok","version":"0.1.0"}""") },
+    ) { server ->
+        val latency = runBlocking { SyncApi().probe(server.url) }
+        assertTrue(latency >= 0)
+        val request = server.requests.single()
+        assertEquals("GET", request.method)
+        assertEquals("/healthz", request.path)
+    }
+
+    @Test fun probeRejectsAnAddressThatIsNotThisServer() = withServer(
+        { it.reply(200, "<html><body>some other site</body></html>") },
+    ) { server ->
+        try {
+            runBlocking { SyncApi().probe(server.url) }
+            fail("expected ApiException")
+        } catch (e: ApiException) {
+            assertTrue(e.message!!.contains("不是日盈服务器"))
+        }
+    }
+
     @Test fun loginParsesTheSessionAndSendsTheCredentials() = withServer(
         { it.reply(200, """{"accessToken":"access","refreshToken":"refresh","expiresIn":900,"user":{"id":"u1","username":"alice"}}""") },
     ) { server ->
@@ -150,6 +171,36 @@ class SyncApiTest {
             fail("expected ApiException")
         } catch (e: ApiException) {
             assertEquals("已关闭联网，无法同步", e.message)
+        }
+    }
+
+    @Test fun changePasswordSendsBothPasswordsAndParsesTheNewSession() = withServer(
+        { it.reply(200, """{"accessToken":"new-access","refreshToken":"new-refresh","expiresIn":900,"user":{"id":"u1","username":"alice"}}""") },
+    ) { server ->
+        val session = runBlocking {
+            SyncApi().changePassword(server.url, "old-access", "old-password", "new-password-456")
+        }
+        assertEquals("new-access", session.accessToken)
+        assertEquals("new-refresh", session.refreshToken)
+        assertEquals("alice", session.user.username)
+        val request = server.requests.single()
+        assertEquals("POST", request.method)
+        assertEquals("/v1/auth/password", request.path)
+        assertEquals("Bearer old-access", request.header("Authorization"))
+        assertTrue(request.body.contains("\"oldPassword\":\"old-password\""))
+        assertTrue(request.body.contains("\"newPassword\":\"new-password-456\""))
+    }
+
+    @Test fun aWrongOldPasswordGetsItsOwnMessage() = withServer(
+        { it.reply(401, """{"error":{"code":"invalid_old_password","message":"old password is incorrect"}}""") },
+    ) { server ->
+        try {
+            runBlocking { SyncApi().changePassword(server.url, "access", "wrong", "new-password-456") }
+            fail("expected ApiException")
+        } catch (e: ApiException) {
+            assertEquals(401, e.status)
+            assertEquals("invalid_old_password", e.code)
+            assertEquals("旧密码不正确", e.message)
         }
     }
 

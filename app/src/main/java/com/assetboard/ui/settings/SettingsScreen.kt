@@ -345,7 +345,7 @@ fun SettingsScreen(
                         modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 2.dp, bottom = 4.dp),
                     )
                 }
-                Footnote("账号由服务器管理员创建，没有注册和找回密码。")
+                Footnote("账号由服务器管理员创建，没有注册；登录后可在账号页修改密码，忘了密码只能请管理员在服务器上重置。")
             }
 
             SectionCard(Modifier.appear(3)) {
