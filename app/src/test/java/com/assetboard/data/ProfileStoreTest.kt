@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
+import com.assetboard.BuildConfig
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -83,6 +84,31 @@ class ProfileStoreTest {
         assertEquals(account.id, store.findForAccount("a")?.id)
         assertNull(store.findForAccount("b"))
         assertEquals(local.id, store.byId(local.id)?.id)
+    }
+
+    @Test fun profilesPointingAtTheMovedServerFollowTheNewDefault() {
+        val store = ProfileStore(context)
+        store.save(
+            Profile(
+                id = "p-moved",
+                dbFile = "asset-board-p-moved.db",
+                username = "konghw",
+                serverUrl = LEGACY_SYNC_SERVER_URL,
+                createdAt = 20,
+            ),
+        )
+        store.save(
+            Profile(
+                id = "p-other",
+                dbFile = "asset-board-p-other.db",
+                username = "alice",
+                serverUrl = "https://example.com",
+                createdAt = 21,
+            ),
+        )
+
+        assertEquals(BuildConfig.SYNC_BASE_URL, ProfileStore(context).byId("p-moved")?.serverUrl)
+        assertEquals("https://example.com", ProfileStore(context).byId("p-other")?.serverUrl)
     }
 
     @Test fun epochsOnlyMoveForward() {

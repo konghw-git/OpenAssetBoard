@@ -58,7 +58,14 @@ class SettingsStore(context: Context) {
     val hideAmounts = bool(KEY_HIDE_AMOUNTS, false)
 
     /** The self-hosted server the account page signs in to; a fork sets its own default. */
-    private val _syncServerUrl = MutableStateFlow(prefs.getString(KEY_SYNC_SERVER, null) ?: BuildConfig.SYNC_BASE_URL)
+    private val _syncServerUrl = MutableStateFlow(
+        when (val stored = prefs.getString(KEY_SYNC_SERVER, null)) {
+            null -> BuildConfig.SYNC_BASE_URL
+            // A carried-over preference must not point at the server that was moved away from.
+            LEGACY_SYNC_SERVER_URL -> BuildConfig.SYNC_BASE_URL
+            else -> stored
+        },
+    )
     val syncServerUrl: StateFlow<String> = _syncServerUrl.asStateFlow()
 
     fun setSyncServerUrl(url: String) {

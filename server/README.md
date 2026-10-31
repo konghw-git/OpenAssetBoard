@@ -4,7 +4,7 @@
 
 它不解析账本，不做逐行合并，也不保存第二套数据模型。App 仍然是本地优先的：不登录时行为完全不变；登录后把现有的 `BackupFile` JSON 上传到这里，换设备或重装时再下载回来。
 
-> 当前状态：服务端已部署在 VPS 的 `https://khw-asset.216-158-79-137.sslip.io`，Android 端的「设置 › 账号与同步」已经接入。当前实例的管理员账号是 `konghw`，初始密码在 VPS 的 `/root/assetboard-login.txt`（权限 600）。
+> 当前状态：服务端已部署在东京 VPS 的 `https://tyo.magnusk.top:9443`，Android 端的「设置 › 账号与同步」已经接入。当前实例的管理员账号是 `konghw`，初始密码在 VPS 的 `/root/assetboard-login.txt`（权限 600）。
 
 ## 设计边界
 
@@ -139,61 +139,89 @@ X-Updated-At: 1793075494
   - 改密码、禁用账号会撤销该用户全部会话。App 内改密码需要旧密码；成功后这次请求会拿到一对新令牌，当前设备保持登录，其他设备需要重新登录。旧密码错误按用户限流（默认 5 次 / 5 分钟）。
 - 登录限流：每用户名 5 次 / 5 分钟，每 IP 20 次 / 5 分钟（进程内固定窗口）。
 - 用户名 3–32 位（字母、数字、`.` `_` `-`，不区分大小写）；密码 8–256 字节。
-- 服务只应在 TLS 后面运行；容器不发布端口，由 Caddy 通过 Docker 网络访问。
+- 服务只应在 TLS 后面运行；默认只监听本机回环地址，由 Caddy 反代。
 - 日志只记录方法、路径、状态码、耗时、IP，不记录请求体、密码或令牌。
 - 数据在磁盘上是明文。请限制 VPS 的 SSH 访问、保护 `/opt/assetboard/data` 和备份目录。
 
 ## 部署到 VPS
 
-现有环境：Caddy 在 Docker 里，网络名 `sub2api_sub2api-network`，`khw-monitor.216-158-79-137.sslip.io` 已经验证过 sslip.io + Let's Encrypt。新服务沿用同一套：
+实例跑在东京 VPS（Ubuntu 24.04，1 GB 内存）的原生 systemd 服务上。那台机器的 443/8443 已被 sing-box 占用，所以 HTTPS 用 9443，并由 Caddy 通过 80 端口的 HTTP-01 自动申请证书。
 
-1. 准备目录，注意容器内用户是 UID 10001：
-
-   ```bash
-   sudo install -d -o 10001 -g 10001 /opt/assetboard/data
-   sudo install -d -o 10001 -g 10001 /opt/assetboard/data/backups
-   ```
-
-2. 把 `server/` 放到 `/opt/assetboard`，启动：
+1. 建用户和目录（数据属主是运行服务的 `assetboard` 用户）：
 
    ```bash
-   cd /opt/assetboard
-   sudo docker compose -f compose.example.yaml up -d --build
-   sudo docker compose -f compose.example.yaml exec -T assetboard \
-       assetboard-server user add -db /data/assetboard.db alice
+   sudo useradd --system --no-create-home --shell /usr/sbin/nologin assetboard
+   sudo install -d -m 755 /opt/assetboard
+   sudo install -d -m 700 -o assetboard -g assetboard /opt/assetboard/data
+   sudo install -d -m 700 /var/backups/assetboard
    ```
 
-3. 在 `/opt/sub2api/Caddyfile` **只追加** `Caddyfile.example` 里的站点块，然后：
+2. 把编译好的静态二进制放到 `/opt/assetboard/assetboard-server`，写 systemd 单元并启动：
+
+   ```ini
+   [Unit]
+   Description=AssetBoard account and sync server
+   After=network-online.target
+   Wants=network-online.target
+
+   [Service]
+   User=assetboard
+   Group=assetboard
+   WorkingDirectory=/opt/assetboard
+   ExecStart=/opt/assetboard/assetboard-server serve -addr 127.0.0.1:18090 -db /opt/assetboard/data/assetboard.db -trust-proxy
+   Restart=always
+   UMask=0077
+   NoNewPrivileges=true
+   PrivateTmp=true
+   ProtectSystem=strict
+   ProtectHome=true
+   ReadWritePaths=/opt/assetboard/data
+   ```
 
    ```bash
-   sudo docker exec sub2api-caddy caddy validate --config /etc/caddy/Caddyfile
-   sudo docker exec sub2api-caddy caddy reload   --config /etc/caddy/Caddyfile
-   curl -s https://khw-asset.216-158-79-137.sslip.io/healthz
+   sudo systemctl enable --now assetboard
+   curl -fsS http://127.0.0.1:18090/healthz
    ```
 
-4. 不在防火墙上开放 8090；Caddy 通过 `assetboard:8090` 访问。
+3. Caddy（`/etc/caddy/Caddyfile`）只加一个站点块，443/8443 不要动：
 
-> 修改 Caddyfile 会碰到正在为 Sub2API 与 Monitor 服务的进程。正式操作前先备份原文件并在非高峰时段进行；`caddy validate` 通过后再 reload。
+   ```caddyfile
+   tyo.magnusk.top:9443 {
+       encode zstd gzip
+       reverse_proxy 127.0.0.1:18090
+   }
+   ```
+
+   ```bash
+   sudo caddy validate --config /etc/caddy/Caddyfile
+   sudo systemctl reload caddy
+   curl -fsS https://tyo.magnusk.top:9443/healthz
+   ```
+
+4. 备份：`assetboard-backup.timer` 每天 03:55（Asia/Shanghai）调用 `assetboard-server backup`，产物放在 `/var/backups/assetboard`，保留 7 天。
+
+> 目标机器若已有 Docker 和 Caddy，也可以按 `compose.example.yaml` 用容器部署；此时服务地址改成 `assetboard:8090`，并让 Caddy 和容器在同一个 Docker 网络里。不要发布 8090 到公网。
 
 ## 备份与恢复
 
 每天一份一致副本，保留 7–30 天：
 
 ```bash
-cd /opt/assetboard
-sudo docker compose exec -T assetboard assetboard-server backup \
-    -db /data/assetboard.db -out "/data/backups/assetboard-$(date +%F).db"
-sudo cp "/opt/assetboard/data/backups/assetboard-$(date +%F).db" /var/backups/assetboard/
+# 立即备份一份（文件名带时间戳，拒绝覆盖同名文件）
+sudo systemctl start assetboard-backup.service
+sudo ls -lh /var/backups/assetboard
 ```
 
-`backup` 拒绝覆盖同名文件，所以同一天重复执行会失败，这是有意的。恢复：
+`backup` 拒绝覆盖同名文件，所以同一天重复执行会失败，这是有意的。恢复（先停服务）：
 
 ```bash
-sudo docker compose -f /opt/assetboard/compose.example.yaml stop assetboard
-sudo cp /var/backups/assetboard/assetboard-2026-10-27.db /opt/assetboard/data/assetboard.db
+sudo systemctl stop assetboard
+sudo cp /var/backups/assetboard/assetboard-2026-10-31-031700.db /opt/assetboard/data/assetboard.db
 sudo rm -f /opt/assetboard/data/assetboard.db-wal /opt/assetboard/data/assetboard.db-shm
-sudo chown 10001:10001 /opt/assetboard/data/assetboard.db
-sudo docker compose -f /opt/assetboard/compose.example.yaml start assetboard
+sudo chown assetboard:assetboard /opt/assetboard/data/assetboard.db
+sudo chmod 600 /opt/assetboard/data/assetboard.db
+sudo systemctl start assetboard
+curl -fsS https://tyo.magnusk.top:9443/healthz
 ```
 
 ## 测试

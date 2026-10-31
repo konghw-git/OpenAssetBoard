@@ -24,12 +24,12 @@ android {
         applicationId = "com.assetboard"
         minSdk = 29
         targetSdk = 36
-        versionCode = 30
-        versionName = "1.1.1"
+        versionCode = 31
+        versionName = "1.1.2"
         // Where the in-app updater looks for releases; a fork points this at its own repository.
         buildConfigField("String", "UPDATE_REPO", "\"konghw-git/OpenAssetBoard\"")
         // The self-hosted account and sync service; the login page lets the user change it.
-        buildConfigField("String", "SYNC_BASE_URL", "\"https://khw-asset.216-158-79-137.sslip.io\"")
+        buildConfigField("String", "SYNC_BASE_URL", "\"https://tyo.magnusk.top:9443\"")
         // The commit a build came from, for 导出诊断 and for reading a release's crash stacks
         // against its mapping file; "unknown" outside a git checkout.
         val commit = runCatching {

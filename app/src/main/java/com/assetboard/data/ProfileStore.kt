@@ -3,6 +3,7 @@ package com.assetboard.data
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.core.content.edit
+import com.assetboard.BuildConfig
 import com.assetboard.domain.AppClock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -100,8 +101,23 @@ class ProfileStore(private val context: Context) {
         prefs.edit(commit = true) { putLong(KEY_EPOCH, atLeast) }
     }
 
-    private fun load(): List<Profile> =
-        prefs.getString(KEY_PROFILES, null)?.let { runCatching { json.decodeFromString(serializer, it) }.getOrNull() }.orEmpty()
+    private fun load(): List<Profile> {
+        val list = prefs.getString(KEY_PROFILES, null)
+            ?.let { runCatching { json.decodeFromString(serializer, it) }.getOrNull() }
+            .orEmpty()
+        if (BuildConfig.SYNC_BASE_URL == LEGACY_SYNC_SERVER_URL) return list
+        var moved = false
+        val migrated = list.map { profile ->
+            if (profile.serverUrl == LEGACY_SYNC_SERVER_URL) {
+                moved = true
+                profile.copy(serverUrl = BuildConfig.SYNC_BASE_URL)
+            } else {
+                profile
+            }
+        }
+        if (moved) persist(migrated)
+        return migrated
+    }
 
     private fun persist(list: List<Profile>) {
         prefs.edit(commit = true) { putString(KEY_PROFILES, json.encodeToString(serializer, list)) }

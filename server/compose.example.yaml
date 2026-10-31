@@ -1,6 +1,7 @@
-# Runs beside the existing Sub2API stack on the same Docker network so Caddy can reach it.
+# Runs behind a Caddy instance on the same Docker network so Caddy can reach it.
 # Nothing is published to the host: only Caddy talks to assetboard:8090.
 #
+#   docker network create proxy
 #   install -d -o 10001 -g 10001 ./data
 #   docker compose -f compose.example.yaml up -d --build
 #
@@ -19,7 +20,7 @@ services:
     volumes:
       - ./data:/data
     networks:
-      - sub2api
+      - proxy
     read_only: true
     tmpfs:
       - /tmp
@@ -33,6 +34,6 @@ services:
     pids_limit: 256
 
 networks:
-  sub2api:
+  proxy:
     external: true
-    name: sub2api_sub2api-network
+    name: proxy

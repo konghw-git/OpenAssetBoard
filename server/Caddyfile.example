@@ -1,14 +1,13 @@
-# Add this block to the Caddyfile that already serves Sub2API and Monitor, then:
-#   docker exec sub2api-caddy caddy validate --config /etc/caddy/Caddyfile
-#   docker exec sub2api-caddy caddy reload   --config /etc/caddy/Caddyfile
+# Example site block. Add it to the Caddyfile that already serves this machine,
+# then validate and reload (no need to restart Caddy):
+#   caddy validate --config /etc/caddy/Caddyfile
+#   systemctl reload caddy
 #
-# Do not replace the existing file wholesale; add only this block.
-khw-asset.216-158-79-137.sslip.io {
-    tls {
-        issuer acme {
-            dir https://acme-v02.api.letsencrypt.org/directory
-        }
-    }
+# If another service already owns 443 (for example a sing-box relay), give the
+# site an explicit port instead of the default; clients then use
+# https://asset.example.com:9443. Caddy still gets the certificate over HTTP-01
+# on port 80, so port 80 must be reachable.
+asset.example.com:9443 {
     encode zstd gzip
-    reverse_proxy assetboard:8090
+    reverse_proxy 127.0.0.1:18090
 }

@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-31
+
+### Changed
+
+- The self-hosted account and sync server moved to the Tokyo VPS, so signing in and syncing are
+  faster from mainland China. The new default address is `https://tyo.magnusk.top:9443`; the
+  account database and every snapshot were moved as-is, so no re-upload is needed.
+- A profile or saved server address that still points at the retired US server is rewritten to the
+  new default on launch, so an existing sign-in keeps working after the upgrade instead of calling
+  a server that no longer exists.
+
 ## [1.1.1] - 2026-10-27
 
 ### Added
