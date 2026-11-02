@@ -53,8 +53,6 @@ import androidx.compose.ui.unit.dp
 import com.assetboard.ui.components.GlassSheet
 import com.assetboard.data.NoteTopic
 import com.assetboard.ui.components.pressScale
-import com.assetboard.ui.components.LocalAmbient
-import com.assetboard.ui.components.glass
 import com.assetboard.ui.theme.AppTheme
 import com.assetboard.ui.components.verticalScrollWithIndicator
 
@@ -191,45 +189,6 @@ private fun TopicCell(c: TopicCellData, selected: Boolean, modifier: Modifier, o
         if (c.count != null) {
             Spacer(Modifier.width(4.dp))
             Text(c.count.toString(), style = MaterialTheme.typography.labelMedium, color = if (selected) onColor.copy(alpha = 0.8f) else cs.onSurfaceVariant)
-        }
-    }
-}
-
-/** A topic chip: its colour dot, name and count; picked, it fills with the colour. */
-@Composable
-internal fun FilterPill(name: String, count: Int?, color: Color, selected: Boolean, dot: Color?, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val bg by animateColorAsState(if (selected) color else color.copy(alpha = 0f), tween(220), label = "pill")
-    val onGlass = LocalAmbient.current != null
-    // Dark mode's palette is light: picked text goes dark on it instead of white.
-    val onColor = if (color.luminance() > 0.5f) Color(0xFF12201C) else Color.White
-    val fg = if (selected) onColor else cs.onSurface
-    val source = remember { MutableInteractionSource() }
-    Row(
-        modifier
-            .height(38.dp)
-            .pressScale(source)
-            .then(
-                when {
-                    selected -> Modifier.shadow(4.dp, RoundedCornerShape(50), spotColor = color)
-                    onGlass -> Modifier.glass(RoundedCornerShape(50), glass, elevation = 5.dp)
-                    else -> Modifier.shadow(1.dp, RoundedCornerShape(50), spotColor = Color.Black.copy(alpha = 0.1f)).background(cs.surfaceContainer, RoundedCornerShape(50))
-                },
-            )
-            .clip(RoundedCornerShape(50))
-            .background(bg)
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
-            .padding(start = if (dot != null) 12.dp else 16.dp, end = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (dot != null) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (selected) onColor else dot))
-            Spacer(Modifier.width(7.dp))
-        }
-        Text(name, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))
-        if (count != null) {
-            Spacer(Modifier.width(6.dp))
-            Text(count.toString(), style = MaterialTheme.typography.labelMedium, color = if (selected) onColor.copy(alpha = 0.8f) else cs.onSurfaceVariant)
         }
     }
 }

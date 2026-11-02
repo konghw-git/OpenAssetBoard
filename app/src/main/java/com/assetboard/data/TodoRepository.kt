@@ -95,6 +95,9 @@ data class InlineItem(val id: String?, val text: String)
 /** The affected checklists before a move, guarded against edits made after it. */
 data class ChecklistMoveUndo(val before: List<ChecklistItem>, val revisionsAfter: Map<String, Int>)
 
+/** A checklist item let go as a todo of its own, for [undoExtract]. */
+data class ChecklistExtract(val todoId: String, val item: ChecklistItem)
+
 /** What a reschedule does to the time of day: keeps it, clears it or sets it. */
 sealed interface TimeChange {
     data object Keep : TimeChange
@@ -799,6 +802,46 @@ class TodoRepository(
         }
         dao.updateChecklistItems(undo.before)
         parents.forEach { save(it.bump(seq = false)) }
+    }
+
+    /**
+     * [itemId] leaves its checklist and becomes a todo of its own, right after the todo it hung
+     * under and with that todo's list, section, day, 以后再说, deadline and flag; a ticked item
+     * arrives done. The parent stays, minus the item. Returns what [undoExtract] needs.
+     */
+    suspend fun extractChecklistItem(itemId: String): ChecklistExtract? = tx {
+        val item = dao.checklistItem(itemId) ?: return@tx null
+        val t = live(item.todoId)
+        ensure(TodoViews.isOpen(t)) { "只能从还没完成的待办里取出检查项" }
+        // Room right after the parent in the one order every view shares, as a dissolve makes.
+        for (o in dao.allTodos()) if (o.sortOrder > t.sortOrder) dao.updateTodo(o.copy(sortOrder = o.sortOrder + 1, revision = o.revision + 1))
+        val n = Todo(
+            id = newId(),
+            title = item.text.trim().ifEmpty { "检查项" },
+            listId = t.listId,
+            sectionId = t.sectionId,
+            planDate = t.planDate,
+            someday = t.someday,
+            deadline = t.deadline,
+            important = t.important,
+            sortOrder = t.sortOrder + 1,
+            createdAt = now,
+            completedAt = if (item.done) now else null,
+        )
+        insert(ReminderState.afterManualEdit(n, now, zone()))
+        dao.deleteChecklistItem(itemId)
+        save(t.bump(seq = false))
+        ChecklistExtract(n.id, item)
+    }
+
+    /** Undoes [extractChecklistItem]: the todo made goes for good and the item returns to its parent. */
+    suspend fun undoExtract(extract: ChecklistExtract) = tx {
+        val gone = newId()
+        dao.todo(extract.todoId)?.takeIf { it.deletedAt == null }?.let { trashTodo(it, gone) }
+        purge(gone)
+        val parent = dao.todo(extract.item.todoId)?.takeIf { it.deletedAt == null } ?: return@tx
+        if (dao.checklistItem(extract.item.id) == null) dao.insertChecklistItem(extract.item)
+        save(parent.bump(seq = false))
     }
 
     /** Returns the item as it was, for [restoreChecklistItem]; null if it was already gone. */

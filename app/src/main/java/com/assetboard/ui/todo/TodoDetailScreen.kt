@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Repeat
@@ -83,6 +84,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.assetboard.AppContainer
 import com.assetboard.data.ChecklistItem
+import com.assetboard.data.CalendarChoice
+import com.assetboard.data.CalendarEvent
+import com.assetboard.data.CalendarExporter
+import com.assetboard.data.CalendarLink
 import com.assetboard.data.Todo
 import com.assetboard.data.TodoKind
 import com.assetboard.data.TodoList
@@ -108,6 +113,7 @@ import com.assetboard.ui.components.UndoEvent
 import com.assetboard.ui.components.UndoMessages
 import com.assetboard.ui.components.dissolvable
 import com.assetboard.ui.components.DatePickDialog
+import com.assetboard.ui.components.CalendarPickerDialog
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.ListPickerDialog
 import com.assetboard.ui.components.ListRow
@@ -122,7 +128,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
@@ -194,6 +202,11 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
     fun moveChecklist(itemId: String, into: String, before: String?) = action {
         val undo = repo.moveChecklistItem(itemId, into, before) ?: return@action
         events.tryEmit(UndoEvent("已移动检查项") { repo.undoChecklistMove(undo) })
+    }
+    /** A checklist item dragged out of the todo becomes a todo of its own. */
+    fun extractItem(itemId: String) = action {
+        val extract = repo.extractChecklistItem(itemId) ?: return@action
+        events.tryEmit(UndoEvent("「${extract.item.text.take(14)}」已变成独立待办") { repo.undoExtract(extract) })
     }
     fun deleteItem(itemId: String) = action {
         val item = repo.deleteChecklistItem(itemId) ?: return@action
@@ -287,9 +300,75 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
     val ended = t.kind == TodoKind.REPEAT_SOURCE && t.repeatEndedAt != null
     val editable = !record && !ended
     val detailScroll = rememberScrollState()
+    // The phone's calendar: the chosen one, its picker, and where this todo's event lives.
+    val calendarScope = rememberCoroutineScope()
+    val calendar = container.calendar
+    var calendarLink by remember(t.id) { mutableStateOf(calendar.link(t.id)) }
+    var calendarChoices by remember { mutableStateOf(emptyList<CalendarChoice>()) }
+    var pickingCalendar by remember { mutableStateOf(false) }
+    var calendarBusy by remember { mutableStateOf(false) }
+    fun calendarDescription(): String = buildString {
+        if (t.notes.isNotBlank()) append(t.notes.trim()).append("\n\n")
+        state.lists.firstOrNull { it.id == t.listId }?.let { append("清单：").append(it.name).append('\n') }
+        val open = state.checklist.filterNot { it.done }
+        if (open.isNotEmpty()) {
+            append("检查项：\n")
+            open.forEach { append("· ").append(it.text).append('\n') }
+        }
+        if (isEmpty()) append("来自日盈")
+    }
+    fun writeCalendar(choice: CalendarChoice) {
+        val date = TodoViews.parse(t.planDate)
+        if (date == null) {
+            vm.events.tryEmit(UndoEvent("先给这条待办选一个计划日"))
+            return
+        }
+        calendarBusy = true
+        calendarScope.launch {
+            val written = withContext(Dispatchers.IO) {
+                calendar.write(
+                    t.id, choice.id,
+                    CalendarEvent(t.title, calendarDescription(), date, t.remindTime?.let(LocalTime::parse)),
+                )
+            }
+            calendarBusy = false
+            if (written != null) {
+                calendarLink = calendar.link(t.id)
+                vm.events.tryEmit(UndoEvent("已写入日历「${choice.name}」"))
+            } else {
+                vm.events.tryEmit(UndoEvent("没能写入日历，检查权限或换一个日历"))
+            }
+        }
+    }
+    fun exportCalendar() {
+        val choice = calendar.chosen()
+        if (choice == null) {
+            calendarChoices = calendar.calendars()
+            pickingCalendar = true
+        } else {
+            writeCalendar(choice)
+        }
+    }
+    val askCalendar = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grant ->
+        if (grant.values.all { it }) exportCalendar()
+        else vm.events.tryEmit(UndoEvent("没有日历权限，无法写入"))
+    }
+    fun exportToCalendar() {
+        if (!calendar.hasPermission()) askCalendar.launch(CalendarExporter.required) else exportCalendar()
+    }
+    fun removeFromCalendar() {
+        calendarScope.launch {
+            val removed = withContext(Dispatchers.IO) { calendar.remove(t.id) }
+            calendarLink = null
+            vm.events.tryEmit(UndoEvent(if (removed) "已从日历移除" else "日历里已经没有这条了"))
+        }
+    }
     val checklistDrag = rememberChecklistDragState(
         state.checklist, if (!done) setOf(t.id) else emptySet(),
         scroll = { detailScroll.scrollBy(it) }, onMove = vm::moveChecklist,
+        onExtract = vm::extractItem,
     )
 
     Box(modifier.fillMaxWidth().checklistDragHost(checklistDrag)) {
@@ -351,7 +430,11 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
                 if (record) {
                     RecordCard(t, state.source, onOpenSource = { state.source?.let { onOpenTodo(it.id) } }, onUndo = { vm.uncomplete() })
                 } else {
-                    Schedule(t, today, editable, onDialog = { dialog = it }, vm = vm)
+                    Schedule(
+                        t, today, editable, onDialog = { dialog = it }, vm = vm,
+                        calendarLink = calendarLink, calendarName = calendar.chosenName(), calendarBusy = calendarBusy,
+                        onCalendar = ::exportToCalendar, onRemoveCalendar = ::removeFromCalendar,
+                    )
                     SectionCard {
                         val listName = state.lists.firstOrNull { it.id == t.listId }?.name
                         ListRow(
@@ -395,6 +478,10 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
         DustHost(dust)
         GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
         ChecklistDragPreview(checklistDrag)
+        ChecklistExtractTarget(
+            checklistDrag,
+            Modifier.align(Alignment.TopCenter).padding(top = 6.dp),
+        )
     }
 
     when (dialog) {
@@ -449,6 +536,18 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
             onPick = { dialog = null; vm.move(t.listId, it?.id) }, onDismiss = { dialog = null },
         )
     }
+    if (pickingCalendar) {
+        CalendarPickerDialog(
+            calendarChoices,
+            selected = calendar.chosen()?.id,
+            onPick = { choice ->
+                pickingCalendar = false
+                calendar.choose(choice)
+                writeCalendar(choice)
+            },
+            onDismiss = { pickingCalendar = false },
+        )
+    }
     if (confirmRecord) {
         ConfirmDialog(
             title = "无法还原重复待办",
@@ -462,7 +561,18 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
 }
 
 @Composable
-private fun Schedule(t: Todo, today: LocalDate, editable: Boolean, onDialog: (String) -> Unit, vm: TodoDetailViewModel) {
+private fun Schedule(
+    t: Todo,
+    today: LocalDate,
+    editable: Boolean,
+    onDialog: (String) -> Unit,
+    vm: TodoDetailViewModel,
+    calendarLink: CalendarLink?,
+    calendarName: String?,
+    calendarBusy: Boolean,
+    onCalendar: () -> Unit,
+    onRemoveCalendar: () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val plan = TodoViews.parse(t.planDate)
     val deadline = TodoViews.parse(t.deadline)
@@ -537,6 +647,26 @@ private fun Schedule(t: Todo, today: LocalDate, editable: Boolean, onDialog: (St
                 leading = { Icon(Icons.Outlined.Archive, null, tint = cs.primary) },
                 trailing = { Switch(t.someday, { vm.setSomeday(it) }, enabled = editable) },
                 chevron = false,
+            )
+        }
+        if (plan != null && !t.someday) {
+            RowDivider(58.dp)
+            ListRow(
+                title = if (calendarLink == null) "写入系统日历" else "系统日历",
+                subtitle = when {
+                    calendarBusy -> "正在写入…"
+                    calendarLink != null -> "已写入" + (calendarName?.let { "「$it」" } ?: "手机日历") + "，改过安排后再点一下更新"
+                    else -> "加到手机的每日计划：有时间就是日程，没时间就是全天"
+                },
+                leading = { Icon(Icons.Outlined.EventAvailable, null, tint = cs.primary) },
+                trailing = {
+                    if (calendarLink != null) {
+                        TextButton(onClick = onRemoveCalendar) { Text("移除", color = cs.error) }
+                    } else {
+                        Text(if (calendarBusy) "写入中" else "写入", color = cs.primary)
+                    }
+                },
+                onClick = if (editable && !calendarBusy) onCalendar else null,
             )
         }
     }

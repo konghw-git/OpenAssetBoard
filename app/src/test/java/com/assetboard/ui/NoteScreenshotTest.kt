@@ -204,11 +204,10 @@ class NoteScreenshotTest {
     @Test fun noteTopics() {
         show(demo())
         openTab()
-        // Every topic in a sheet, from the button that stays at the end of the row.
-        compose.onNodeWithContentDescription("全部主题").performClick()
-        waitFor("按主题看")
-        capture("56-note-topic-sheet")
-        compose.onNodeWithText("管理").performClick()
+        // The topics as a deck, from the one pill above the list.
+        compose.onNodeWithText("主题").performClick()
+        waitFor("管理主题")
+        compose.onNodeWithText("管理主题").performClick()
         waitFor("笔记主题")
         capture("56b-note-topics")
     }

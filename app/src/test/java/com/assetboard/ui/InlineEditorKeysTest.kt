@@ -21,7 +21,7 @@ class InlineEditorKeysTest {
 
     private fun type(lines: MutableList<EditLine>, i: Int, text: String, cursor: Int = text.length, calls: Calls = Calls()): Calls {
         onItemChange(
-            lines, i, TextFieldValue(text, TextRange(cursor)),
+            lines, lines.getOrNull(i)?.key ?: "", TextFieldValue(text, TextRange(cursor)),
             joinUp = { at, t -> calls.joined += at to t },
             insertAfter = { at, parts -> calls.inserted += at to parts },
             onEmptyEnter = { calls.ended++ },
@@ -81,5 +81,21 @@ class InlineEditorKeysTest {
         val c = type(lines, 0, MARK + "牛奶\n面包\n鸡蛋")
         assertEquals(MARK + "牛奶", lines[0].value.text)
         assertEquals(listOf(0 to listOf("面包", "鸡蛋")), c.inserted)
+    }
+
+    /**
+     * Some keyboards send one Enter twice. The first ends the edit on the empty item and takes it
+     * out; the second must not blank the item that moved into its place.
+     */
+    @Test fun aRepeatedEmptyEnterFindsItsLineGone() {
+        val lines = mutableListOf(line("a", "买菜"), line("b", ""), line("c", "做饭"))
+        fun enter() = onItemChange(
+            lines, "b", TextFieldValue(MARK + "\n"),
+            joinUp = { _, _ -> }, insertAfter = { _, _ -> }, onEmptyEnter = { lines.removeAt(it) },
+        )
+        enter()
+        enter()
+        assertEquals(listOf("a", "c"), lines.map { it.key })
+        assertEquals(MARK + "做饭", lines[1].value.text)
     }
 }

@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-02
+
+### Added
+
+- **Checklist items can be dragged out into todos of their own.** Long-press an item, drag it to
+  the "变成独立待办" target at the top, and let go: it becomes a todo right after its parent,
+  keeping the list, section, day, 以后再说, deadline and important flag (a ticked item arrives
+  done). The move can be undone from the snackbar, in the list and in the detail page.
+- **Lists and note topics as a 3D deck.** One compact pill replaces the row (or stack) of list
+  cards and the topic filter bar. It opens a deck of cards that swing in and lean away in 3D as
+  they are swiped; tapping the front card opens that list or filters the notes. New lists and
+  topics are named right in the deck, and the topic deck links to 管理主题.
+- **Todos write into the phone calendar.** A todo with a plan day gets 写入系统日历 in its detail
+  page, and 今天's header has a calendar button that writes every todo planned for the day at
+  once. The app asks for the calendar permission once, remembers which calendar was picked,
+  writes a timed todo as a 30-minute block and the rest as all-day entries, and updates the same
+  event instead of duplicating it; the event can be removed again from the detail page.
+
+### Fixed
+
+- Enter in the in-place todo editor could take an existing checklist item with it: some
+  keyboards deliver one Enter as two changes, and the second was applied to whatever row moved
+  into the ended item's place. Changes now find their line by its stable key, so a repeated
+  Enter on an empty item leaves the rest alone.
+
+### Changed
+
+- The todo tab's lists no longer take one tall card each: a single 清单 pill shows the deck's
+  size and the open list, and the cards live behind it. Reordering and managing a list stay in
+  its own page menu (编辑清单、上移、下移、归档、删除).
+- The notes tab's topic filter row is now the same one-line 主题 pill, opening the topic deck.
+
 ## [1.1.2] - 2026-10-31
 
 ### Changed

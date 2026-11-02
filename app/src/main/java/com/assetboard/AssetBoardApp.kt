@@ -14,6 +14,7 @@ import com.assetboard.data.AppUpdater
 import com.assetboard.data.BackupKind
 import com.assetboard.data.BackupManager
 import com.assetboard.data.BackupWorker
+import com.assetboard.data.CalendarExporter
 import com.assetboard.data.CrashLog
 import com.assetboard.data.DiaryRepository
 import com.assetboard.data.EditorRegistry
@@ -107,6 +108,8 @@ class AppContainer(
     val food by lazy { FoodRepository(db, gate) }
     val goal by lazy { GoalRepository(db, gate) }
     val weather by lazy { WeatherService(context, settings) }
+    /** The phone calendars, for writing a todo day into its daily plan. */
+    val calendar by lazy { CalendarExporter(context, settings) }
     val updater by lazy { AppUpdater(context, settings, appScope) { backup.backupNow(BackupKind.AUTO) } }
 
     private val _restoreGeneration = MutableStateFlow(0)

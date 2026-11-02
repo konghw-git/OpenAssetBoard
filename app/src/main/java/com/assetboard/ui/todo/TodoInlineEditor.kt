@@ -203,7 +203,7 @@ fun TodoInlineEditor(
                         if (line.value.text.length <= 1) Text("检查项", style = checkItemStyle, color = cs.outline)
                         BasicTextField(
                             value = line.value,
-                            onValueChange = { v -> onItemChange(lines, i, v, ::joinUp, ::insertItems, onEmptyEnter = { lines.removeAt(i); onDone() }) },
+                            onValueChange = { v -> onItemChange(lines, line.key, v, ::joinUp, ::insertItems, onEmptyEnter = { at -> lines.removeAt(at); onDone() }) },
                             textStyle = checkItemStyle.copy(
                                 color = if (line.done) cs.outline else cs.onSurface,
                                 textDecoration = if (line.done) TextDecoration.LineThrough else null,
@@ -247,18 +247,24 @@ private fun newKey() = UUID.randomUUID().toString()
 private fun marked(text: String) = TextFieldValue(MARK + text, TextRange(MARK.length + text.length))
 
 /**
- * Line [i] typed into: a Backspace that took the mark joins it upward, a line break splits it,
+ * Line [key] typed into: a Backspace that took the mark joins it upward, a line break splits it,
  * anything else is kept with the cursor held after the mark.
+ *
+ * The stable key, not the place in the list, finds the line: some keyboards deliver one Enter as
+ * two changes, and the first may end the edit and take the line out. Looking the key up again
+ * keeps the second change from writing to the row that moved into its place.
  */
 internal fun onItemChange(
     lines: MutableList<EditLine>,
-    i: Int,
+    key: String,
     v: TextFieldValue,
     joinUp: (Int, String) -> Unit,
     insertAfter: (Int, List<String>) -> Unit,
-    onEmptyEnter: () -> Unit,
+    onEmptyEnter: (Int) -> Unit,
 ) {
-    val old = lines.getOrNull(i) ?: return
+    val i = lines.indexOfFirst { it.key == key }
+    if (i < 0) return
+    val old = lines[i]
     val text = v.text
     if (!text.startsWith(MARK)) {
         if (old.value.text.removePrefix(MARK) == text) {
@@ -274,7 +280,7 @@ internal fun onItemChange(
     if ('\n' in body) {
         val parts = body.split('\n')
         if (parts.all { it.isEmpty() } && old.value.text.removePrefix(MARK).isEmpty()) {
-            onEmptyEnter()
+            onEmptyEnter(i)
             return
         }
         lines[i] = old.copy(value = TextFieldValue(MARK + parts.first(), TextRange(MARK.length + parts.first().length)))

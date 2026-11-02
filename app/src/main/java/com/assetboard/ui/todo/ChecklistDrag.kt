@@ -36,6 +36,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CallSplit
+import androidx.compose.material3.Icon
+import com.assetboard.ui.components.glass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
@@ -84,6 +88,10 @@ internal class ChecklistDragState(private val scope: CoroutineScope, private val
         private set
     var drop by mutableStateOf<ChecklistDrop?>(null)
         private set
+    /** The pointer is over the "let it become a todo" target, so letting go makes one. */
+    var extract by mutableStateOf(false)
+        private set
+    var extractZone: Rect? = null
     var originalBounds = Rect.Zero
         private set
     var grab = Offset.Zero
@@ -96,6 +104,7 @@ internal class ChecklistDragState(private val scope: CoroutineScope, private val
     var items: Map<String, ChecklistItem> = emptyMap()
     var allowed: Set<String> = emptySet()
     var onMove: (String, String, String?) -> Unit = { _, _, _ -> }
+    var onExtract: (String) -> Unit = {}
     var onStart: () -> Unit = {}
     var scroll: suspend (Float) -> Unit = {}
     private var scroller: Job? = null
@@ -136,6 +145,14 @@ internal class ChecklistDragState(private val scope: CoroutineScope, private val
 
     private fun updateTarget() {
         val held = item ?: return
+        // The extract target sits over the page header: it wins over whatever card is under it.
+        if (extractZone?.contains(pointer) == true) {
+            if (!extract) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+            extract = true
+            if (drop != null) drop = null
+            return
+        }
+        extract = false
         val owner = cards.entries.firstOrNull { (id, rect) -> id in allowed && rect.contains(pointer) }?.key
         val next = owner?.let {
             val before = rows.entries.filter { (id, _) -> id != held.id && items[id]?.todoId == owner }
@@ -149,19 +166,29 @@ internal class ChecklistDragState(private val scope: CoroutineScope, private val
     fun finish(cancelled: Boolean) {
         val held = item ?: return
         val target = drop
+        val letsGo = extract
         scroller?.cancel()
         released = held.id
         releasedAt = System.nanoTime()
         item = null
         drop = null
-        if (!cancelled && target != null && held.todoId in allowed && target.todoId in allowed) {
-            onMove(held.id, target.todoId, target.beforeId)
+        extract = false
+        if (!cancelled && held.todoId in allowed) {
+            if (letsGo) onExtract(held.id)
+            else if (target != null && target.todoId in allowed) onMove(held.id, target.todoId, target.beforeId)
         }
     }
 }
 
 @Composable
-internal fun rememberChecklistDragState(items: List<ChecklistItem>, allowed: Set<String>, scroll: suspend (Float) -> Unit, onStart: () -> Unit = {}, onMove: (String, String, String?) -> Unit): ChecklistDragState {
+internal fun rememberChecklistDragState(
+    items: List<ChecklistItem>,
+    allowed: Set<String>,
+    scroll: suspend (Float) -> Unit,
+    onStart: () -> Unit = {},
+    onMove: (String, String, String?) -> Unit,
+    onExtract: (String) -> Unit = {},
+): ChecklistDragState {
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val edge = with(LocalDensity.current) { 64.dp.toPx() }
@@ -171,6 +198,7 @@ internal fun rememberChecklistDragState(items: List<ChecklistItem>, allowed: Set
     state.scroll = scroll
     state.onStart = onStart
     state.onMove = onMove
+    state.onExtract = onExtract
     DisposableEffect(state) { onDispose { state.finish(cancelled = true) } }
     return state
 }
@@ -326,13 +354,57 @@ internal fun ChecklistDragPreview(state: ChecklistDragState) {
                 textDecoration = if (item.done) TextDecoration.LineThrough else null,
             )
         }
-        if (state.drop == null) {
+        if (state.drop == null && !state.extract) {
             Text(
                 "拖到检查项之间或其他待办上",
                 style = MaterialTheme.typography.labelSmall,
                 color = cs.onPrimary,
                 modifier = Modifier.padding(start = 12.dp, top = 6.dp).clip(RoundedCornerShape(50)).background(cs.primary).padding(horizontal = 8.dp, vertical = 2.dp),
             )
+        }
+    }
+}
+
+/**
+ * The place a held checklist item may be let go to become a todo of its own: a pill over the
+ * page header, rising while the drag lasts and filling in once the pointer is over it.
+ */
+@Composable
+internal fun ChecklistExtractTarget(state: ChecklistDragState, modifier: Modifier = Modifier) {
+    if (state.item == null) return
+    val cs = MaterialTheme.colorScheme
+    val over = state.extract
+    val rise = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { rise.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)) }
+    val shape = RoundedCornerShape(22.dp)
+    Box(
+        modifier
+            .onGloballyPositioned { state.extractZone = it.boundsInRoot() }
+            .graphicsLayer {
+                alpha = rise.value
+                translationY = (1f - rise.value) * 28.dp.toPx()
+                val s = 1f + 0.04f * (if (over) 1f else 0f)
+                scaleX = s
+                scaleY = s
+            }
+            .glass(shape, glass, tint = cs.primary.copy(alpha = if (over) 0.18f else 0.09f), elevation = if (over) 16.dp else 8.dp)
+            .clip(shape)
+            .border(1.5.dp, cs.primary.copy(alpha = if (over) 0.9f else 0.35f), shape)
+            .padding(horizontal = 20.dp, vertical = 13.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(30.dp).clip(CircleShape).background(cs.primary.copy(alpha = if (over) 0.9f else 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.CallSplit, null, tint = if (over) cs.onPrimary else cs.primary, modifier = Modifier.size(17.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(if (over) "松手，让它成为待办" else "拖到这里，变成独立待办", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                Text("保留所属清单、日期和重要标记", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            }
         }
     }
 }

@@ -164,6 +164,33 @@ class TodoInlineEditTest {
         assertNull(f.todos.todo(plain)!!.deletedAt)
     }
 
+    @Test fun anItemLiftedOutBecomesATodoRightAfterItsParentAndUndoPutsItBack() = f.run {
+        val list = f.todos.createList("周末")
+        val before = f.todos.create(TodoDraft("前面", listId = list))
+        val id = f.todos.create(TodoDraft("采购", listId = list, planDate = date("2026-10-24"), important = true))
+        val milk = f.todos.addChecklistItem(id, "牛奶")
+        f.todos.addChecklistItem(id, "面包")
+        f.todos.toggleChecklist(milk)
+        val after = f.todos.create(TodoDraft("后面", listId = list))
+
+        val extract = f.todos.extractChecklistItem(milk)!!
+        val made = f.todos.todo(extract.todoId)!!
+        assertEquals("牛奶", made.title)
+        assertEquals(list, made.listId)
+        assertEquals("2026-10-24", made.planDate)
+        assertEquals(true, made.important)
+        // Ticked in the checklist, it arrives done.
+        assertEquals(true, made.completedAt != null)
+        assertEquals(listOf("面包"), items(id).map { it.text })
+        // In the parent's place in the shared order: after it, before the row that followed.
+        val order = listOf(before, id, extract.todoId, after).map { f.todos.todo(it)!!.sortOrder }
+        assertEquals(order.sorted(), order)
+
+        f.todos.undoExtract(extract)
+        assertNull(f.todos.todo(extract.todoId))
+        assertEquals(listOf("牛奶", "面包"), items(id).map { it.text })
+    }
+
     @Test fun rescheduleSetsKeepsOrClearsTheTime() = f.run {
         val id = f.todos.create(TodoDraft("开会", planDate = date("2026-10-20"), remindTime = LocalTime.of(9, 0)))
         f.todos.reschedule(listOf(id), date("2026-10-21"), false)

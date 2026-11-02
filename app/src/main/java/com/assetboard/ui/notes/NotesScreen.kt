@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -91,9 +90,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
@@ -105,7 +101,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import com.assetboard.data.NoteText
 import com.assetboard.ui.todo.rememberToday
-import androidx.compose.ui.layout.layout
 import com.assetboard.ui.components.GlassSnackbarHost
 import com.assetboard.ui.components.LocalDust
 import com.assetboard.ui.TabPageBottomInset
@@ -121,6 +116,9 @@ import com.assetboard.ui.components.glass
 import com.assetboard.ui.components.rememberAmbient
 import com.assetboard.ui.components.rememberBackdrop
 import com.assetboard.ui.components.rememberReorderState
+import com.assetboard.ui.components.DeckButton
+import com.assetboard.ui.components.DeckCard
+import com.assetboard.ui.components.CardDeckDialog
 import com.assetboard.ui.components.rememberSwipeGroup
 import com.assetboard.ui.components.reorderable
 import com.assetboard.ui.components.CarryBadge
@@ -257,7 +255,7 @@ fun NotesScreen(
     val today = rememberToday()
     LaunchedEffect(today, all) { vm.refreshReview(today) }
     var draftsOpen by rememberSaveable { mutableStateOf(false) }
-    var topicsOpen by rememberSaveable { mutableStateOf(false) }
+    var deckOpen by rememberSaveable { mutableStateOf(false) }
     var filingId by rememberSaveable { mutableStateOf<String?>(null) }
     ErrorDialog(error) { vm.error.value = null }
     val cs = MaterialTheme.colorScheme
@@ -375,11 +373,9 @@ fun NotesScreen(
                     verticalArrangement = Arrangement.Top,
                 ) {
                     item(key = "topics") {
-                        TopicBar(
-                            topics, counts, notes.size, filter,
-                            onPick = { vm.filter.value = it },
-                            onAll = { topicsOpen = true },
-                            onNewTopic = onTopics,
+                        TopicDeckButton(
+                            topics, counts, filter,
+                            onOpen = { deckOpen = true },
                             modifier = Modifier.appear(0),
                         )
                     }
@@ -475,13 +471,48 @@ fun NotesScreen(
     }
 }
 
-    if (topicsOpen) {
-        TopicSheet(
-            "按主题看", topics, counts, filter, showAll = true,
-            onPick = { vm.filter.value = it; topicsOpen = false },
-            onCreate = { name -> vm.createTopic(name) { vm.filter.value = it } ; topicsOpen = false },
-            onDismiss = { topicsOpen = false },
-            onManage = { topicsOpen = false; onTopics() },
+    if (deckOpen) {
+        val cs = MaterialTheme.colorScheme
+        val cards = buildList {
+            add(
+                DeckCard(
+                    key = NotesViewModel.ALL, title = "全部", count = notes.size, accent = cs.primary,
+                    icon = Icons.Outlined.GridView, footnote = "所有主题与未归类的笔记",
+                ),
+            )
+            topics.forEachIndexed { i, t ->
+                add(
+                    DeckCard(
+                        key = t.id, title = t.name, count = counts[t.id] ?: 0,
+                        accent = AppTheme.extra.group(i), icon = Icons.AutoMirrored.Outlined.Label,
+                        footnote = "主题",
+                    ),
+                )
+            }
+            if (topics.isNotEmpty() && ((counts[null] ?: 0) > 0 || filter == NotesViewModel.UNSORTED)) {
+                add(
+                    DeckCard(
+                        key = NotesViewModel.UNSORTED, title = "未归类", count = counts[null] ?: 0,
+                        accent = cs.onSurfaceVariant, icon = Icons.Outlined.Drafts, footnote = "还没有主题的笔记",
+                    ),
+                )
+            }
+        }
+        CardDeckDialog(
+            title = "主题",
+            cards = cards,
+            selected = filter,
+            onPick = { vm.filter.value = it; deckOpen = false },
+            onDismiss = { deckOpen = false },
+            hint = "左右滑动挑一个主题，点一下筛选",
+            createLabel = "新建主题",
+            onCreate = { name ->
+                deckOpen = false
+                vm.createTopic(name) { vm.filter.value = it }
+            },
+            manageLabel = "管理主题",
+            onManage = { deckOpen = false; onTopics() },
+            emptyText = "还没有主题",
         )
     }
     filingId?.let { id ->
@@ -549,115 +580,36 @@ private fun Label(text: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * 全部, each topic and 未归类 in a row that scrolls, with a fixed button at its end that opens
- * every topic in a sheet, so a long row never hides the way to the rest.
+ * The topics as one compact pill: what is showing now, how many there are, and a way into the
+ * deck where each topic is a card. It keeps a long topic list from filling the page with chips.
  */
 @Composable
-private fun TopicBar(
+private fun TopicDeckButton(
     topics: List<NoteTopic>,
     counts: Map<String?, Int>,
-    total: Int,
     filter: String,
-    onPick: (String) -> Unit,
-    onAll: () -> Unit,
-    onNewTopic: () -> Unit,
+    onOpen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
+    val current = when (filter) {
+        NotesViewModel.ALL -> "全部"
+        NotesViewModel.UNSORTED -> "未归类"
+        else -> topics.firstOrNull { it.id == filter }?.name ?: "全部"
+    }
     val unsorted = counts[null] ?: 0
-    val row = rememberLazyListState()
-    val keys = buildList {
-        add(NotesViewModel.ALL)
-        topics.forEach { add(it.id) }
-        if (topics.isNotEmpty() && (unsorted > 0 || filter == NotesViewModel.UNSORTED)) add(NotesViewModel.UNSORTED)
-    }
-    // A topic picked from the sheet scrolls into view.
-    LaunchedEffect(filter) {
-        val i = keys.indexOf(filter)
-        val visible = row.layoutInfo.visibleItemsInfo
-        val whole = visible.any { it.index == i && it.offset >= 0 && it.offset + it.size <= row.layoutInfo.viewportEndOffset }
-        if (i >= 0 && !whole) row.animateScrollToItem((i - 1).coerceAtLeast(0))
-    }
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        LazyRow(
-            Modifier
-                .weight(1f)
-                // Out to the screen's left edge, so chips scroll off it and their shadows are not cut.
-                .layout { m, c ->
-                    val edge = 16.dp.roundToPx()
-                    val p = m.measure(c.copy(minWidth = c.minWidth + edge, maxWidth = c.maxWidth + edge))
-                    layout(c.maxWidth, p.height) { p.place(-edge, 0) }
-                }
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    // The row fades out under the button rather than being cut off.
-                    if (topics.isNotEmpty()) {
-                        drawRect(
-                            Brush.horizontalGradient(listOf(Color.Transparent, Color.Black), startX = size.width - 28.dp.toPx(), endX = size.width),
-                            blendMode = BlendMode.DstOut,
-                        )
-                    }
-                },
-            state = row,
-            contentPadding = PaddingValues(start = 16.dp, top = 12.dp, bottom = 14.dp, end = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item(key = NotesViewModel.ALL) { FilterPill("全部", total, cs.primary, filter == NotesViewModel.ALL, null) { onPick(NotesViewModel.ALL) } }
-            topics.forEachIndexed { i, t ->
-                item(key = t.id) {
-                    FilterPill(t.name, counts[t.id] ?: 0, AppTheme.extra.group(i), filter == t.id, AppTheme.extra.group(i), Modifier.animateItem()) { onPick(t.id) }
-                }
-            }
-            if (NotesViewModel.UNSORTED in keys) {
-                item(key = NotesViewModel.UNSORTED) {
-                    FilterPill("未归类", unsorted, cs.onSurfaceVariant, filter == NotesViewModel.UNSORTED, cs.outline) { onPick(NotesViewModel.UNSORTED) }
-                }
-            }
-            if (topics.isEmpty()) {
-                item(key = "new") { NewTopicPill(onNewTopic) }
-            }
-        }
-        if (topics.isNotEmpty()) {
-            Spacer(Modifier.width(4.dp))
-            AllTopicsButton(onAll)
-        }
-    }
-}
-
-@Composable
-private fun NewTopicPill(onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier
-            .height(38.dp)
-            .clip(RoundedCornerShape(50))
-            .background(cs.primary.copy(alpha = 0.08f))
-            .clickable(onClick = onClick)
-            .padding(start = 10.dp, end = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Default.Add, null, tint = cs.primary, modifier = Modifier.size(17.dp))
-        Spacer(Modifier.width(4.dp))
-        Text("新建主题", style = MaterialTheme.typography.labelLarge, color = cs.primary)
-    }
-}
-
-/** Opens every topic in a sheet; stays put at the end of the row. */
-@Composable
-private fun AllTopicsButton(onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val source = remember { MutableInteractionSource() }
-    Box(
-        Modifier
-            .size(38.dp)
-            .pressScale(source, 0.9f)
-            .glass(CircleShape, glass, elevation = 6.dp)
-            .clip(CircleShape)
-            .clickable(interactionSource = source, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Outlined.GridView, "全部主题", tint = cs.onSurface, modifier = Modifier.size(19.dp))
+    Box(modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp)) {
+        DeckButton(
+            label = "主题",
+            current = current,
+            count = topics.size,
+            accents = buildList {
+                add(cs.primary)
+                topics.take(2).forEachIndexed { i, _ -> add(AppTheme.extra.group(i)) }
+                if (unsorted > 0 && topics.isNotEmpty()) add(cs.onSurfaceVariant)
+            },
+            onClick = onOpen,
+        )
     }
 }
 

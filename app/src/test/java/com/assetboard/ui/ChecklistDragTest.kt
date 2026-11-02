@@ -22,6 +22,7 @@ import com.assetboard.ui.todo.TodoHomeScreen
 import com.assetboard.ui.todo.TodoDetailScreen
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -128,6 +129,29 @@ class ChecklistDragTest {
         assertEquals(listOf("A1", "A2", "A3"), items(c, "Parent A"))
         assertEquals(listOf("B1", "B2"), items(c, "Parent B"))
         assertEquals(0, runBlocking { c.todos.loadOnce().checklist.count { it.done } })
+    }
+
+    @Test fun draggedToTheExtractTargetItBecomesATodoOfItsOwn() {
+        val c = show()
+        val start = compose.onNodeWithText("A2").fetchSemanticsNode().boundsInRoot.center
+        compose.mainClock.autoAdvance = false
+        compose.onRoot().performTouchInput { down(start) }
+        compose.mainClock.advanceTimeBy(900)
+        compose.onRoot().performTouchInput { moveBy(Offset(0f, 10f)) }
+        compose.mainClock.advanceTimeBy(200)
+        val end = compose.onNodeWithText("拖到这里，变成独立待办").fetchSemanticsNode().boundsInRoot.center
+        repeat(10) { step ->
+            compose.onRoot().performTouchInput { moveTo(start + (end - start) * ((step + 1) / 10f)) }
+            compose.mainClock.advanceTimeBy(40)
+        }
+        compose.mainClock.advanceTimeBy(200)
+        compose.onRoot().performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(100)
+        compose.mainClock.autoAdvance = true
+        compose.waitUntil(5_000) { runBlocking { c.todos.loadOnce() }.todos.any { it.title == "A2" && it.deletedAt == null } }
+        assertEquals(listOf("A1", "A3"), items(c, "Parent A"))
+        val made = runBlocking { c.todos.loadOnce() }.todos.single { it.title == "A2" && it.deletedAt == null }
+        assertNull(made.completedAt)
     }
 
     @Test fun theDetailHandleSortsWithoutEditingOrToggling() {

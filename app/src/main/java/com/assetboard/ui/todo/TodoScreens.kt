@@ -56,7 +56,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
@@ -64,7 +63,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
@@ -74,9 +72,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.platform.LocalDensity
@@ -89,6 +84,7 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.EditNote
@@ -132,15 +128,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -150,7 +142,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -159,6 +150,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.assetboard.data.CalendarChoice
+import com.assetboard.data.CalendarEvent
+import com.assetboard.data.CalendarExporter
 import com.assetboard.data.Todo
 import com.assetboard.data.TodoData
 import com.assetboard.data.TodoKind
@@ -193,8 +187,14 @@ import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.ListPickerDialog
 import com.assetboard.ui.components.ListRow
 import com.assetboard.ui.components.pressScale
+import com.assetboard.ui.components.DeckButton
+import com.assetboard.ui.components.DeckCard
+import com.assetboard.ui.components.CardDeckDialog
+import com.assetboard.ui.components.CalendarPickerDialog
 import com.assetboard.ui.theme.AppTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import kotlin.math.cos
 import kotlin.math.sin
@@ -267,6 +267,8 @@ fun TodoHomeScreen(
     var editingItem by rememberSaveable(selected) { mutableStateOf<String?>(null) }
     // A todo just gathered from the selection: its edit starts with the title blank, to be named.
     var gatheredId by rememberSaveable(selected) { mutableStateOf<String?>(null) }
+    // The lists as a deck of cards.
+    var listsOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(selection.isEmpty()) { if (selection.isNotEmpty()) editingId = null }
     var rescheduleFor by remember { mutableStateOf<List<String>?>(null) }
     var moveFor by remember { mutableStateOf<List<String>?>(null) }
@@ -400,10 +402,62 @@ fun TodoHomeScreen(
         scroll = { listState.scrollBy(it) },
         onStart = { swipe.closeAll() },
         onMove = vm::moveChecklist,
+        onExtract = vm::extractChecklistItem,
     )
     var listOrder by remember(shownLists) { mutableStateOf(shownLists) }
     val todayRows = remember(d, today) { d?.let { TodoViews.today(it.todos, today) }.orEmpty() }
     val doneToday = todayRows.count { it.done }
+    // Today as the phone calendar's daily plan: choose a calendar once, then write or update each todo.
+    val calendar = LocalContainer.current.calendar
+    var calendarChoices by remember { mutableStateOf(emptyList<CalendarChoice>()) }
+    var pickingCalendar by remember { mutableStateOf(false) }
+    fun calendarDescription(t: Todo): String = buildString {
+        if (t.notes.isNotBlank()) append(t.notes.trim()).append("\n\n")
+        d?.listById?.get(t.listId)?.let { append("清单：").append(it.name).append('\n') }
+        val open = d?.checklistByTodo?.get(t.id).orEmpty().sortedBy { it.sortOrder }.filterNot { it.done }
+        if (open.isNotEmpty()) {
+            append("检查项：\n")
+            open.forEach { append("· ").append(it.text).append('\n') }
+        }
+        if (isEmpty()) append("来自日盈")
+    }
+    fun writeToday(choice: CalendarChoice) {
+        val rows = todayRows.filter { !it.done && !it.todo.someday && it.todo.planDate == today.toString() }
+        if (rows.isEmpty()) {
+            scope.launch { snackbar.showSnackbar("今天没有安排在计划日上的待办") }
+            return
+        }
+        scope.launch {
+            val written = withContext(Dispatchers.IO) {
+                rows.count { row ->
+                    val t = row.todo
+                    calendar.write(
+                        t.id, choice.id,
+                        CalendarEvent(t.title, calendarDescription(t), today, t.remindTime?.let(java.time.LocalTime::parse)),
+                    ) != null
+                }
+            }
+            snackbar.showSnackbar(if (written == rows.size) "已把 $written 条今日日程写入「${choice.name}」" else "写入了 $written/${rows.size} 条，检查日历权限")
+        }
+    }
+    fun exportToday() {
+        val choice = calendar.chosen()
+        if (choice == null) {
+            calendarChoices = calendar.calendars()
+            pickingCalendar = true
+        } else {
+            writeToday(choice)
+        }
+    }
+    val askCalendar = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grant ->
+        if (grant.values.all { it }) exportToday()
+        else scope.launch { snackbar.showSnackbar("没有日历权限，无法写入") }
+    }
+    fun exportToCalendar() {
+        if (!calendar.hasPermission()) askCalendar.launch(CalendarExporter.required) else exportToday()
+    }
     val dialGone by remember {
         derivedStateOf {
             val st = if (sideColumn.value) sideState else listState
@@ -498,6 +552,7 @@ fun TodoHomeScreen(
         swipe = swipe,
         reorder = reorder,
         ambient = ambient,
+        onExportToday = if (view == TodoView.TODAY) ::exportToCalendar else null,
         vm = vm,
     )
     val cs = MaterialTheme.colorScheme
@@ -508,27 +563,10 @@ fun TodoHomeScreen(
         BoxWithConstraints(Modifier.fillMaxSize().checklistDragHost(checklistDrag)) {
             val wide = maxWidth >= 600.dp
             SideEffect { sideColumn.value = wide }
-            val listReorder = rememberReorderState(
-                if (wide) sideState else listState,
-                onMove = { from, to ->
-                    val a = listOrder.indexOfFirst { listKey(it.id) == from }
-                    val b = listOrder.indexOfFirst { listKey(it.id) == to }
-                    if (a < 0 || b < 0) {
-                        false
-                    } else {
-                        listOrder = listOrder.toMutableList().apply { add(b, removeAt(a)) }
-                        true
-                    }
-                },
-                onDrop = { vm.reorderLists(listOrder.map { it.id }) },
-                // Held without moving: nothing; a list has no selection.
-                onHold = {},
-            )
             val lists = ListsContext(
                 d, listOrder, today, selected,
                 onSelect = { selected = it },
-                onCreate = { name -> vm.createList(name) { selected = ViewKey.list(it) } },
-                swipe = swipe, reorder = listReorder, vm = vm,
+                onOpenDeck = { listsOpen = true },
             )
             if (wide) {
                 Row(Modifier.fillMaxSize()) {
@@ -542,7 +580,7 @@ fun TodoHomeScreen(
                         item("banners") { Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) { ReminderBanners(vm, onGuide) } }
                         item("views") { Box(Modifier.padding(bottom = 14.dp)) { dial(Modifier) } }
                         item("composer") { Box(Modifier.padding(bottom = 8.dp)) { composerField() } }
-                        listCards(lists)
+                        listDeckButton(lists)
                     }
                     VerticalDivider(color = cs.outlineVariant)
                     Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -565,7 +603,7 @@ fun TodoHomeScreen(
                         item("banners") { Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) { ReminderBanners(vm, onGuide) } }
                         item("views") { dial(Modifier.padding(top = 2.dp, bottom = 6.dp)) }
                         item("composer") { composerField() }
-                        listCards(lists)
+                        listDeckButton(lists)
                         viewContent(ctx)
                     }
                     }
@@ -575,6 +613,10 @@ fun TodoHomeScreen(
                 GlassSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = TabPageBottomInset), backdrop)
             }
             ChecklistDragPreview(checklistDrag)
+            ChecklistExtractTarget(
+                checklistDrag,
+                Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 6.dp),
+            )
         }
     }
 }
@@ -657,6 +699,47 @@ fun TodoHomeScreen(
             )
         }
     }
+    if (listsOpen) {
+        val cs = MaterialTheme.colorScheme
+        val cards = listOrder.map { l ->
+            val deadline = TodoViews.parse(l.deadline)?.let { TodoViews.deadlineBadge(it, today)?.text }
+            val sections = d?.sections?.count { it.listId == l.id && it.deletedAt == null } ?: 0
+            DeckCard(
+                key = ViewKey.list(l.id),
+                title = l.name,
+                count = TodoViews.countInList(l.id, d?.todos.orEmpty()),
+                accent = listColor(d, l.id) ?: cs.primary,
+                icon = Icons.Outlined.FormatListBulleted,
+                footnote = listOfNotNull(deadline, if (sections > 0) "$sections 个分区" else null).joinToString(" · ").ifEmpty { null },
+            )
+        }
+        CardDeckDialog(
+            title = "清单",
+            cards = cards,
+            selected = selected.takeIf { ViewKey.listId(it) != null },
+            onPick = { selected = it; listsOpen = false },
+            onDismiss = { listsOpen = false },
+            hint = "左右滑动挑一张清单，点一下打开",
+            createLabel = "新建清单",
+            onCreate = { name ->
+                listsOpen = false
+                vm.createList(name) { selected = ViewKey.list(it) }
+            },
+            emptyText = "还没有清单",
+        )
+    }
+    if (pickingCalendar) {
+        CalendarPickerDialog(
+            calendarChoices,
+            selected = calendar.chosen()?.id,
+            onPick = { choice ->
+                pickingCalendar = false
+                calendar.choose(choice)
+                writeToday(choice)
+            },
+            onDismiss = { pickingCalendar = false },
+        )
+    }
 }
 
 @Composable
@@ -684,196 +767,40 @@ private const val PULL_ARMED = "松手新建待办"
 
 // ---------------------------------------------------------------- lists
 
-/** What the lists' cards need from the page. */
+/** What the lists' button needs from the page. */
 private class ListsContext(
     val data: TodoData?,
-    /** The lists not archived, in the order on screen: one being dragged is already in its new place. */
+    /** The lists not archived, in their order. */
     val lists: List<TodoList>,
     val today: LocalDate,
     val selected: String,
     val onSelect: (String) -> Unit,
-    val onCreate: (String) -> Unit,
-    val swipe: SwipeGroup,
-    val reorder: ReorderState,
-    val vm: TodoViewModel,
+    /** Opens the deck of list cards. */
+    val onOpenDeck: () -> Unit,
 )
 
-/** A list card's key in the LazyColumn, for its swipe and its dust. */
-private fun listKey(id: String) = "list-card:$id"
-
-private val ListCardShape = RoundedCornerShape(18.dp)
-
 /**
- * 清单, the same on the phone and unfolded: the header with 新建, then a card for each list. A
- * tap opens the list; a left swipe deletes it (to the trash, in dust, as every left swipe in the
- * app deletes) and a right swipe archives it, each with an undo; held, it is dragged to another place.
+ * 清单 as one compact pill: however many lists there are, they take a single row, and the deck
+ * behind it holds their cards. Tapping the pill opens the deck; a card picked there opens the list.
  */
-private fun LazyListScope.listCards(c: ListsContext) {
-    item("lists-header") {
-        var adding by rememberSaveable { mutableStateOf(false) }
-        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 4.dp)) {
-            ListsHeader(adding, Modifier.padding(start = 4.dp)) { adding = !adding }
-            NewListField(adding, c.onCreate, onClose = { adding = false })
-            if (c.lists.isEmpty() && !adding) {
+private fun LazyListScope.listDeckButton(c: ListsContext) {
+    item("lists-deck") {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            val current = c.lists.firstOrNull { ViewKey.list(it.id) == c.selected }?.name
+            DeckButton(
+                label = "清单",
+                current = current,
+                count = c.lists.size,
+                accents = c.lists.take(3).map { listColor(c.data, it.id) ?: MaterialTheme.colorScheme.primary },
+                onClick = c.onOpenDeck,
+            )
+            if (c.lists.isEmpty()) {
                 Text(
                     "把一个项目拆成清单，再用分区分阶段",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 6.dp),
+                    modifier = Modifier.padding(start = 6.dp, top = 4.dp),
                 )
             }
-        }
-    }
-    items(c.lists, key = { listKey(it.id) }) { l ->
-        val key = listKey(l.id)
-        val dragged = c.reorder.dragging == key
-        val cs = MaterialTheme.colorScheme
-        Box(
-            Modifier
-                .zIndex(if (c.reorder.isLifted(key)) 1f else 0f)
-                .graphicsLayer { translationY = c.reorder.translationOf(key) }
-                .then(if (dragged) Modifier else Modifier.animateItem())
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-        ) {
-            SwipeActionsBox(
-                key = key,
-                group = c.swipe,
-                shape = ListCardShape,
-                enabled = c.reorder.dragging == null,
-                actions = listOf(SwipeAction("归档", Icons.Outlined.Archive, cs.tertiary) { c.vm.archiveList(l.id, l.name) }),
-                onDelete = { c.vm.deleteList(l.id) {} },
-            ) {
-                ListCard(
-                    l, listColor(c.data, l.id) ?: cs.primary, TodoViews.countInList(l.id, c.data?.todos.orEmpty()),
-                    selected = c.selected == ViewKey.list(l.id), today = c.today, lifted = dragged,
-                    modifier = Modifier.reorderable(c.reorder, key),
-                ) { if (!c.reorder.ownsClick(key)) c.onSelect(ViewKey.list(l.id)) }
-            }
-        }
-    }
-}
-
-/**
- * One list: its icon, its name with the deadline's tag under it (the way a todo's reminder sits
- * under its title), and the open todos in it. Filled with its color while open.
- */
-@Composable
-private fun ListCard(l: TodoList, color: Color, count: Int, selected: Boolean, today: LocalDate, lifted: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val bg by animateColorAsState(if (selected) color else Color.Transparent, tween(220), label = "listCard")
-    val lift by animateFloatAsState(if (lifted) 1f else 0f, spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow), label = "lift")
-    val badge = TodoViews.parse(l.deadline)?.let { TodoViews.deadlineBadge(it, today) }
-    Row(
-        modifier
-            .fillMaxWidth()
-            .graphicsLayer { scaleX = 1f + 0.03f * lift; scaleY = scaleX }
-            .then(if (selected) Modifier.shadow(8.dp + 12.dp * lift, ListCardShape, spotColor = color) else Modifier.glass(ListCardShape, glass, elevation = 3.dp + 21.dp * lift))
-            .clip(ListCardShape)
-            .background(bg)
-            .clickable(onClick = onClick)
-            .heightIn(min = 58.dp)
-            .padding(start = 12.dp, end = 14.dp, top = 9.dp, bottom = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // The list's colour as a small gem: a rounded square lit from the top left.
-        Box(
-            Modifier.size(34.dp).clip(RoundedCornerShape(11.dp))
-                .background(if (selected) SolidColor(Color.White.copy(alpha = 0.22f)) else Brush.linearGradient(listOf(color.copy(alpha = 0.22f), color.copy(alpha = 0.10f)))),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Outlined.FormatListBulleted, null, tint = if (selected) Color.White else color, modifier = Modifier.size(17.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(l.name, style = todoTitleStyle, color = if (selected) Color.White else cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (badge != null) {
-                Box(Modifier.padding(top = 4.dp)) {
-                    MetaChip(Icons.Outlined.Event, badge.text, if (selected) Color.White else badgeColor(badge.tone), bold = badge.tone == com.assetboard.domain.todo.DateBadge.Tone.ALERT)
-                }
-            }
-        }
-        if (count > 0) {
-            Spacer(Modifier.width(8.dp))
-            Text(
-                count.toString(),
-                style = MaterialTheme.typography.labelLarge.merge(com.assetboard.ui.theme.NumberStyle),
-                color = if (selected) Color.White else color,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.clip(RoundedCornerShape(50)).background(if (selected) Color.White.copy(alpha = 0.2f) else color.copy(alpha = 0.12f))
-                    .widthIn(min = 28.dp).padding(horizontal = 8.dp, vertical = 3.dp),
-            )
-        }
-    }
-}
-
-/** "清单" with the new-list button at its right end, where it stays in reach however many lists there are. */
-@Composable
-private fun ListsHeader(adding: Boolean, modifier: Modifier = Modifier, onToggle: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val turn by animateFloatAsState(if (adding) 45f else 0f, spring(dampingRatio = 0.6f), label = "plus")
-    Row(modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("清单", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-        Row(
-            Modifier
-                .clip(RoundedCornerShape(50))
-                .background(cs.primary.copy(alpha = if (adding) 0.16f else 0.08f))
-                .clickable(onClick = onToggle)
-                .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Default.Add, null, tint = cs.primary, modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = turn })
-            Spacer(Modifier.width(2.dp))
-            Text(if (adding) "取消" else "新建", style = MaterialTheme.typography.labelLarge, color = cs.primary)
-        }
-    }
-}
-
-/**
- * The new list's name, full width under the header: focused when it opens, Enter or 创建 makes
- * the list and opens it, an empty field closes on leaving it.
- */
-@Composable
-private fun NewListField(visible: Boolean, onCreate: (String) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
-    AnimatedVisibility(visible, modifier = modifier, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-        val cs = MaterialTheme.colorScheme
-        var name by rememberSaveable { mutableStateOf("") }
-        val focus = remember { FocusRequester() }
-        var hadFocus by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-        fun create() {
-            if (name.isBlank()) return
-            onCreate(name.trim())
-            name = ""
-            onClose()
-        }
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-                .height(52.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(cs.surfaceContainer)
-                .border(1.5.dp, cs.primary.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-                .padding(start = 14.dp, end = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Outlined.FormatListBulleted, null, tint = cs.primary, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(10.dp))
-            Box(Modifier.weight(1f)) {
-                if (name.isEmpty()) Text("新清单的名字，比如「搬家」", style = MaterialTheme.typography.bodyLarge, color = cs.outline, maxLines = 1)
-                BasicTextField(
-                    name, { name = it.replace("\n", "") }, singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = cs.onSurface),
-                    cursorBrush = SolidColor(cs.primary),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { if (name.isBlank()) onClose() else create() }),
-                    modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { f ->
-                        if (hadFocus && !f.isFocused && name.isBlank()) onClose()
-                        if (f.isFocused) hadFocus = true
-                    },
-                )
-            }
-            val ready = name.isNotBlank()
-            TextButton(onClick = ::create, enabled = ready) { Text("创建") }
         }
     }
 }
@@ -961,6 +888,8 @@ private class ViewContext(
     val swipe: SwipeGroup,
     val reorder: ReorderState,
     val ambient: Ambient,
+    /** In 今天: write the day's planned todos into the phone calendar. */
+    val onExportToday: (() -> Unit)?,
     val vm: TodoViewModel,
 ) {
     val title get() = view?.label ?: list?.name.orEmpty()
@@ -1181,6 +1110,11 @@ private fun ViewHeader(c: ViewContext) {
                             if (n > 0 && c.view != TodoView.LOGBOOK) {
                                 Text("  $n 项", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
                             }
+                        }
+                    }
+                    if (c.onExportToday != null) {
+                        IconButton(onClick = { c.onExportToday.invoke() }) {
+                            Icon(Icons.Outlined.EventAvailable, "把今天的日程写入日历", tint = cs.onSurfaceVariant)
                         }
                     }
                     AnimatedVisibility(c.onAdd != null, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {

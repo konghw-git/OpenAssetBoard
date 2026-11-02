@@ -158,6 +158,12 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
         _events.tryEmit(TodoEvent("已移动检查项") { repo.undoChecklistMove(undo) })
     }
 
+    /** A checklist item dragged out of its todo becomes a todo of its own. */
+    fun extractChecklistItem(itemId: String) = action {
+        val extract = repo.extractChecklistItem(itemId) ?: return@action
+        _events.tryEmit(TodoEvent("「${extract.item.text.take(14)}」已变成独立待办") { repo.undoExtract(extract) })
+    }
+
     /** [onResult] hears whether the todo was written; a failure also shows the error. */
     fun quickAdd(draft: TodoDraft, onResult: (saved: Boolean) -> Unit = {}) = action {
         try {
