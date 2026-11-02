@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-02
+
+### Changed
+
+- The 清单 and 主题 bars are now gilded brass over deep enamel, and the deck they open is a card
+  table: a dark green felt lit from above, a short burst of light as it is dealt, and each card
+  in a brushed-brass frame with a painted window, a crest, a count gemstone, a brass name plate
+  and a foil sweep when it comes to the front. The brass and enamel are drawn in Compose, in the
+  app's own palette.
+- The 主题 bar is now as wide as the notes below it, instead of being inset a second time.
+
 ## [1.2.0] - 2026-11-02
 
 ### Added

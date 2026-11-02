@@ -598,7 +598,8 @@ private fun TopicDeckButton(
         else -> topics.firstOrNull { it.id == filter }?.name ?: "全部"
     }
     val unsorted = counts[null] ?: 0
-    Box(modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp)) {
+    // The list's own 16dp content padding is the only inset, so the bar is as wide as the notes.
+    Box(modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp)) {
         DeckButton(
             label = "主题",
             current = current,

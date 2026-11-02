@@ -26,6 +26,7 @@ import com.assetboard.domain.todo.Recurrence
 import com.assetboard.ui.notes.dayLabel
 import com.assetboard.ui.theme.AssetBoardTheme
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.rules.RuleChain
@@ -69,6 +70,21 @@ class NoteShellTest {
         waitFor("${day.monthValue}月 · ${Recurrence.weekName(day.dayOfWeek)}")
         // The diary tab is the one selected; its page title says 日记 too.
         compose.onNode(hasText("日记") and isSelected()).assertExists()
+    }
+
+    @Test fun theTopicPillIsAsWideAsTheNotesUnderIt() {
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
+        runBlocking(c.gate.bound()) {
+            val topic = c.notes.createTopic("读书")
+            c.notes.create("一本书的摘要", null, topicId = topic)
+        }
+        show(c)
+        compose.onNodeWithText("笔记").performClick()
+        waitFor("一本书的摘要")
+        val pill = compose.onNode(hasText("主题") and hasClickAction()).fetchSemanticsNode().boundsInRoot
+        val note = compose.onNode(hasText("一本书的摘要") and hasClickAction()).fetchSemanticsNode().boundsInRoot
+        assertEquals("the pill should start where the notes do", note.left, pill.left, 1f)
+        assertEquals("the pill should end where the notes do", note.right, pill.right, 1f)
     }
 
     @Test fun theTopicDeckFiltersToThePickedTopic() {

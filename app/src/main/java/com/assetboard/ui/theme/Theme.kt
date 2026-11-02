@@ -110,6 +110,8 @@ data class ExtraColors(
     val chartGrid: Color,
     /** The net worth card: clear glass lit from within by drifting fields of these warm colours. */
     val aurora: Aurora,
+    /** The gilded decks: brass, deep enamel and warm light, for the lists and note topics. */
+    val gilded: Gilded,
 ) {
     fun group(index: Int): Color = groupPalette[((index % groupPalette.size) + groupPalette.size) % groupPalette.size]
     fun signed(cents: Long): Color = if (cents >= 0) gain else loss
@@ -180,6 +182,58 @@ private val DarkAurora = Aurora(
     shadow = Color(0x73000000),
 )
 
+/**
+ * The brass of the gilded decks. The frame is brushed metal, the face is deep enamel so the gold
+ * reads warm against it, and the light is the warm cream the app already uses for the hero card.
+ */
+@Immutable
+data class Gilded(
+    /** The frame, lit from one corner to the other. */
+    val rim: List<Color>,
+    /** The dark cut line outside the frame and under its ornaments. */
+    val rimDark: Color,
+    /** The enamel inside the frame, top to bottom. */
+    val face: List<Color>,
+    /** The name plate and other lit brass. */
+    val plate: List<Color>,
+    /** Lettering on enamel. */
+    val ink: Color,
+    /** Lettering cut into brass. */
+    val onPlate: Color,
+    /** Quiet lettering on enamel. */
+    val muted: Color,
+    /** The gem holding a count. */
+    val gem: List<Color>,
+    /** Light shed behind the front card and along the table's edge. */
+    val glow: Color,
+    /** The dark table the deck lies on. */
+    val table: List<Color>,
+    val tableGlow: Color,
+    /** Highlights in the dust and the foil sweep. */
+    val spark: Color,
+)
+
+private val LightGilded = Gilded(
+    rim = listOf(Color(0xFF4A3312), Color(0xFFB08A3F), Color(0xFFF8E6AD), Color(0xFFC79A45), Color(0xFF6B4B1B), Color(0xFFE8CA82)),
+    rimDark = Color(0xFF2A1B07),
+    face = listOf(Color(0xFF1C3E33), Color(0xFF0E241C), Color(0xFF071610)),
+    plate = listOf(Color(0xFFFBF0C4), Color(0xFFD8A94F), Color(0xFFA3721F)),
+    ink = Color(0xFFF4DFA4),
+    onPlate = Color(0xFF2A1B07),
+    muted = Color(0xFFD2BE93),
+    gem = listOf(Color(0xFFF9E9B5), Color(0xFFCFA24B), Color(0xFF8A6424)),
+    glow = Color(0xFFF0C868),
+    table = listOf(Color(0xFF13271F), Color(0xFF0B1812), Color(0xFF050D09)),
+    tableGlow = Color(0xFF2F6B54),
+    spark = Color(0xFFFFE7A8),
+)
+
+private val DarkGilded = LightGilded.copy(
+    rim = listOf(Color(0xFF5A3F16), Color(0xFFC79A45), Color(0xFFFFF0BE), Color(0xFFD8AC55), Color(0xFF7A5720), Color(0xFFF0D28C)),
+    face = listOf(Color(0xFF143128), Color(0xFF0A1E17), Color(0xFF040E0A)),
+    table = listOf(Color(0xFF0F2019), Color(0xFF07120D), Color(0xFF030907)),
+)
+
 private fun extraColors(dark: Boolean, upIsRed: Boolean): ExtraColors {
     val red = if (dark) Color(0xFFFF8A80) else Color(0xFFD23F31)
     val green = if (dark) Color(0xFF6FD39A) else Color(0xFF23864D)
@@ -196,6 +250,7 @@ private fun extraColors(dark: Boolean, upIsRed: Boolean): ExtraColors {
         groupPalette = if (dark) DarkPalette else LightPalette,
         chartGrid = if (dark) Color(0xFF283B33) else Color(0xFFD7E1DB),
         aurora = if (dark) DarkAurora else LightAurora,
+        gilded = if (dark) DarkGilded else LightGilded,
     )
 }
 
