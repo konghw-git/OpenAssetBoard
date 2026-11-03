@@ -16,11 +16,13 @@ import com.assetboard.ui.components.rememberAmbient
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.Lock
 import com.assetboard.ui.components.tint
+import com.assetboard.domain.AiAction
 import com.assetboard.domain.Habit
 import com.assetboard.domain.HabitDay
 import com.assetboard.domain.Mood
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -33,6 +35,7 @@ import android.content.ClipboardManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material3.LinearProgressIndicator
 import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.HeaderAction
 import com.assetboard.ui.components.SettingsAction
@@ -240,7 +243,7 @@ fun DiaryScreen(
     // One notice at a time and none for long: the newest replaces the one on screen, and each goes
     // by itself after a while (a snackbar with an action would otherwise stay until tapped).
     LaunchedEffect(vm) {
-        merge(vm.messages.map { it to null }, vm.tidied.map { TIDIED_TEXT to it }).collectLatest { (text, t) ->
+        merge(vm.messages.map { it to null }, vm.tidied.map { it.notice to it }).collectLatest { (text, t) ->
             snackbar.currentSnackbarData?.dismiss()
             // Typed on, or another day opened, before it got here: nothing left to undo.
             if (t != null && (vm.session.value !== t.session || t.session.text.value != t.after)) return@collectLatest
@@ -322,6 +325,18 @@ fun DiaryScreen(
         extractingSelection = true
         extracting = date to picked
     }
+    val aiBusy by vm.aiBusy.collectAsStateWithLifecycle()
+    // The AI passes act on the selection when there is one, the whole body otherwise.
+    val runAi: (AiAction) -> Unit = { kind ->
+        val sel = editorState.value.selection
+        when (kind) {
+            AiAction.FORMAT -> vm.aiFormat(sel.start, sel.end)
+            AiAction.POLISH -> vm.aiPolish(sel.start, sel.end)
+            AiAction.GENERATE -> vm.aiGenerate()
+        }
+    }
+    // 生成日记 fills an empty day (never tomorrow's) from the day card's records.
+    val canGenerate = body.isBlank() && sessionStatus == DiarySession.Status.READY && !date.isAfter(today)
     val ambient = rememberAmbient()
     Box(Modifier.fillMaxSize().ambient(ambient)) {
     CompositionLocalProvider(LocalAmbient provides ambient) {
@@ -333,7 +348,8 @@ fun DiaryScreen(
                 AnimatedContent(editing, transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.9f)) togetherWith fadeOut() }, label = "actions") { on ->
                     if (on) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (body.isNotBlank()) HeaderAction(Icons.Outlined.AutoFixHigh, "一键排版", vm::tidy)
+                            if (canGenerate) HeaderAction(Icons.Outlined.AutoAwesome, "AI生成日记", { runAi(AiAction.GENERATE) })
+                            if (body.isNotBlank()) HeaderAction(Icons.Outlined.AutoFixHigh, "AI排版", { runAi(AiAction.FORMAT) })
                             Row(
                                 Modifier.height(42.dp).clip(RoundedCornerShape(50)).background(Brush.linearGradient(listOf(AppTheme.extra.heroEnd, AppTheme.extra.heroStart))).clickable(onClick = done).padding(horizontal = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -346,7 +362,8 @@ fun DiaryScreen(
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             HeaderAction(Icons.Outlined.Search, "搜索", onSearch)
-                            if (body.isNotBlank() && sessionStatus == DiarySession.Status.READY) HeaderAction(Icons.Outlined.AutoFixHigh, "一键排版", vm::tidy)
+                            if (canGenerate) HeaderAction(Icons.Outlined.AutoAwesome, "AI生成日记", { runAi(AiAction.GENERATE) })
+                            if (body.isNotBlank() && sessionStatus == DiarySession.Status.READY) HeaderAction(Icons.Outlined.AutoFixHigh, "AI排版", { runAi(AiAction.FORMAT) })
                             // From the session, not the entry: a save started by 完成 may not have landed yet.
                             if (entry != null && body.isNotBlank()) HeaderAction(Icons.Outlined.Lightbulb, "提炼到笔记", { extractingSelection = false; extracting = date to body })
                             // Nothing to delete while the text cannot be saved: the trash would keep the old body.
@@ -379,6 +396,10 @@ fun DiaryScreen(
                     onJump = { jump = true },
                     onCalendar = { onCalendar(date) },
                 )
+                // An AI pass in flight: a slim bar under the header, where its button was tapped.
+                AnimatedVisibility(visible = aiBusy != null, Modifier.fillMaxWidth()) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth().height(3.dp))
+                }
             }
             // Stepping a day slides the new page in from the side it lies on: a later day from the right.
             val lastDate = remember { arrayOf(date) }
@@ -453,7 +474,7 @@ fun DiaryScreen(
                 ) {
                     ExtractSelectionButton(text?.count { !it.isWhitespace() } ?: 0) { text?.let(extractSelection) }
                 }
-                NoteFormatBar(editorState)
+                NoteFormatBar(editorState, onAi = runAi, aiBusy = aiBusy)
             }
         }
     }
@@ -704,8 +725,7 @@ private fun FoldList(content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 10.dp, start = 2.dp)) { content() }
 }
 
-private const val TIDIED_TEXT = "已排版：首行缩进、标点和空行都理好了"
-/** How long the 撤销 of a 排版, or a note just extracted into, stays offered: long enough to read and reach. */
+/** How long the 撤销 of an AI edit, or a note just extracted into, stays offered: long enough to read and reach. */
 private const val NOTICE_MS = 4_000L
 
 /**

@@ -82,6 +82,7 @@ import androidx.lifecycle.createSavedStateHandle
 import com.assetboard.data.NoteSession
 import com.assetboard.data.NoteTopic
 import com.assetboard.data.SourceRef
+import com.assetboard.domain.AiAction
 import com.assetboard.domain.Dates
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.ConfirmDialog
@@ -115,6 +116,13 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
     var editing by remember { mutableStateOf(false) }
     var outline by rememberSaveable { mutableStateOf(false) }
     val editorState = remember(vm) { NoteEditorState(vm::onInput) }
+    val aiBusy by vm.aiBusy.collectAsStateWithLifecycle()
+    // The AI passes act on the selection when there is one, the whole body otherwise; the result
+    // lands as one undo step on the editor state.
+    val runAi: (AiAction) -> Unit = { kind ->
+        val v = editorState.value
+        vm.aiEdit(kind, v.text, v.selection.start, v.selection.end) { editorState.apply(it) }
+    }
     val scroll = rememberScrollState()
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -229,7 +237,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
                 enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 },
                 exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { it / 2 },
             ) {
-                NoteFormatBar(editorState)
+                NoteFormatBar(editorState, onAi = runAi, aiBusy = aiBusy)
             }
             AnimatedVisibility(
                 visible = !editing,

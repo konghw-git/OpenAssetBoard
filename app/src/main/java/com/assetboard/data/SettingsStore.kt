@@ -74,6 +74,36 @@ class SettingsStore(context: Context) {
         _syncServerUrl.value = value
     }
 
+    // ------------------------------------------------------------ AI assistant
+
+    /**
+     * The AI editor helpers' endpoint: an OpenAI-compatible chat API (Bailian by default). The key
+     * lives only on this device — settings are not backed up, not synced, not in the repository.
+     */
+    private val _aiApiKey = MutableStateFlow(prefs.getString(KEY_AI_API_KEY, "") ?: "")
+    val aiApiKey: StateFlow<String> = _aiApiKey.asStateFlow()
+
+    fun setAiApiKey(value: String) {
+        prefs.edit { putString(KEY_AI_API_KEY, value) }
+        _aiApiKey.value = value
+    }
+
+    private val _aiBaseUrl = MutableStateFlow(prefs.getString(KEY_AI_BASE_URL, null) ?: DEFAULT_AI_BASE_URL)
+    val aiBaseUrl: StateFlow<String> = _aiBaseUrl.asStateFlow()
+
+    fun setAiBaseUrl(value: String) {
+        prefs.edit { putString(KEY_AI_BASE_URL, value) }
+        _aiBaseUrl.value = value
+    }
+
+    private val _aiModel = MutableStateFlow(prefs.getString(KEY_AI_MODEL, null) ?: DEFAULT_AI_MODEL)
+    val aiModel: StateFlow<String> = _aiModel.asStateFlow()
+
+    fun setAiModel(value: String) {
+        prefs.edit { putString(KEY_AI_MODEL, value) }
+        _aiModel.value = value
+    }
+
     fun setBool(flow: MutableStateFlow<Boolean>, value: Boolean) {
         val key = when (flow) {
             networkEnabled -> KEY_NETWORK
@@ -153,6 +183,9 @@ class SettingsStore(context: Context) {
     companion object {
         const val GLASS_CLEAR = "clear"
         const val GLASS_DEEP = "deep"
+        /** Aliyun Bailian's OpenAI-compatible endpoint, and a DeepSeek model on it. */
+        const val DEFAULT_AI_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        const val DEFAULT_AI_MODEL = "deepseek-v4.1-flash-1017"
         private const val KEY_GLASS = "glass"
         private const val KEY_THEME = "theme_mode"
         private const val KEY_UP_RED = "up_is_red"
@@ -171,5 +204,8 @@ class SettingsStore(context: Context) {
         private const val KEY_SYNC_SERVER = "sync_server_url"
         private const val KEY_BACKUP_ERROR = "backup_error"
         private const val KEY_BACKUP_ERROR_AT = "backup_error_at"
+        private const val KEY_AI_API_KEY = "ai_api_key"
+        private const val KEY_AI_BASE_URL = "ai_base_url"
+        private const val KEY_AI_MODEL = "ai_model"
     }
 }

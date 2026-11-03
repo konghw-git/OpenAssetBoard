@@ -1,6 +1,7 @@
 package com.assetboard
 
 import android.content.Context
+import com.assetboard.data.AiGateway
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -18,7 +19,8 @@ import org.junit.runners.model.Statement
 object TestContainers {
     private val live = mutableListOf<AppContainer>()
 
-    fun open(context: Context): AppContainer = AppContainer(context).also { live += it }
+    /** [ai] replaces the real AI gateway: no key, no network, no waiting on a model. */
+    fun open(context: Context, ai: AiGateway? = null): AppContainer = AppContainer(context, aiApi = ai).also { live += it }
 
     fun closeAll() {
         val containers = live.toList()

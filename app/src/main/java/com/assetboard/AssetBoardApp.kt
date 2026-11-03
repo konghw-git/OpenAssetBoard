@@ -9,6 +9,8 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.assetboard.data.AccountManager
+import com.assetboard.data.AiGateway
+import com.assetboard.data.AiService
 import com.assetboard.data.AppDatabase
 import com.assetboard.data.AppUpdater
 import com.assetboard.data.BackupKind
@@ -74,6 +76,7 @@ class AppContainer(
     val profiles: ProfileStore = ProfileStore(context),
     private val onSwitchProfile: suspend (Profile) -> Unit = {},
     private val syncApi: SyncGateway? = null,
+    private val aiApi: AiGateway? = null,
 ) {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val db = AppDatabase.build(context, dbName)
@@ -108,6 +111,8 @@ class AppContainer(
     val food by lazy { FoodRepository(db, gate) }
     val goal by lazy { GoalRepository(db, gate) }
     val weather by lazy { WeatherService(context, settings) }
+    /** The AI editor helpers; tests bring their own gateway. */
+    val ai by lazy { aiApi ?: AiService(settings) }
     /** The phone calendars, for writing a todo day into its daily plan. */
     val calendar by lazy { CalendarExporter(context, settings) }
     val updater by lazy { AppUpdater(context, settings, appScope) { backup.backupNow(BackupKind.AUTO) } }

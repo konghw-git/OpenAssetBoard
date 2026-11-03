@@ -32,6 +32,7 @@ class NoteToolbarTest {
         "撤销", "重做", "一级标题", "二级标题", "三级标题",
         "待办清单", "无序列表", "有序列表", "引用", "分割线",
         "加粗", "斜体", "删除线", "行内代码", "增加缩进", "减少缩进",
+        "AI排版", "润色",
     )
 
     private fun show() {
@@ -53,13 +54,13 @@ class NoteToolbarTest {
 
     @Test fun theButtonsWrapIntoSeveralRowsOnAPhone() {
         show()
-        assertNotEquals("undo starts a row of its own up top", topOf("撤销"), topOf("减少缩进"))
+        assertNotEquals("undo starts a row of its own up top", topOf("撤销"), topOf("润色"))
     }
 
     @Test
-    @Config(qualifiers = "w600dp-h880dp-xxhdpi")
+    @Config(qualifiers = "w720dp-h880dp-xxhdpi")
     fun theButtonsSitOnOneRowOnAWideScreen() {
         show()
-        assertEquals("one row on a wide screen", topOf("撤销"), topOf("减少缩进"))
+        assertEquals("one row on a wide screen", topOf("撤销"), topOf("润色"))
     }
 }

@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **AI 排版 and 润色 in the editors.** The format bar gains two buttons after its own: AI 排版
+  tidies layout and punctuation only, 润色 smooths the wording only (each prompt pins the model
+  to its own job), and a selected stretch is rewritten alone while nothing selected takes the
+  whole body. The diary's 一键排版 button is this AI pass now — the local tidy is gone — and
+  生成日记 fills an empty day from what the day card gathered (completed todos, habits, mood,
+  weather, the stocktake). Every result lands as one undo step or the diary's 撤销 notice, a
+  body typed on while the model worked keeps what was typed, and empty text asks for words
+  first instead of sending nothing.
+- **An AI 助手 card in the settings.** API Key, endpoint and model (Bailian's DeepSeek by
+  default) with a 测试连接 probe; the key stays on the device, outside backups and sync.
+
 ## [1.3.1] - 2026-11-03
 
 ### Added

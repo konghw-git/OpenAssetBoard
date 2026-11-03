@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatStrikethrough
+import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.Code
@@ -38,8 +39,10 @@ import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.FormatQuote
 import androidx.compose.material.icons.outlined.HorizontalRule
 import androidx.compose.material.icons.outlined.Redo
+import androidx.compose.material.icons.outlined.Spellcheck
 import androidx.compose.material.icons.outlined.Toc
 import androidx.compose.material.icons.outlined.Undo
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -77,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.assetboard.data.NoteSession
+import com.assetboard.domain.AiAction
 import com.assetboard.domain.Dates
 import com.assetboard.domain.notes.NoteMarkdown
 import com.assetboard.domain.notes.NoteMarkdown.Kind
@@ -218,15 +222,22 @@ private fun EditorFooter(
 /**
  * The formatting bar, pinned above the keyboard while writing. On a wide screen the buttons
  * shrink until every one fits on a single row; on a narrow one the groups wrap into two or three
- * rows on their own, so no button hides behind a horizontal scroll.
+ * rows on their own, so no button hides behind a horizontal scroll. The last group is the AI
+ * passes (排版 and 润色), which act on the selection when there is one and the whole body
+ * otherwise; while one runs, its button shows the wait and both stay quiet.
  */
 @Composable
-fun NoteFormatBar(state: NoteEditorState, modifier: Modifier = Modifier) {
+fun NoteFormatBar(
+    state: NoteEditorState,
+    modifier: Modifier = Modifier,
+    onAi: (AiAction) -> Unit = {},
+    aiBusy: AiAction? = null,
+) {
     val doc = state.document()
     val line = state.currentLine(doc)
     BoxWithConstraints(modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp), glass, elevation = 12.dp)) {
         val wide = maxWidth >= 600.dp
-        val buttonSize = if (wide) ((maxWidth - 60.dp) / 16).coerceIn(34.dp, 42.dp) else 42.dp
+        val buttonSize = if (wide) ((maxWidth - 72.dp) / 18).coerceIn(34.dp, 42.dp) else 42.dp
         FlowRow(
             Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
             horizontalArrangement = Arrangement.Center,
@@ -261,6 +272,11 @@ fun NoteFormatBar(state: NoteEditorState, modifier: Modifier = Modifier) {
                 BarDivider()
                 FormatButton(Icons.Outlined.FormatIndentIncrease, "增加缩进", false, size = buttonSize) { state.format(Format.INDENT) }
                 FormatButton(Icons.Outlined.FormatIndentDecrease, "减少缩进", false, size = buttonSize) { state.format(Format.OUTDENT) }
+            }
+            BarGroup {
+                BarDivider()
+                AiButton(Icons.Outlined.AutoFixHigh, "AI排版", AiAction.FORMAT, aiBusy, buttonSize) { onAi(AiAction.FORMAT) }
+                AiButton(Icons.Outlined.Spellcheck, "润色", AiAction.POLISH, aiBusy, buttonSize) { onAi(AiAction.POLISH) }
             }
         }
     }
@@ -314,6 +330,34 @@ private fun FormatButton(
             tint = (if (active) cs.primary else cs.onSurfaceVariant).copy(alpha = if (enabled) 1f else 0.4f),
             modifier = Modifier.size(21.dp),
         )
+    }
+}
+
+/** An AI pass: its own button, which spins instead of its icon while that pass runs. */
+@Composable
+private fun AiButton(
+    icon: ImageVector,
+    label: String,
+    kind: AiAction,
+    busy: AiAction?,
+    size: Dp = 42.dp,
+    onClick: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val source = remember { MutableInteractionSource() }
+    val running = busy == kind
+    Box(
+        Modifier.size(size).clip(CircleShape)
+            .focusProperties { canFocus = false }
+            .semantics { contentDescription = label }
+            .clickable(interactionSource = source, indication = ripple(bounded = true), enabled = busy == null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (running) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = cs.primary)
+        } else {
+            Icon(icon, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(21.dp))
+        }
     }
 }
 

@@ -14,6 +14,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
 import com.assetboard.CloseTestContainers
 import com.assetboard.TestContainers
+import com.assetboard.data.AiGateway
 import com.assetboard.data.DiarySession
 import com.assetboard.data.ThemeMode
 import com.assetboard.domain.DiaryFormat
@@ -33,9 +34,10 @@ import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
 
 /**
- * The notice after 一键排版: its 撤销 goes by itself after a few seconds, a second tap offers it
+ * The notice after AI 排版: its 撤销 goes by itself after a few seconds, a second tap offers it
  * afresh instead of queueing another notice behind it, and it goes at once when typing makes it
- * unable to undo.
+ * unable to undo. The gateway here is the local tidy — what 排版 did before AI — so the text the
+ * tests expect stays deterministic.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -47,8 +49,22 @@ class DiaryTidyNoticeTest {
 
     private val typed = "早上跑了五公里.\n\n\n下午改论文"
 
-    private fun show(): AppContainer {
-        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
+    private object TidyAi : AiGateway {
+        override suspend fun complete(system: String, user: String): String = DiaryFormat.tidy(user)
+    }
+
+    /** The local tidy behind a gate: a reply the test lets land only when it says so. */
+    private class GatedTidyAi : AiGateway {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+
+        override suspend fun complete(system: String, user: String): String {
+            gate.await()
+            return DiaryFormat.tidy(user)
+        }
+    }
+
+    private fun show(ai: AiGateway = TidyAi): AppContainer {
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext(), ai)
         runBlocking(c.gate.bound()) {
             val s = DiarySession(c.diary, LocalDate.now(), c.appScope + c.gate.bound())
             s.open(null)
@@ -71,7 +87,7 @@ class DiaryTidyNoticeTest {
     private fun shown(text: String) = compose.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty()
 
     private fun tidy() {
-        compose.onNodeWithContentDescription("一键排版").performClick()
+        compose.onNodeWithContentDescription("AI排版").performClick()
         compose.mainClock.advanceTimeBy(300)
     }
 
@@ -112,5 +128,19 @@ class DiaryTidyNoticeTest {
         compose.onAllNodes(hasSetTextAction())[0].performTextReplacement(DiaryFormat.tidy(typed) + "，晚上散步")
         compose.mainClock.advanceTimeBy(300)
         assertEquals(false, undoShown())
+    }
+
+    @Test fun typingDuringThePassDropsTheStaleResult() {
+        val ai = GatedTidyAi()
+        show(ai)
+        compose.onNodeWithContentDescription("AI排版").performClick()
+        compose.onNodeWithText("下午改论文", substring = true).performClick()
+        compose.mainClock.advanceTimeBy(500)
+        compose.onAllNodes(hasSetTextAction())[0].performTextReplacement("改过了，晚上散步")
+        ai.gate.complete(Unit)
+        compose.mainClock.advanceTimeBy(600)
+        assertEquals("the stale reply is announced", true, shown("文本已改动"))
+        assertEquals("and offers no undo", false, undoShown())
+        assertEquals("what was typed stays", true, shown("改过了，晚上散步"))
     }
 }

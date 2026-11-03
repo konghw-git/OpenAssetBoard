@@ -7,6 +7,9 @@ import com.assetboard.data.Note
 import com.assetboard.data.NoteSession
 import com.assetboard.data.NoteSource
 import com.assetboard.data.NoteTopic
+import com.assetboard.domain.AiAction
+import com.assetboard.domain.AiEdit
+import com.assetboard.domain.notes.NoteMarkdownEdit
 import com.assetboard.ui.ActionViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -109,6 +112,40 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
 
     fun onInput(text: String) {
         _session.value?.onInput(text)
+    }
+
+    /** The AI pass running right now, if any: its buttons stay busy meanwhile. */
+    val aiBusy = MutableStateFlow<AiAction?>(null)
+
+    /**
+     * One AI pass over [text]: [start, end) when a selection is meant, the whole body otherwise.
+     * [apply] lands the finished edit on the editor state as one undo step. The body may not
+     * change under the wait — typing, undo — and then the result is dropped, not pasted over it.
+     */
+    fun aiEdit(kind: AiAction, text: String, start: Int, end: Int, apply: (NoteMarkdownEdit.Result) -> Unit) {
+        if (aiBusy.value != null) return
+        val range = AiEdit.targetRange(text, start, end)
+        if (range.isEmpty()) {
+            messages.tryEmit("先写点内容再用 AI")
+            return
+        }
+        aiBusy.value = kind
+        launchBound {
+            try {
+                val out = AiEdit.unwrap(container.ai.complete(AiEdit.systemFor(kind), text.substring(range)))
+                if (_session.value?.text?.value != text) {
+                    messages.tryEmit("文本已改动，AI 的结果没有应用")
+                } else {
+                    apply(AiEdit.replace(text, range.first, range.last + 1, out))
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                messages.tryEmit("${if (kind == AiAction.POLISH) "润色" else "AI 排版"}失败：${e.message ?: "未知错误"}")
+            } finally {
+                aiBusy.value = null
+            }
+        }
     }
 
     /** Going to the background or putting the keyboard away. */
