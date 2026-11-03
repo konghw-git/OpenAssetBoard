@@ -6,11 +6,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -40,7 +42,9 @@ import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.FormatQuote
 import androidx.compose.material.icons.outlined.HorizontalRule
+import androidx.compose.material.icons.outlined.Redo
 import androidx.compose.material.icons.outlined.Toc
+import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -90,6 +94,7 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -406,46 +411,71 @@ private fun TaskToggle(target: TaskTarget, onToggle: () -> Unit) {
     )
 }
 
-/** The formatting bar, pinned above the keyboard while writing. */
+/**
+ * The formatting bar, pinned above the keyboard while writing. On a wide screen the buttons
+ * shrink until every one fits on a single row; on a narrow one the groups wrap into two or three
+ * rows on their own, so no button hides behind a horizontal scroll.
+ */
 @Composable
 fun NoteFormatBar(state: NoteEditorState, modifier: Modifier = Modifier) {
-    val cs = MaterialTheme.colorScheme
     val doc = state.document()
     val line = state.currentLine(doc)
-    Box(modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp), glass, elevation = 12.dp)) {
-        Row(
-            Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    BoxWithConstraints(modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp), glass, elevation = 12.dp)) {
+        val wide = maxWidth >= 600.dp
+        val buttonSize = if (wide) ((maxWidth - 60.dp) / 16).coerceIn(34.dp, 42.dp) else 42.dp
+        FlowRow(
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            HeadingButton("H1", "一级标题", Format.H1, line.kind == Kind.HEADING && line.level == 1) { state.format(Format.H1) }
-            HeadingButton("H2", "二级标题", Format.H2, line.kind == Kind.HEADING && line.level == 2) { state.format(Format.H2) }
-            HeadingButton("H3", "三级标题", Format.H3, line.kind == Kind.HEADING && line.level == 3) { state.format(Format.H3) }
-            BarDivider()
-            FormatButton(Icons.Outlined.CheckBox, "待办清单", line.kind == Kind.CHECKLIST) { state.format(Format.CHECKLIST) }
-            FormatButton(Icons.Outlined.FormatListBulleted, "无序列表", line.kind == Kind.BULLET) { state.format(Format.BULLET) }
-            FormatButton(Icons.Outlined.FormatListNumbered, "有序列表", line.kind == Kind.NUMBERED) { state.format(Format.NUMBERED) }
-            FormatButton(Icons.Outlined.FormatQuote, "引用", line.kind == Kind.QUOTE) { state.format(Format.QUOTE) }
-            FormatButton(Icons.Outlined.HorizontalRule, "分割线", false) { state.format(Format.DIVIDER) }
-            BarDivider()
-            FormatButton(Icons.Filled.FormatBold, "加粗", false) { state.format(Format.BOLD) }
-            FormatButton(Icons.Filled.FormatItalic, "斜体", false) { state.format(Format.ITALIC) }
-            FormatButton(Icons.Filled.FormatStrikethrough, "删除线", false) { state.format(Format.STRIKE) }
-            FormatButton(Icons.Outlined.Code, "行内代码", false) { state.format(Format.CODE) }
-            BarDivider()
-            FormatButton(Icons.Outlined.FormatIndentIncrease, "增加缩进", false) { state.format(Format.INDENT) }
-            FormatButton(Icons.Outlined.FormatIndentDecrease, "减少缩进", false) { state.format(Format.OUTDENT) }
+            BarGroup {
+                FormatButton(Icons.Outlined.Undo, "撤销", active = false, enabled = state.canUndo, size = buttonSize) { state.undo() }
+                FormatButton(Icons.Outlined.Redo, "重做", active = false, enabled = state.canRedo, size = buttonSize) { state.redo() }
+            }
+            BarGroup {
+                BarDivider()
+                HeadingButton("H1", "一级标题", line.kind == Kind.HEADING && line.level == 1, buttonSize) { state.format(Format.H1) }
+                HeadingButton("H2", "二级标题", line.kind == Kind.HEADING && line.level == 2, buttonSize) { state.format(Format.H2) }
+                HeadingButton("H3", "三级标题", line.kind == Kind.HEADING && line.level == 3, buttonSize) { state.format(Format.H3) }
+            }
+            BarGroup {
+                BarDivider()
+                FormatButton(Icons.Outlined.CheckBox, "待办清单", line.kind == Kind.CHECKLIST, size = buttonSize) { state.format(Format.CHECKLIST) }
+                FormatButton(Icons.Outlined.FormatListBulleted, "无序列表", line.kind == Kind.BULLET, size = buttonSize) { state.format(Format.BULLET) }
+                FormatButton(Icons.Outlined.FormatListNumbered, "有序列表", line.kind == Kind.NUMBERED, size = buttonSize) { state.format(Format.NUMBERED) }
+                FormatButton(Icons.Outlined.FormatQuote, "引用", line.kind == Kind.QUOTE, size = buttonSize) { state.format(Format.QUOTE) }
+                FormatButton(Icons.Outlined.HorizontalRule, "分割线", false, size = buttonSize) { state.format(Format.DIVIDER) }
+            }
+            BarGroup {
+                BarDivider()
+                FormatButton(Icons.Filled.FormatBold, "加粗", false, size = buttonSize) { state.format(Format.BOLD) }
+                FormatButton(Icons.Filled.FormatItalic, "斜体", false, size = buttonSize) { state.format(Format.ITALIC) }
+                FormatButton(Icons.Filled.FormatStrikethrough, "删除线", false, size = buttonSize) { state.format(Format.STRIKE) }
+                FormatButton(Icons.Outlined.Code, "行内代码", false, size = buttonSize) { state.format(Format.CODE) }
+            }
+            BarGroup {
+                BarDivider()
+                FormatButton(Icons.Outlined.FormatIndentIncrease, "增加缩进", false, size = buttonSize) { state.format(Format.INDENT) }
+                FormatButton(Icons.Outlined.FormatIndentDecrease, "减少缩进", false, size = buttonSize) { state.format(Format.OUTDENT) }
+            }
         }
     }
 }
 
 private typealias Format = NoteMarkdownEdit.Format
 
+/** One group of buttons; a wrap moves the whole group, so its divider never starts a row. */
 @Composable
-private fun HeadingButton(text: String, description: String, format: Format, active: Boolean, onClick: () -> Unit) {
+private fun BarGroup(content: @Composable RowScope.() -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, content = content)
+}
+
+@Composable
+private fun HeadingButton(text: String, description: String, active: Boolean, size: Dp = 42.dp, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val source = remember { MutableInteractionSource() }
     Box(
-        Modifier.size(42.dp).clip(CircleShape)
+        Modifier.size(size).clip(CircleShape)
             .background(if (active) cs.primary.copy(alpha = 0.14f) else Color.Transparent)
             .focusProperties { canFocus = false }
             .semantics { contentDescription = description }
@@ -457,18 +487,29 @@ private fun HeadingButton(text: String, description: String, format: Format, act
 }
 
 @Composable
-private fun FormatButton(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
+private fun FormatButton(
+    icon: ImageVector,
+    label: String,
+    active: Boolean,
+    enabled: Boolean = true,
+    size: Dp = 42.dp,
+    onClick: () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val source = remember { MutableInteractionSource() }
     Box(
-        Modifier.size(42.dp).clip(CircleShape)
+        Modifier.size(size).clip(CircleShape)
             .background(if (active) cs.primary.copy(alpha = 0.14f) else Color.Transparent)
             .focusProperties { canFocus = false }
             .semantics { contentDescription = label }
-            .clickable(interactionSource = source, indication = ripple(bounded = true), onClick = onClick),
+            .clickable(interactionSource = source, indication = ripple(bounded = true), enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = if (active) cs.primary else cs.onSurfaceVariant, modifier = Modifier.size(21.dp))
+        Icon(
+            icon, null,
+            tint = (if (active) cs.primary else cs.onSurfaceVariant).copy(alpha = if (enabled) 1f else 0.4f),
+            modifier = Modifier.size(21.dp),
+        )
     }
 }
 

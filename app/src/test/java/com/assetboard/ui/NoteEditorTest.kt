@@ -100,4 +100,43 @@ class NoteEditorTest {
         field.performTextInput("\n")
         compose.onNode(hasSetTextAction()).assertTextContains("- [ ] 买牛奶\n- [ ] ")
     }
+
+    @Test fun theBackButtonUndoesTheLastEdit() {
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
+        openNote(c, "买牛奶")
+        val field = compose.onNode(hasSetTextAction())
+        field.performClick()
+        field.performTextInputSelection(TextRange("买牛奶".length))
+        field.performTextInput("和鸡蛋")
+        compose.onNode(hasSetTextAction()).assertTextContains("买牛奶和鸡蛋")
+        waitForDescription("撤销")
+        compose.onNodeWithContentDescription("撤销").performClick()
+        compose.onNode(hasSetTextAction()).assertTextContains("买牛奶")
+        waitForDescription("重做")
+        compose.onNodeWithContentDescription("重做").performClick()
+        compose.onNode(hasSetTextAction()).assertTextContains("买牛奶和鸡蛋")
+    }
+
+    @Test fun theUndoButtonStepsBackThroughAFormat() {
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
+        openNote(c, "买牛奶")
+        compose.onNode(hasSetTextAction()).performClick()
+        waitForDescription("待办清单")
+        compose.onNodeWithContentDescription("待办清单").performClick()
+        compose.onNode(hasSetTextAction()).assertTextContains("- [ ] 买牛奶")
+        compose.onNodeWithContentDescription("撤销").performClick()
+        compose.onNode(hasSetTextAction()).assertTextContains("买牛奶")
+    }
+
+    @Test fun checkingABoxCanBeUndone() {
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
+        openNote(c, "- [ ] 买牛奶")
+        compose.onNode(hasSetTextAction()).performClick()
+        waitForDescription("待办：买牛奶")
+        compose.onNodeWithContentDescription("待办：买牛奶").performClick()
+        compose.onNodeWithContentDescription("待办：买牛奶").assertIsOn()
+        waitForDescription("撤销")
+        compose.onNodeWithContentDescription("撤销").performClick()
+        compose.onNodeWithContentDescription("待办：买牛奶").assertIsOff()
+    }
 }
