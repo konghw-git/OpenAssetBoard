@@ -147,6 +147,7 @@ interface NoteDao {
     suspend fun search(q: String): List<Note>
 
     @Query("SELECT COUNT(*) FROM notes WHERE topic_id = :topicId AND deleted_at IS NULL") suspend fun liveCountIn(topicId: String): Int
+    @Query("SELECT id FROM notes WHERE topic_id = :topicId") suspend fun noteIdsInTopic(topicId: String): List<String>
     @Query("SELECT COALESCE(MIN(position), 0) FROM notes") suspend fun minPosition(): Long
 
     /** The live, unpinned note left alone the longest, if that was before [before]. */

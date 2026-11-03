@@ -282,6 +282,49 @@ class NoteTest {
         assertNull(repo.note(trashed)!!.topicId)
     }
 
+    @Test fun reorderingTopicsSavesTheWholeOrder() = f.run {
+        val a = repo.createTopic("A")
+        val b = repo.createTopic("B")
+        val c = repo.createTopic("C")
+        repo.reorderTopics(listOf(c, a))
+        assertEquals(listOf(c, a, b), dao.topics().map { it.id })
+        assertEquals(listOf(0, 1, 2), dao.topics().map { it.sortOrder })
+    }
+
+    @Test fun undoingATopicDeletionRestoresTheTopicAndItsNotes() = f.run {
+        val t = repo.createTopic("会回来")
+        val live = note("活的", t).id
+        val trashed = note("回收站里的", t).id
+        repo.delete(trashed)
+        val gone = repo.deleteTopic(t)!!
+        repo.undoDeleteTopic(gone)
+        val back = dao.topics().single()
+        assertEquals(t, back.id)
+        assertEquals("会回来", back.name)
+        assertEquals(t, repo.note(live)!!.topicId)
+        assertEquals(t, repo.note(trashed)!!.topicId)
+    }
+
+    @Test fun undoingATopicDeletionLeavesNotesThatFoundANewTopicAlone() = f.run {
+        val a = repo.createTopic("A")
+        val kept = note("留在A", a).id
+        val moved = note("搬走了", a).id
+        val gone = repo.deleteTopic(a)!!
+        val b = repo.createTopic("B")
+        repo.setTopic(moved, b)
+        repo.undoDeleteTopic(gone)
+        assertEquals(a, repo.note(kept)!!.topicId)
+        assertEquals(b, repo.note(moved)!!.topicId)
+    }
+
+    @Test fun undoingATopicDeletionKeepsNamesUnique() = f.run {
+        val t = repo.createTopic("读书")
+        val gone = repo.deleteTopic(t)!!
+        repo.createTopic("读书")
+        repo.undoDeleteTopic(gone)
+        assertEquals(listOf("读书", "读书 2"), dao.topics().sortedBy { it.sortOrder }.map { it.name })
+    }
+
     @Test fun draftBecomesANoteInItsOriginalTopic() = f.run {
         val t = repo.createTopic("投资")
         val n = note("原笔记", t)

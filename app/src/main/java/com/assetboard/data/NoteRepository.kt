@@ -9,6 +9,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
+/** What a topic's deletion took with it: the row and the ids of the notes it held. */
+data class TopicDeletion(val topic: NoteTopic, val noteIds: List<String>)
+
 /**
  * Every note write goes through one serial queue (a fair mutex) under the write gate, as the
  * diary's do: pinning, changing the topic, deleting and appending can never overwrite each
@@ -232,11 +235,45 @@ class NoteRepository(
         dao.updateTopics(topics.mapIndexed { idx, t -> t.copy(sortOrder = idx) })
     }
 
+    /** Rewrites the order to [idsInOrder], dense from the top; topics left out land at the end. */
+    suspend fun reorderTopics(idsInOrder: List<String>) = serial {
+        val topics = dao.topics()
+        val byId = topics.associateBy { it.id }
+        val ordered = idsInOrder.mapNotNull { byId[it] } + topics.filter { it.id !in idsInOrder }
+        dao.updateTopics(ordered.mapIndexed { idx, t -> t.copy(sortOrder = idx) })
+    }
+
     /** Live notes that would move to 未归类. Notes in the trash move too, but are not counted. */
     suspend fun liveCountIn(topicId: String): Int = dao.liveCountIn(topicId)
 
-    /** The topic goes; its notes, the trashed ones too, become 未归类 through the foreign key. */
-    suspend fun deleteTopic(id: String) = serial { dao.deleteTopic(id) }
+    /**
+     * The topic goes; its notes, the trashed ones too, become 未归类 through the foreign key.
+     * The row and its notes come back as a handle for [undoDeleteTopic]; null when there was no
+     * such topic to begin with.
+     */
+    suspend fun deleteTopic(id: String): TopicDeletion? = serial {
+        val t = dao.topic(id) ?: return@serial null
+        val noteIds = dao.noteIdsInTopic(id)
+        dao.deleteTopic(id)
+        TopicDeletion(t, noteIds)
+    }
+
+    /**
+     * Puts a deleted topic back as it was, with the notes of [TopicDeletion.noteIds] — the ones
+     * still 未归类, so a note filed elsewhere meanwhile stays where it is. A name taken in the
+     * meantime comes back numbered.
+     */
+    suspend fun undoDeleteTopic(deletion: TopicDeletion) = serial {
+        val t = deletion.topic
+        if (dao.topic(t.id) == null) {
+            val name = dedupeTopicName(t.name, dao.topics().map { it.name })
+            dao.insertTopic(if (name == t.name) t else t.copy(name = name))
+        }
+        for (id in deletion.noteIds) {
+            val n = dao.note(id) ?: continue
+            if (n.topicId == null) dao.setTopic(id, t.id)
+        }
+    }
 
     companion object {
         const val TOPIC_NAME_MAX = 16
@@ -258,6 +295,18 @@ class NoteRepository(
             ensure(clean.length <= TOPIC_NAME_MAX) { "主题名最多 $TOPIC_NAME_MAX 个字" }
             ensure(others.none { it.trim().equals(clean, ignoreCase = true) }) { "已有同名主题「$clean」" }
             return clean
+        }
+
+        /** [name] as it is, or numbered behind until it stands alone among [others] ignoring case. */
+        internal fun dedupeTopicName(name: String, others: List<String>): String {
+            fun free(candidate: String) = others.none { it.trim().equals(candidate, ignoreCase = true) }
+            if (free(name)) return name
+            for (n in 2..999) {
+                val suffix = " $n"
+                val candidate = name.take(TOPIC_NAME_MAX - suffix.length) + suffix
+                if (free(candidate)) return candidate
+            }
+            return name
         }
 
         /** The note tables of a backup, before anything is touched. */
