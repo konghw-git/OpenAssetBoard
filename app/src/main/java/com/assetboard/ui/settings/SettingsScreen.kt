@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.Image
@@ -47,9 +48,11 @@ import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import com.assetboard.ui.components.GlassScaffold
 import com.assetboard.ui.components.glassBarColors
 import com.assetboard.ui.components.GlassSnackbarHost
@@ -70,6 +73,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -91,6 +95,8 @@ import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.SegmentedControl
 import com.assetboard.ui.components.appear
+import com.assetboard.ui.components.FieldShape
+import com.assetboard.ui.components.glassFieldColors
 import com.assetboard.ui.components.rememberBackupProblem
 import androidx.compose.material3.TextButton
 import com.assetboard.ui.components.ConfirmDialog
@@ -184,6 +190,10 @@ fun SettingsScreen(
     val weatherOn by settings.weatherEnabled.collectAsStateWithLifecycle()
     val holidayOn by settings.holidayUpdateEnabled.collectAsStateWithLifecycle()
     val allAlarms by settings.allRemindersAsAlarms.collectAsStateWithLifecycle()
+    val aiKey by settings.aiApiKey.collectAsStateWithLifecycle()
+    val aiBaseUrl by settings.aiBaseUrl.collectAsStateWithLifecycle()
+    val aiModel by settings.aiModel.collectAsStateWithLifecycle()
+    var aiCheck by remember { mutableStateOf(AiCheck()) }
     val diaryOn by settings.diaryReminderEnabled.collectAsStateWithLifecycle()
     val diaryAt by settings.diaryReminderMinutes.collectAsStateWithLifecycle()
     val holidayYears = container.holidays.table.collectAsStateWithLifecycle().value.years
@@ -424,6 +434,58 @@ fun SettingsScreen(
             }
 
             SectionCard(Modifier.appear(5)) {
+                SectionHeader("AI 助手")
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = aiKey,
+                        onValueChange = settings::setAiApiKey,
+                        label = { Text("API Key") },
+                        placeholder = { Text("sk-…") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = FieldShape,
+                        colors = glassFieldColors(),
+                    )
+                    OutlinedTextField(
+                        value = aiBaseUrl,
+                        onValueChange = settings::setAiBaseUrl,
+                        label = { Text("接口地址") },
+                        placeholder = { Text(SettingsStore.DEFAULT_AI_BASE_URL) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = FieldShape,
+                        colors = glassFieldColors(),
+                    )
+                    OutlinedTextField(
+                        value = aiModel,
+                        onValueChange = settings::setAiModel,
+                        label = { Text("模型") },
+                        placeholder = { Text(SettingsStore.DEFAULT_AI_MODEL) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = FieldShape,
+                        colors = glassFieldColors(),
+                    )
+                    AiCheckStatus(
+                        check = aiCheck,
+                        onCheck = {
+                            scope.launch {
+                                aiCheck = AiCheck(running = true)
+                                aiCheck = runCatching { container.ai.testConnection() }
+                                    .fold(
+                                        { reply -> AiCheck(ok = true, detail = "连接正常 · 回复「${reply.trim().take(16)}」") },
+                                        { e -> AiCheck(ok = false, detail = e.message ?: "无法连接") },
+                                    )
+                            }
+                        },
+                        enabled = networkOn,
+                    )
+                }
+                Footnote("AI 排版、润色和生成日记会把处理的文字发给你配置的模型服务。API Key 只保存在本机，不进备份也不参与同步；接口地址和模型留空时用阿里云百炼上的 DeepSeek。")
+            }
+
+            SectionCard(Modifier.appear(6)) {
                 SectionHeader("应用更新")
                 ListRow(
                     title = "检查更新",
@@ -458,7 +520,7 @@ fun SettingsScreen(
                 )
             }
 
-            SectionCard(Modifier.appear(6)) {
+            SectionCard(Modifier.appear(7)) {
                 SectionHeader("账户")
                 ListRow(
                     title = "分组管理",
@@ -468,7 +530,7 @@ fun SettingsScreen(
                 )
             }
 
-            SectionCard(Modifier.appear(7)) {
+            SectionCard(Modifier.appear(8)) {
                 SectionHeader("数据初始化")
                 ResetScope.entries.forEachIndexed { i, scope ->
                     if (i > 0) RowDivider(startIndent = RowIndent)
@@ -484,7 +546,7 @@ fun SettingsScreen(
                 Footnote("账户里混进了别人的数据、又已经改成自己的余额时，用「清空资产历史」。执行前都会自动另存一份当前数据，可在「恢复前副本」里一键还原。")
             }
 
-            AboutCard(BuildConfigInfo.versionName(context), lastBackup, Modifier.appear(8), onBackup = { if (tree == null) pickTree.launch(null) else vm.backupNow() })
+            AboutCard(BuildConfigInfo.versionName(context), lastBackup, Modifier.appear(9), onBackup = { if (tree == null) pickTree.launch(null) else vm.backupNow() })
         }
     }
 
@@ -524,6 +586,43 @@ private suspend fun shareDiagnostics(context: android.content.Context, settings:
         .putExtra(Intent.EXTRA_SUBJECT, "日盈诊断信息")
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     context.startActivity(Intent.createChooser(send, "导出诊断"))
+}
+
+/** The last AI connection test: running, or its verdict and the service's own words. */
+private data class AiCheck(val running: Boolean = false, val ok: Boolean? = null, val detail: String? = null)
+
+/** The probe's result under the AI fields, and the button that asks again. */
+@Composable
+private fun AiCheckStatus(check: AiCheck, onCheck: () -> Unit, enabled: Boolean = true) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            when {
+                check.running -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Text("正在测试连接…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
+                check.ok == true -> Text(check.detail ?: "连接正常", style = MaterialTheme.typography.bodySmall, color = cs.primary)
+                check.ok == false -> Text(check.detail ?: "无法连接", style = MaterialTheme.typography.bodySmall, color = cs.error)
+                else -> Text(
+                    if (enabled) "测一下 Key、接口和模型能不能通。" else "已关闭联网，开启后才能测试。",
+                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                )
+            }
+        }
+        if (!check.running) {
+            TextButton(
+                onClick = onCheck,
+                enabled = enabled,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) {
+                Text(if (check.ok == null) "测试连接" else "重新测试", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    }
 }
 
 @Composable

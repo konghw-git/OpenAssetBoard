@@ -12,8 +12,12 @@ import com.assetboard.data.Place
 import com.assetboard.data.SourceRef
 import com.assetboard.data.Todo
 import com.assetboard.data.WeatherResult
-import com.assetboard.domain.DiaryFormat
+import com.assetboard.data.WeatherService
+import com.assetboard.domain.AiAction
+import com.assetboard.domain.AiEdit
+import com.assetboard.domain.HabitDay
 import com.assetboard.domain.Mood
+import com.assetboard.domain.Money
 import com.assetboard.domain.NetWorthPoint
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.ActionViewModel
@@ -253,7 +257,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
 
     fun discardDraft(draft: DiaryDraft) = action { diary.discardDraft(draft.id) }
 
-    // ------------------------------------------------------------ mood and 排版
+    // ------------------------------------------------------------ mood and AI 排版
 
     /** The open day's mood; null clears it. */
     fun setMood(mood: Mood?) {
@@ -261,30 +265,66 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         action { diary.setMood(d, mood?.value) }
     }
 
-    /** A 排版 that changed the text: what it was before, for the snackbar's 撤销. */
+    /** The AI pass running right now, if any: its buttons stay busy meanwhile. */
+    val aiBusy = MutableStateFlow<AiAction?>(null)
+
+    /** An AI edit that changed the text: what it was before, for the snackbar's 撤销. */
     val tidied = MutableSharedFlow<Tidied>(extraBufferCapacity = 4)
     private var lastTidied: Tidied? = null
 
+    /** AI 排版: only layout and punctuation, on the selection or the whole body. */
+    fun aiFormat(selStart: Int = -1, selEnd: Int = -1) = aiEdit(AiAction.FORMAT, selStart, selEnd)
+
+    /** AI 润色: only the wording, on the selection or the whole body. */
+    fun aiPolish(selStart: Int = -1, selEnd: Int = -1) = aiEdit(AiAction.POLISH, selStart, selEnd)
+
+    /** 生成日记: a fresh body for the day, written from its records (the day card's facts). */
+    fun aiGenerate() = aiEdit(AiAction.GENERATE, -1, -1)
+
     /**
-     * 一键排版: the whole text through [DiaryFormat.tidy], saved at once like any typing. Tapped
-     * again with nothing left to tidy, it offers the last 撤销 afresh while that can still undo,
-     * rather than covering it with 已经很整齐了.
+     * One AI pass over the open day's text, saved at once like any typing. Tapped again with
+     * nothing left to change, it offers the last 撤销 afresh while that can still undo, rather
+     * than covering it with 已经很整齐了.
      */
-    fun tidy() {
+    private fun aiEdit(kind: AiAction, selStart: Int, selEnd: Int) {
         val s = _session.value ?: return
         if (s.status.value != DiarySession.Status.READY) return
+        if (aiBusy.value != null) return
         val before = s.text.value
-        val after = DiaryFormat.tidy(before)
-        if (after == before) {
-            val last = lastTidied?.takeIf { it.session === s && it.after == before }
-            if (last != null) tidied.tryEmit(last) else messages.tryEmit("已经很整齐了")
+        val range = AiEdit.targetRange(before, selStart, selEnd)
+        if (kind != AiAction.GENERATE && range.isEmpty()) {
+            messages.tryEmit("先写点内容再用 AI")
             return
         }
-        s.onInput(after)
-        saveScope.launch { s.saveNow() }
-        val t = Tidied(s, before, after)
-        lastTidied = t
-        tidied.tryEmit(t)
+        aiBusy.value = kind
+        launchBound {
+            try {
+                val user = if (kind == AiAction.GENERATE) AiEdit.daySummary(dayFacts()) else before.substring(range)
+                val out = AiEdit.unwrap(container.ai.complete(AiEdit.systemFor(kind), user))
+                // Typed on while the model worked: what was typed wins, the reply is dropped.
+                if (s.text.value != before) {
+                    messages.tryEmit("文本已改动，AI 的结果没有应用")
+                    return@launchBound
+                }
+                val after = AiEdit.replace(before, range.first, range.last + 1, out).text
+                if (after == before) {
+                    val last = lastTidied?.takeIf { it.session === s && it.after == before }
+                    if (last != null) tidied.tryEmit(last) else messages.tryEmit(unchangedText(kind))
+                    return@launchBound
+                }
+                s.onInput(after)
+                saveScope.launch { s.saveNow() }
+                val t = Tidied(s, before, after, noticeText(kind))
+                lastTidied = t
+                tidied.tryEmit(t)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                messages.tryEmit("${failedLabel(kind)}失败：${e.message ?: "未知错误"}")
+            } finally {
+                aiBusy.value = null
+            }
+        }
     }
 
     /** Puts the text back as it was before [t], unless it was typed on since. */
@@ -295,7 +335,58 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         saveScope.launch { s.saveNow() }
     }
 
-    data class Tidied(val session: DiarySession, val before: String, val after: String)
+    data class Tidied(val session: DiarySession, val before: String, val after: String, val notice: String)
+
+    private fun unchangedText(kind: AiAction) = when (kind) {
+        AiAction.FORMAT -> "已经很整齐了"
+        AiAction.POLISH -> "润色后没有变化"
+        AiAction.GENERATE -> "AI 没有生成内容"
+    }
+
+    private fun noticeText(kind: AiAction) = when (kind) {
+        AiAction.FORMAT -> "已排版：标点、空行和段落都理好了"
+        AiAction.POLISH -> "已润色"
+        AiAction.GENERATE -> "已生成今天的日记"
+    }
+
+    private fun failedLabel(kind: AiAction) = when (kind) {
+        AiAction.FORMAT -> "AI 排版"
+        AiAction.POLISH -> "润色"
+        AiAction.GENERATE -> "生成日记"
+    }
+
+    /** The day's habits, straight from the todo tab's battery; the 生成 draws on them. */
+    val dayHabits: StateFlow<HabitDay?> = _date.flatMapLatest { container.habits.observeDay(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Everything the day card shows, as strings the 生成's prompt may draw on. */
+    private fun dayFacts(): AiEdit.DayFacts {
+        val e = entry.value
+        val h = dayHabits.value
+        val last = stocktakes.value.lastOrNull()
+        return AiEdit.DayFacts(
+            date = _date.value,
+            mood = Mood.of(e?.mood)?.label,
+            weather = e?.let { w ->
+                val temps = when {
+                    w.tempMin != null && w.tempMax != null -> "${w.tempMin!!.toInt()}~${w.tempMax!!.toInt()}°C"
+                    w.tempMax != null -> "${w.tempMax!!.toInt()}°C"
+                    w.tempMin != null -> "${w.tempMin!!.toInt()}°C"
+                    else -> null
+                }
+                listOfNotNull(WeatherService.describe(w.weatherCode).ifBlank { null }, temps, w.city)
+                    .joinToString("，").ifBlank { null }
+            },
+            completed = completed.value.map { it.title },
+            habitsDone = h?.done,
+            habitsDue = h?.due,
+            habits = h?.shown?.map { it.label to (it.key in h.checked) }.orEmpty(),
+            stocktake = last?.let { s ->
+                "¥" + Money.short(s.point.netWorth) +
+                    (s.change?.takeIf { it != 0L }?.let { "（较上次 " + Money.format(it, signed = true) + "）" } ?: "")
+            },
+        )
+    }
 
     // ------------------------------------------------------------ extract into notes
 
