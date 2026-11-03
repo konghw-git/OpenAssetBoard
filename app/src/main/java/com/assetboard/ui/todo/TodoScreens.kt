@@ -701,25 +701,21 @@ fun TodoHomeScreen(
     }
     if (listsOpen) {
         val cs = MaterialTheme.colorScheme
-        val cards = listOrder.map { l ->
-            val deadline = TodoViews.parse(l.deadline)?.let { TodoViews.deadlineBadge(it, today)?.text }
-            val sections = d?.sections?.count { it.listId == l.id && it.deletedAt == null } ?: 0
-            val open = TodoViews.countInList(l.id, d?.todos.orEmpty())
+        // Precomputed once per data change: rebuilding the rows here on every recomposition is
+        // what made the deck slow to open.
+        val rows = remember(listOrder, d, today) { buildListDeckRows(listOrder, d, today) }
+        val cards = rows.map { r ->
             DeckCard(
-                key = ViewKey.list(l.id),
-                title = l.name,
-                count = open,
-                countLabel = if (open == 0) "没有未完成" else "$open 项未完成",
-                accent = listColor(d, l.id) ?: cs.primary,
+                key = ViewKey.list(r.id),
+                title = r.name,
+                count = r.open,
+                countLabel = if (r.open == 0) "没有未完成" else "${r.open} 项未完成",
+                accent = listColor(d, r.id) ?: cs.primary,
                 icon = Icons.Outlined.FormatListBulleted,
-                footnote = listOfNotNull(deadline, if (sections > 0) "$sections 个分区" else null).joinToString(" · ").ifEmpty { null },
+                footnote = listOfNotNull(r.deadline, if (r.sections > 0) "${r.sections} 个分区" else null).joinToString(" · ").ifEmpty { null },
                 // What is still open in the list, so two lists with similar names can be told apart
                 // without opening either one.
-                preview = d?.todos.orEmpty()
-                    .filter { it.listId == l.id && TodoViews.isOpen(it) }
-                    .sortedBy { it.sortOrder }
-                    .take(3)
-                    .map { it.title },
+                preview = r.preview,
                 previewEmpty = "清单里没有未完成的待办",
             )
         }

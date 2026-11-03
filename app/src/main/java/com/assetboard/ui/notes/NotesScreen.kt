@@ -474,12 +474,11 @@ fun NotesScreen(
     if (deckOpen) {
         val cs = MaterialTheme.colorScheme
         // The newest notes behind each topic, so the deck can say what a topic holds without
-        // opening it; the deck is small enough for three lines to be readable.
+        // opening it; the deck is small enough for three lines to be readable. Precomputed once
+        // per notes change instead of sorting every topic on each recomposition.
+        val previews = remember(notes) { buildTopicPreviews(notes) }
         fun previewOf(topicId: String?, everything: Boolean = false): List<String> =
-            (if (everything) notes else notes.filter { it.topicId == topicId })
-                .sortedByDescending { it.updatedAt }
-                .take(3)
-                .map { it.title }
+            if (everything) previews.all else previews.byTopic[topicId].orEmpty()
         val cards = buildList {
             add(
                 DeckCard(
