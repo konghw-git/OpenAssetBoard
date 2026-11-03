@@ -210,4 +210,17 @@ class TodoListCardTest {
         }
         assertEquals(listOf("旅行", "论文", "搬家"), lists(c).sortedBy { it.sortOrder }.map { it.name })
     }
+
+    /** The deck opens the way it was last left, even with few enough lists for the carousel. */
+    @Test fun theDeckOpensInLastChosenModeEvenWhenTheListIsShort() {
+        show()
+        openDeck()
+        compose.onNodeWithContentDescription("网格展示").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一张卡直接打开")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("关闭").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一张卡直接打开")).fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithText("清单").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一张卡直接打开")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("左右滑动浏览，点中间那张打开").assertDoesNotExist()
+    }
 }

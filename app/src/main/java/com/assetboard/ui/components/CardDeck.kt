@@ -97,6 +97,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
+import com.assetboard.data.DeckMode
 import com.assetboard.ui.theme.AppTheme
 import com.assetboard.ui.theme.Gilded
 import kotlinx.coroutines.launch
@@ -158,6 +159,8 @@ fun CardDeckDialog(
     manageLabel: String? = null,
     onManage: (() -> Unit)? = null,
     emptyText: String = "还没有内容",
+    rememberedMode: DeckMode? = null,
+    onModeChange: ((DeckMode) -> Unit)? = null,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -167,6 +170,7 @@ fun CardDeckDialog(
             title = title, cards = cards, selected = selected, onPick = onPick, onDismiss = onDismiss,
             hint = hint, gridHint = gridHint, openVerb = openVerb, createLabel = createLabel, onCreate = onCreate,
             manageLabel = manageLabel, onManage = onManage, emptyText = emptyText,
+            rememberedMode = rememberedMode, onModeChange = onModeChange,
         )
     }
 }
@@ -187,16 +191,20 @@ fun CardDeckContent(
     manageLabel: String? = null,
     onManage: (() -> Unit)? = null,
     emptyText: String = "还没有内容",
+    rememberedMode: DeckMode? = null,
+    onModeChange: ((DeckMode) -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val g = AppTheme.extra.gilded
     var naming by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     // Many cards are quicker to pick from a page of the whole deck than from a carousel; the
-    // toggle in the header swaps between the two and remembers the choice while this deck is open.
-    // Keyed on the threshold so a deck whose data arrives after it opened still starts on the
-    // page when it turns out to be long; a toggle on a steady deck is kept.
-    var grid by rememberSaveable(cards.size > 6) { mutableStateOf(cards.size > 6) }
+    // toggle in the header swaps between the two. A remembered choice wins; without one the deck
+    // falls back to the threshold, keyed on it so a deck whose data arrives after it opened still
+    // starts on the page when it turns out to be long. A remembered seed is steady, so a toggle
+    // on a deck is kept, and [onModeChange] carries the choice out to be remembered.
+    val seed = rememberedMode ?: if (cards.size > 6) DeckMode.LIST else DeckMode.CAROUSEL
+    var listMode by rememberSaveable(seed) { mutableStateOf(seed == DeckMode.LIST) }
     val scope = rememberCoroutineScope()
     val createFocus = remember { FocusRequester() }
     val ambient = rememberAmbient()
@@ -277,17 +285,20 @@ fun CardDeckContent(
                         Text(
                             when {
                                 cards.isEmpty() -> emptyText
-                                grid -> gridHint
+                                listMode -> gridHint
                                 else -> hint
                             },
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp),
                         )
                     }
                     if (cards.isNotEmpty()) {
-                        IconButton(onClick = { grid = !grid }) {
+                        IconButton(onClick = {
+                            listMode = !listMode
+                            onModeChange?.invoke(if (listMode) DeckMode.LIST else DeckMode.CAROUSEL)
+                        }) {
                             Icon(
-                                if (grid) Icons.Outlined.ViewCarousel else Icons.Outlined.GridView,
-                                if (grid) "环绕展示" else "网格展示", tint = cs.onSurfaceVariant,
+                                if (listMode) Icons.Outlined.ViewCarousel else Icons.Outlined.GridView,
+                                if (listMode) "环绕展示" else "网格展示", tint = cs.onSurfaceVariant,
                             )
                         }
                     }
@@ -297,7 +308,7 @@ fun CardDeckContent(
                     Box(Modifier.weight(1f).fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Text(emptyText, style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant)
                     }
-                } else if (grid) {
+                } else if (listMode) {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 104.dp),
                         modifier = Modifier.weight(1f).fillMaxWidth()

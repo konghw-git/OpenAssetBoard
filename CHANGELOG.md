@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The decks remember how they were last opened.** 清单 and 主题 each keep their own choice of
+  the carousel or the page of cards, so the deck opens the way it was left instead of falling
+  back to the old cards-count rule.
+
 ## [1.3.1] - 2026-11-03
 
 ### Added

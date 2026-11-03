@@ -112,6 +112,38 @@ class NoteShellTest {
         compose.onNodeWithText("一本书的摘要").assertExists()
     }
 
+    /** Each deck keeps its own choice of carousel or page; switching one leaves the other alone. */
+    @Test fun theTwoDecksRememberTheirModesSeparately() {
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext())
+        runBlocking(c.gate.bound()) {
+            c.todos.createList("搬家")
+            c.todos.createList("论文")
+            val topic = c.notes.createTopic("读书")
+            c.notes.create("一本书的摘要", null, topicId = topic)
+        }
+        show(c)
+        // The lists' deck is switched to the page of cards and closed.
+        compose.onNodeWithText("待办").performClick()
+        waitFor("清单")
+        compose.onNodeWithText("清单").performClick()
+        waitFor("左右滑动浏览，点中间那张打开")
+        compose.onNodeWithContentDescription("网格展示").performClick()
+        waitFor("点一张卡直接打开")
+        compose.onNodeWithContentDescription("关闭").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一张卡直接打开")).fetchSemanticsNodes().isEmpty() }
+        // The topics' deck knows nothing of that choice and opens on its carousel.
+        compose.onNodeWithText("笔记").performClick()
+        waitFor("一本书的摘要")
+        compose.onNodeWithText("主题").performClick()
+        waitFor("左右滑动浏览，点中间那张筛选")
+        // And the lists' deck still opens the way it was left.
+        compose.onNodeWithContentDescription("关闭").performClick()
+        compose.onNodeWithText("待办").performClick()
+        waitFor("清单")
+        compose.onNodeWithText("清单").performClick()
+        waitFor("点一张卡直接打开")
+    }
+
     @Test fun unsavedNoteAsksBeforeGoingBack() {
         val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         runBlocking(c.gate.bound()) { c.notes.create("写不进去", null) }

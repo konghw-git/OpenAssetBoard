@@ -65,6 +65,7 @@ import com.assetboard.AppContainer
 import com.assetboard.data.Note
 import com.assetboard.data.NoteDraft
 import com.assetboard.data.NoteTopic
+import com.assetboard.data.SettingsStore
 import com.assetboard.domain.Dates
 import com.assetboard.ui.ActionViewModel
 import com.assetboard.ui.LocalContainer
@@ -527,6 +528,8 @@ fun NotesScreen(
             manageLabel = "管理主题",
             onManage = { deckOpen = false; onTopics() },
             emptyText = "还没有主题",
+            rememberedMode = container.settings.deckMode(SettingsStore.DECK_TOPICS),
+            onModeChange = { container.settings.setDeckMode(SettingsStore.DECK_TOPICS, it) },
         )
     }
     filingId?.let { id ->

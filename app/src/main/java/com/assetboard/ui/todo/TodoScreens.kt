@@ -153,6 +153,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.assetboard.data.CalendarChoice
 import com.assetboard.data.CalendarEvent
 import com.assetboard.data.CalendarExporter
+import com.assetboard.data.SettingsStore
 import com.assetboard.data.Todo
 import com.assetboard.data.TodoData
 import com.assetboard.data.TodoKind
@@ -701,6 +702,7 @@ fun TodoHomeScreen(
     }
     if (listsOpen) {
         val cs = MaterialTheme.colorScheme
+        val settings = LocalContainer.current.settings
         // Precomputed once per data change: rebuilding the rows here on every recomposition is
         // what made the deck slow to open.
         val rows = remember(listOrder, d, today) { buildListDeckRows(listOrder, d, today) }
@@ -733,6 +735,8 @@ fun TodoHomeScreen(
                 vm.createList(name) { selected = ViewKey.list(it) }
             },
             emptyText = "还没有清单",
+            rememberedMode = settings.deckMode(SettingsStore.DECK_LISTS),
+            onModeChange = { settings.setDeckMode(SettingsStore.DECK_LISTS, it) },
         )
     }
     if (pickingCalendar) {

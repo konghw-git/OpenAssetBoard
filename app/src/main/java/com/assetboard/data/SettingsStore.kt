@@ -9,6 +9,12 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class ThemeMode(val label: String) { SYSTEM("跟随系统"), LIGHT("浅色"), DARK("深色") }
 
+/**
+ * How a card deck opens: the [CAROUSEL] or the one-per-row [LIST] of the "open in one tap" mode.
+ * [stored] is what goes to disk, so renaming the entries cannot break a remembered choice.
+ */
+enum class DeckMode(val stored: String) { CAROUSEL("carousel"), LIST("list") }
+
 /** Why the last backup did not happen, and when. */
 data class BackupFailure(val reason: String, val at: Long)
 
@@ -104,6 +110,14 @@ class SettingsStore(context: Context) {
     fun rescheduleNeeded(): Boolean = prefs.getBoolean(KEY_RESCHEDULE, false)
     fun setRescheduleNeeded(value: Boolean) = prefs.edit { putBoolean(KEY_RESCHEDULE, value) }
 
+    /** The way a deck ([DECK_LISTS], [DECK_TOPICS]) was last opened, or null while never chosen. */
+    fun deckMode(deck: String): DeckMode? =
+        prefs.getString(deck, null)?.let { stored -> DeckMode.entries.firstOrNull { it.stored == stored } }
+
+    fun setDeckMode(deck: String, mode: DeckMode) {
+        prefs.edit { putString(deck, mode.stored) }
+    }
+
     fun string(key: String): String? = prefs.getString(key, null)
     fun putString(key: String, value: String?) = prefs.edit { putString(key, value) }
     fun long(key: String): Long = prefs.getLong(key, 0L)
@@ -151,6 +165,9 @@ class SettingsStore(context: Context) {
     }
 
     companion object {
+        /** Deck-mode memory keys; the two decks remember their choice independently. */
+        const val DECK_LISTS = "deck_mode_lists"
+        const val DECK_TOPICS = "deck_mode_topics"
         const val GLASS_CLEAR = "clear"
         const val GLASS_DEEP = "deep"
         private const val KEY_GLASS = "glass"

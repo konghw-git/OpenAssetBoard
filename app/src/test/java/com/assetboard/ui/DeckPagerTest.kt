@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import com.assetboard.data.DeckMode
 import com.assetboard.data.ThemeMode
 import com.assetboard.ui.components.CardDeckContent
 import com.assetboard.ui.components.DeckCard
@@ -43,13 +44,19 @@ class DeckPagerTest {
         icon = Icons.Outlined.FormatListBulleted, countLabel = "1 项未完成",
     )
 
-    private fun show(cards: List<DeckCard>, selected: String? = null) {
+    private fun show(
+        cards: List<DeckCard>,
+        selected: String? = null,
+        rememberedMode: DeckMode? = null,
+        onModeChange: ((DeckMode) -> Unit)? = null,
+    ) {
         picks.clear()
         compose.setContent {
             AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) {
                 CardDeckContent(
                     title = "清单", cards = cards, selected = selected,
                     onPick = { picks += it }, onDismiss = {},
+                    rememberedMode = rememberedMode, onModeChange = onModeChange,
                 )
             }
         }
@@ -131,5 +138,23 @@ class DeckPagerTest {
         compose.onNodeWithText("点一张卡直接打开").assertExists()
         compose.onNodeWithContentDescription("环绕展示").performClick()
         compose.onNodeWithText("左右滑动浏览，点中间那张打开").assertExists()
+    }
+
+    @Test fun aRememberedListModeOpensEvenAShortDeckAsAList() {
+        show(listOf(card("a", "甲"), card("b", "乙"), card("c", "丙")), rememberedMode = DeckMode.LIST)
+        compose.onNodeWithText("点一张卡直接打开").assertExists()
+    }
+
+    @Test fun aRememberedCarouselModeKeepsALongDeckOnTheCarousel() {
+        show((0 until 7).map { card("k$it", "卡$it") }, rememberedMode = DeckMode.CAROUSEL)
+        compose.onNodeWithText("左右滑动浏览，点中间那张打开").assertExists()
+    }
+
+    @Test fun switchingTheModeAsksForItToBeRemembered() {
+        val remembered = mutableListOf<DeckMode>()
+        show(listOf(card("a", "甲"), card("b", "乙"), card("c", "丙")), onModeChange = { remembered += it })
+        compose.onNodeWithContentDescription("网格展示").performClick()
+        compose.onNodeWithContentDescription("环绕展示").performClick()
+        assertEquals(listOf(DeckMode.LIST, DeckMode.CAROUSEL), remembered)
     }
 }
