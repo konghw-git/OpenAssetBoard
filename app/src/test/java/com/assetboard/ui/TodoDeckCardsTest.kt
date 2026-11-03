@@ -101,6 +101,26 @@ class TodoDeckCardsTest {
         assertEquals(0, row.open)
         assertEquals(0, row.sections)
         assertNull(row.deadline)
+        assertNull(row.progress)
         assertEquals(emptyList<String>(), row.preview)
+    }
+
+    /** The progress ring reads the settled share: done todos and ended repeats, not completion records. */
+    @Test fun progressIsTheSettledShareOfTheListsOwnTodos() {
+        val d = data(
+            todos = listOf(
+                todo("开着", list = "a"),
+                todo("也开着", list = "a"),
+                todo("做完了", list = "a", completedAt = 1),
+                todo("删掉了", list = "a", deletedAt = 1),
+                todo("完成记录", list = "a", kind = TodoKind.COMPLETION),
+                todo("重复结束了", list = "a", kind = TodoKind.REPEAT_SOURCE, repeatEndedAt = 1),
+                todo("收件箱", list = null),
+            ),
+        )
+        val rows = rows(d, listOf(list("a"), list("empty")))
+        // 开着 and 也开着 count open; 做完了 and 重复结束了 settle; 删掉了 and 完成记录 stand outside.
+        assertEquals(0.5f, rows[0].progress!!, 0.001f)
+        assertNull(rows[1].progress)
     }
 }

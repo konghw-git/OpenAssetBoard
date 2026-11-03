@@ -79,9 +79,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -117,7 +117,8 @@ private fun Int.floorMod(other: Int): Int {
  * One card in a [CardDeckContent]: what it picks, what it says and the colour its art wears.
  * [countLabel] says what the count badge counts; [preview] is a few lines from inside the
  * card, so the deck can say what a card holds without being opened; [previewEmpty] is said
- * instead when there is nothing to list.
+ * instead when there is nothing to list; [progress] is the finished share of what is inside,
+ * worn as a ring around the card's seal.
  */
 @Immutable
 data class DeckCard(
@@ -125,11 +126,11 @@ data class DeckCard(
     val title: String,
     val count: Int? = null,
     val accent: Color,
-    val icon: ImageVector,
     val footnote: String? = null,
     val countLabel: String? = null,
     val preview: List<String> = emptyList(),
     val previewEmpty: String? = null,
+    val progress: Float? = null,
 )
 
 /**
@@ -388,10 +389,12 @@ private fun OrnamentRule(g: Gilded) {
 }
 
 /**
- * The carousel and what the card in front holds. The cards are small enough to see three at a
- * time, and the pager snaps one card to the middle and turns like a drum: three cards or more
- * wrap past either end to the other, while a deck of two stops at its ends. [reveal] fades the
- * pane in; [burst] is the one puff of light as the deck opens.
+ * The carousel and what the card in front holds. The cards are wide enough to read and still show
+ * their neighbours, and the pager snaps one card to the middle while the whole deck turns like a
+ * drum: every card leans away about the cylinder's central axis, so the row wraps around out of
+ * sight at the edges instead of standing in a flat line; three cards or more wrap past either end
+ * to the other, while a deck of two stops at its ends. [reveal] fades the pane in; [burst] is the
+ * one puff of light as the deck opens.
  *
  * A [HorizontalPager] whose page indices map back to cards with floorMod (the looping pager
  * pattern from compose-playtime): with three cards or more the page count is endless and the
@@ -418,12 +421,12 @@ private fun CarouselPane(
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
-        val byWidth = maxWidth * 0.42f
+        val byWidth = maxWidth * 0.44f
         // The spotlight is part of the same block, so leave it room before growing the cards; the
         // block is centred as a whole, instead of the cards floating in all the spare height.
-        val byHeight = (maxHeight - 220.dp) / 1.42f
-        val cardWidth = minOf(byWidth, byHeight).coerceIn(120.dp, 212.dp)
-        val cardHeight = cardWidth * 1.42f
+        val byHeight = (maxHeight - 180.dp) / 1.62f
+        val cardWidth = minOf(byWidth, byHeight).coerceIn(136.dp, 236.dp)
+        val cardHeight = cardWidth * 1.62f
         val edge = ((maxWidth - cardWidth) / 2).coerceAtLeast(0.dp)
         val cardPx = with(LocalDensity.current) { cardWidth.toPx() }
         Column(
@@ -442,6 +445,7 @@ private fun CarouselPane(
                             cards[0],
                             current = true,
                             selected = cards[0].key == selected,
+                            cardWidth = cardWidth,
                             modifier = Modifier.requiredWidth(cardWidth).requiredHeight(cardHeight),
                             onClick = { onPick(cards[0].key) },
                         )
@@ -473,31 +477,52 @@ private fun CarouselPane(
                                 Modifier
                                     .width(cardWidth)
                                     .fillMaxHeight()
-                                    .zIndex(if (isFront) 2f else 1f),
+                                    // Nearer the middle, nearer the top of the drum: cards pulled
+                                    // in along the arc would otherwise overlap the wrong way.
+                                    .zIndex(-abs(page - pagerState.currentPage).toFloat()),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 DeckCardView(
                                     card,
                                     current = isFront,
                                     selected = card.key == selected,
+                                    cardWidth = cardWidth,
                                     modifier = Modifier
                                         .requiredWidth(cardWidth)
                                         .requiredHeight(cardHeight)
                                         .graphicsLayer {
                                             // The offset in page units, positive to the right of
-                                            // the centre: the drum's turns, read in the layer so
-                                            // scrolling only invalidates the layer.
-                                            val e = (-((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction))
-                                                .coerceIn(-1f, 1f)
-                                            cameraDistance = 18f * density
-                                            rotationY = -e * 36f
-                                            rotationZ = -e * 1.2f
-                                            translationX = e * cardPx * 0.03f
-                                            translationY = abs(e) * 10.dp.toPx()
-                                            val s = 1f - 0.14f * abs(e)
+                                            // the centre. Every card rides the drum's circle: sin
+                                            // pulls its place in along the arc and the turn lays
+                                            // it tangent to the circle, so the row curves away and
+                                            // wraps out of sight past the edges. Read in the
+                                            // layer, so scrolling only invalidates it.
+                                            val e = -((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                                            val turn = e.coerceIn(-2.15f, 2.15f)
+                                            val away = abs(turn)
+                                            val step = 52f
+                                            val th = turn * step
+                                            val thRad = Math.toRadians(th.toDouble()).toFloat()
+                                            val stepRad = Math.toRadians(step.toDouble()).toFloat()
+                                            cameraDistance = 12f * density
+                                            // The pivot slides toward the drum's axis as the card
+                                            // swings out, so the card's inner edge keeps its place
+                                            // beside its neighbour and the outer edge wraps away —
+                                            // cards hinged on the cylinder, not shrunk in a row.
+                                            transformOrigin = TransformOrigin(
+                                                0.5f - turn.coerceIn(-1f, 1f) * 0.45f, 0.5f,
+                                            )
+                                            rotationY = -th.coerceIn(-94f, 94f)
+                                            rotationZ = -turn * 1.1f
+                                            // The circle through the page positions at rest: the
+                                            // pager walks a straight row, the drum curves it.
+                                            val radius = cardPx / sin(stepRad)
+                                            translationX = sin(thRad) * radius - turn * cardPx
+                                            translationY = away * 13.dp.toPx()
+                                            val s = 1f - 0.18f * away
                                             scaleX = s
                                             scaleY = s
-                                            alpha = 1f - 0.18f * abs(e)
+                                            alpha = (1f - 0.22f * away * away).coerceIn(0f, 1f)
                                         },
                                     onClick = {
                                         if (isFront) onPick(card.key) else scope.launch { pagerState.animateScrollToPage(page) }
@@ -522,7 +547,7 @@ private fun CarouselPane(
     }
 }
 
-/** The light the deck sheds: a pool under the cards and one short burst as it opens. */
+/** The light the deck sheds: a pool under the cards, the drum's two rims, and one short burst as it opens. */
 @Composable
 private fun DeckAura(progress: Float, accent: Color, g: Gilded, modifier: Modifier = Modifier) {
     Canvas(modifier) {
@@ -535,6 +560,27 @@ private fun DeckAura(progress: Float, accent: Color, g: Gilded, modifier: Modifi
                 center = center, radius = w * 0.68f,
             ),
             w * 0.68f, center,
+        )
+        // The drum's rims: two shallow arcs of brass light crossing the deck — the near rim just
+        // under the cards, the far one behind their tops — so the cards read as standing on a
+        // turning cylinder rather than floating in a row. A soft floor shadow gathers where the
+        // card in front rests.
+        val rimStroke = 1.dp.toPx()
+        drawArc(
+            g.rim[1].copy(alpha = 0.30f),
+            startAngle = 12f, sweepAngle = 156f, useCenter = false,
+            topLeft = Offset(-w * 0.30f, h * 0.62f), size = Size(w * 1.60f, h * 0.85f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(rimStroke),
+        )
+        drawArc(
+            g.rim[1].copy(alpha = 0.16f),
+            startAngle = 196f, sweepAngle = 148f, useCenter = false,
+            topLeft = Offset(-w * 0.30f, -h * 0.55f), size = Size(w * 1.60f, h * 0.85f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(rimStroke),
+        )
+        drawOval(
+            Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.16f), Color.Transparent)),
+            topLeft = Offset(w * 0.5f - w * 0.26f, h * 0.82f), size = Size(w * 0.52f, h * 0.16f),
         )
         val p = progress.coerceIn(0f, 1f)
         if (p <= 0f || p >= 1f) return@Canvas
@@ -595,9 +641,8 @@ private fun DeckDots(count: Int, current: Int, accent: Color, g: Gilded) {
 }
 
 /**
- * What is in the card in front: a few names from inside it, so choosing between two lists means
- * reading their contents instead of opening each one. The button opens the card, wearing the
- * card's own colour.
+ * The way into the card in front: what it is being counted as, and a button that opens it wearing
+ * the card's own colour. The card itself shows what is inside; this is where you act on it.
  */
 @Composable
 private fun DeckSpotlight(card: DeckCard, selected: Boolean, openVerb: String, g: Gilded, onOpen: () -> Unit) {
@@ -614,60 +659,41 @@ private fun DeckSpotlight(card: DeckCard, selected: Boolean, openVerb: String, g
             Spacer(Modifier.width(7.dp))
             Text(
                 if (selected) "当前使用" else "当前选中",
-                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, letterSpacing = 1.sp,
+                style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, letterSpacing = 1.sp,
             )
             Spacer(Modifier.weight(1f))
             if (card.count != null) {
                 Text(
-                    card.countLabel ?: "共 ${card.count} 项", style = MaterialTheme.typography.labelMedium,
+                    card.countLabel ?: "共 ${card.count} 项", style = MaterialTheme.typography.labelLarge,
                     color = cs.onSurfaceVariant,
                 )
-            }
-        }
-        Spacer(Modifier.height(5.dp))
-        if (card.preview.isEmpty()) {
-            Text(
-                card.previewEmpty ?: "里面还没有内容",
-                style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-        } else {
-            card.preview.take(3).forEach { line ->
-                Row(Modifier.padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(5.dp).clip(CircleShape).background(card.accent))
-                    Spacer(Modifier.width(9.dp))
-                    Text(
-                        line, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
         }
         Spacer(Modifier.height(9.dp))
         val source = remember { MutableInteractionSource() }
         val onAccent = if (card.accent.luminance() > 0.55f) Color(0xFF1A1A1A) else Color.White
         Box(
-            Modifier.fillMaxWidth().height(38.dp)
+            Modifier.fillMaxWidth().height(44.dp)
                 .pressScale(source, 0.98f)
-                .clip(RoundedCornerShape(11.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(Brush.horizontalGradient(listOf(card.accent, card.accent.copy(alpha = 0.82f))))
                 .clickable(interactionSource = source, indication = null, onClick = onOpen),
             contentAlignment = Alignment.Center,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "$openVerb「${card.title}」", style = MaterialTheme.typography.titleSmall,
+                    "$openVerb「${card.title}」", style = MaterialTheme.typography.titleMedium,
                     color = onAccent, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
-                Icon(Icons.Default.KeyboardArrowRight, null, tint = onAccent, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.KeyboardArrowRight, null, tint = onAccent, modifier = Modifier.size(20.dp))
             }
         }
     }
 }
 
 /**
- * A card in the grid: the same glass, cut smaller, with the name, its count and one quiet line
- * under it. The card in use wears a check instead of the count.
+ * A card in the grid: the same glass and the same seal, cut smaller, with the name and its quiet
+ * line under it. The card in use wears a check in the head instead of nothing.
  */
 @Composable
 private fun GridDeckCard(card: DeckCard, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -690,21 +716,20 @@ private fun GridDeckCard(card: DeckCard, selected: Boolean, onClick: () -> Unit,
             Modifier.fillMaxSize().padding(7.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            ArtWindow(
-                card,
-                crest = 52.dp, medallion = 30.dp, icon = 15.dp, countSize = 21.dp,
-                checked = selected,
+            CardHead(
+                card, selected,
+                seal = 38.dp, gem = 20.dp,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
             Spacer(Modifier.height(5.dp))
             Text(
-                card.title, style = MaterialTheme.typography.titleSmall, color = cs.onSurface,
+                card.title, style = MaterialTheme.typography.titleMedium, color = cs.onSurface,
                 fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (card.footnote != null) {
                 Text(
-                    card.footnote, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
+                    card.footnote, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
                     textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().padding(top = 3.dp, start = 2.dp, end = 2.dp),
                 )
@@ -714,18 +739,21 @@ private fun GridDeckCard(card: DeckCard, selected: Boolean, onClick: () -> Unit,
 }
 
 /**
- * One glass card in the carousel: a wash of the card's own colour behind its crest, the name and
- * a quiet footnote. The front card catches a light sweep as it comes forward.
+ * One glass card in the carousel: its seal and count on a wash of the card's own colour, then the
+ * name and a look at what is inside — the card reads as the list or topic it stands for without
+ * being opened. The front card catches a light sweep as it comes forward.
  */
 @Composable
 private fun DeckCardView(
     card: DeckCard,
     current: Boolean,
     selected: Boolean,
+    cardWidth: Dp,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val g = AppTheme.extra.gilded
     val source = remember { MutableInteractionSource() }
     val outer = RoundedCornerShape(21.dp)
     val foil = remember { Animatable(0f) }
@@ -748,35 +776,65 @@ private fun DeckCardView(
             .clickable(interactionSource = source, indication = null, onClick = onClick),
     ) {
         Column(
-            Modifier.fillMaxSize().padding(10.dp),
+            Modifier.fillMaxSize().padding(11.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            ArtWindow(
-                card,
-                crest = 92.dp, medallion = 50.dp, icon = 24.dp, countSize = 27.dp,
-                modifier = Modifier.fillMaxWidth().weight(1f),
+            CardHead(
+                card, selected,
+                seal = cardWidth * 0.34f, gem = 30.dp,
+                modifier = Modifier.fillMaxWidth().height(cardWidth * 0.55f),
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
-                card.title, style = MaterialTheme.typography.titleMedium, color = cs.onSurface,
+                card.title, style = MaterialTheme.typography.titleLarge, color = cs.onSurface,
                 fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (card.footnote != null) {
-                Text(
-                    card.footnote, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
-                    textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, start = 4.dp, end = 4.dp),
-                )
+                // The parts of a footnote take a line each — a wrap where the reader put the " · "
+                // — and any part too long for its line ellipsizes whole, instead of breaking in
+                // the middle of a word.
+                Column(Modifier.fillMaxWidth().padding(top = 3.dp, start = 2.dp, end = 2.dp)) {
+                    card.footnote.split(" · ").take(2).forEach { part ->
+                        Text(
+                            part, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
+                            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
             }
-            if (selected) {
-                Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier.size(16.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(11.dp)) }
-                    Spacer(Modifier.width(5.dp))
-                    Text("正在使用", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Spacer(Modifier.height(6.dp))
+            Box(
+                Modifier.fillMaxWidth().height(1.dp).background(
+                    Brush.horizontalGradient(
+                        listOf(Color.Transparent, g.rim[1].copy(alpha = 0.55f), Color.Transparent),
+                    ),
+                ),
+            )
+            // What is inside, set on the card itself: this is what tells two similar cards apart
+            // at a glance, and it is where the card used to leave a field of empty wash.
+            Box(Modifier.fillMaxWidth().weight(1f).padding(top = 7.dp)) {
+                if (card.preview.isEmpty()) {
+                    Text(
+                        card.previewEmpty ?: "里面还没有内容",
+                        style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
+                        textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+                    )
+                } else {
+                    Column(Modifier.fillMaxWidth()) {
+                        card.preview.take(3).forEach { line ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(5.dp).clip(CircleShape).background(card.accent))
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    line, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -784,69 +842,103 @@ private fun DeckCardView(
     }
 }
 
-/** A wash of the card's own colour, lit from above, with a crest and a count. */
+/**
+ * The head of a card: a wash of the card's own colour, lit from above, with its seal at the
+ * centre, its count in a glass gem and, on the card in use, a small check.
+ */
 @Composable
-private fun ArtWindow(
+private fun CardHead(
     card: DeckCard,
-    crest: Dp,
-    medallion: Dp,
-    icon: Dp,
-    countSize: Dp,
+    selected: Boolean,
+    seal: Dp,
+    gem: Dp,
     modifier: Modifier = Modifier,
-    checked: Boolean = false,
 ) {
     val g = AppTheme.extra.gilded
     val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(15.dp)
     Box(
         modifier
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(card.accent.copy(alpha = 0.22f), card.accent.copy(alpha = 0.08f), card.accent.copy(alpha = 0.16f))))
+            .background(Brush.verticalGradient(listOf(card.accent.copy(alpha = 0.30f), card.accent.copy(alpha = 0.10f), card.accent.copy(alpha = 0.18f))))
             .border(1.dp, g.rim[1].copy(alpha = 0.35f), shape),
     ) {
-        // Light from above, so the crest sits in a lit window rather than on a flat wash.
+        // Light from above, so the seal sits in a lit window rather than on a flat wash.
         Box(
             Modifier.matchParentSize().background(
                 Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.Transparent, Color.Black.copy(alpha = 0.06f))),
             ),
         )
-        ArtCrest(card.icon, card.accent, g, crest = crest, medallion = medallion, iconSize = icon, modifier = Modifier.align(Alignment.Center))
-        if (checked) {
+        // A struck diamond in each lower corner: the deck's gilded keepsake, small enough to stay quiet.
+        Canvas(Modifier.matchParentSize()) {
+            val inset = 10.dp.toPx()
+            drawDiamond(Offset(inset, size.height - inset), 2.dp.toPx(), g.spark.copy(alpha = 0.5f))
+            drawDiamond(Offset(size.width - inset, size.height - inset), 2.dp.toPx(), g.spark.copy(alpha = 0.5f))
+        }
+        ArtSeal(card, seal, Modifier.align(Alignment.Center))
+        if (selected) {
             Box(
-                Modifier.align(Alignment.TopStart).padding(6.dp).size(18.dp)
+                Modifier.align(Alignment.TopStart).padding(6.dp).size(20.dp)
                     .clip(CircleShape).background(cs.primary),
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Default.Check, "正在使用", tint = cs.onPrimary, modifier = Modifier.size(12.dp)) }
+            ) { Icon(Icons.Default.Check, "正在使用", tint = cs.onPrimary, modifier = Modifier.size(13.dp)) }
         }
         Row(Modifier.fillMaxWidth().padding(7.dp)) {
             Spacer(Modifier.weight(1f))
             if (card.count != null) {
-                CountGem(card.count, g, size = countSize, textStyle = MaterialTheme.typography.labelMedium)
+                CountGem(card.count, g, size = gem, textStyle = MaterialTheme.typography.labelLarge)
             }
         }
     }
 }
 
-/** The card's emblem: its icon on a lit medallion with a brass hairline and a halo of its colour. */
+/**
+ * The card's emblem: its first character on a medallion of its own colour, with a brass hairline
+ * and a halo — and, when the card knows how much of what is inside is done, that share as a ring
+ * of light around the medallion. A seal that names the card and says how far along it is, where
+ * every card used to wear the same pictogram and say nothing.
+ */
 @Composable
-private fun ArtCrest(
-    icon: ImageVector,
-    accent: Color,
-    g: Gilded,
-    crest: Dp,
-    medallion: Dp,
-    iconSize: Dp,
-    modifier: Modifier = Modifier,
-) {
-    Box(modifier.size(crest), contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(accent.copy(alpha = 0.30f), Color.Transparent))))
+private fun ArtSeal(card: DeckCard, diameter: Dp, modifier: Modifier = Modifier) {
+    val g = AppTheme.extra.gilded
+    val on = if (card.accent.luminance() > 0.55f) Color(0xFF1A1A1A) else Color.White
+    val glyph = card.title.trim().firstOrNull()?.toString() ?: "·"
+    Box(modifier.size(diameter), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(card.accent.copy(alpha = 0.32f), Color.Transparent))))
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = 2.2.dp.toPx()
+            val inset = 3.5.dp.toPx()
+            val d = size.minDimension - inset * 2
+            val topLeft = Offset((size.width - d) / 2, (size.height - d) / 2)
+            val p = card.progress
+            if (p != null) {
+                drawArc(
+                    on.copy(alpha = 0.25f), -90f, 360f, useCenter = false,
+                    topLeft = topLeft, size = Size(d, d),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+                )
+                drawArc(
+                    on, -90f, 360f * p.coerceIn(0f, 1f), useCenter = false,
+                    topLeft = topLeft, size = Size(d, d),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = StrokeCap.Round),
+                )
+            } else {
+                drawCircle(
+                    g.rim[1].copy(alpha = 0.55f), radius = d / 2, center = center,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+                )
+            }
+        }
         Box(
-            Modifier.size(medallion).clip(CircleShape)
-                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.34f), Color.White.copy(alpha = 0.12f))))
+            Modifier.size(diameter * 0.70f).clip(CircleShape)
+                .background(Brush.verticalGradient(listOf(card.accent, card.accent.copy(alpha = 0.72f))))
                 .border(1.dp, g.rim[1].copy(alpha = 0.55f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, null, tint = accent, modifier = Modifier.size(iconSize))
+            Text(
+                glyph, color = on, fontWeight = FontWeight.Bold,
+                fontSize = (diameter.value * 0.30f).sp,
+            )
         }
     }
 }
