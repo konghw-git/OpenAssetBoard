@@ -30,6 +30,19 @@ class DiaryFormatTest {
         )
     }
 
+    @Test fun markdownBlocksKeepTheirMarkers() {
+        val typed = "# 周末爬山\n风很大。\n> 引用一句。\n---\n- [ ] 还有件事"
+        assertEquals(
+            "# 周末爬山\n${i}风很大。\n> 引用一句。\n---\n- [ ] 还有件事",
+            DiaryFormat.tidy(typed),
+        )
+    }
+
+    @Test fun tidyingTwiceChangesNothingMore() {
+        val typed = "# 周末爬山\n风很大,很大。\n> 引用一句。\n---\n- [ ] 还有件事\n正文一段"
+        assertEquals(DiaryFormat.tidy(typed), DiaryFormat.tidy(DiaryFormat.tidy(typed)))
+    }
+
     @Test fun halfWidthPunctuationAfterChineseBecomesFullWidth() {
         assertEquals("${i}今天很累，但是很开心！明天呢？", DiaryFormat.tidy("今天很累,但是很开心!明天呢?"))
         assertEquals("${i}时间：上午。地点：公园。", DiaryFormat.tidy("时间:上午.地点:公园."))

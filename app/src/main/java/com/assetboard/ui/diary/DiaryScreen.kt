@@ -36,6 +36,9 @@ import androidx.compose.animation.AnimatedVisibility
 import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.HeaderAction
 import com.assetboard.ui.components.SettingsAction
+import com.assetboard.ui.notes.MarkdownBody
+import com.assetboard.ui.notes.NoteEditorState
+import com.assetboard.ui.notes.NoteFormatBar
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.AnimatedContent
 import kotlin.math.abs
@@ -221,6 +224,8 @@ fun DiaryScreen(
     val unsavedLeave by vm.unsavedLeave.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val body = session?.text?.collectAsStateWithLifecycle()?.value.orEmpty()
+    // The live Markdown editor's state, the same one the note page uses; fresh with each day.
+    val editorState = remember(session) { NoteEditorState(vm::onInput) }
     /** The day and its text as they were when 提炼 was tapped: the sheet works on that snapshot. */
     var extracting by remember { mutableStateOf<Pair<LocalDate, String>?>(null) }
     // Set when the text came from a selection: then all of it is ticked to begin with.
@@ -321,19 +326,6 @@ fun DiaryScreen(
     Scaffold(
         containerColor = Color.Transparent,
         snackbarHost = { GlassSnackbarHost(snackbar, Modifier.padding(bottom = TabPageBottomInset)) },
-        // The system's selection menu puts app items last; this one is right above the keyboard.
-        floatingActionButton = {
-            val text = selected
-            AnimatedVisibility(
-                editing && text != null,
-                enter = fadeIn() + scaleIn(initialScale = 0.8f) + slideInVertically { it / 2 },
-                exit = fadeOut() + scaleOut(targetScale = 0.9f),
-                modifier = Modifier.imePadding(),
-            ) {
-                ExtractSelectionButton(text?.count { !it.isWhitespace() } ?: 0) { text?.let(extractSelection) }
-            }
-        },
-        floatingActionButtonPosition = FabPosition.Center,
         topBar = {
             TabHeader("日记", streakText(streak)) {
                 AnimatedContent(editing, transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.9f)) togetherWith fadeOut() }, label = "actions") { on ->
@@ -427,7 +419,7 @@ fun DiaryScreen(
                 }
                 session?.let {
                     Editor(
-                        it, onInput = vm::onInput, onFocus = { f -> editing = f },
+                        it, state = editorState, onFocus = { f -> editing = f },
                         onExtract = extractSelection,
                         onSelection = { selected = it },
                         focus = editorFocus,
@@ -438,6 +430,26 @@ fun DiaryScreen(
         }
     }
     }
+        // Over the keyboard: the format bar, with the extract button stacked above it while a
+        // selection lasts (the system's selection menu puts app items last; this one is close).
+        AnimatedVisibility(
+            visible = editing,
+            modifier = Modifier.align(Alignment.BottomCenter).imePadding().padding(horizontal = 10.dp, vertical = 8.dp),
+            enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 },
+            exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { it / 2 },
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val text = selected
+                AnimatedVisibility(
+                    visible = text != null,
+                    enter = fadeIn() + scaleIn(initialScale = 0.8f) + slideInVertically { it / 2 },
+                    exit = fadeOut() + scaleOut(targetScale = 0.9f),
+                ) {
+                    ExtractSelectionButton(text?.count { !it.isWhitespace() } ?: 0) { text?.let(extractSelection) }
+                }
+                NoteFormatBar(editorState)
+            }
+        }
     }
 
     if (askDelete) {
@@ -815,7 +827,7 @@ private fun ExtractSelectionButton(chars: Int, onClick: () -> Unit) {
 @Composable
 private fun Editor(
     session: DiarySession,
-    onInput: (String) -> Unit,
+    state: NoteEditorState,
     onFocus: (Boolean) -> Unit,
     /** The selected text, from 提炼到笔记 in the selection menu. */
     onExtract: (String) -> Unit = {},
@@ -829,12 +841,15 @@ private fun Editor(
     val status by session.status.collectAsStateWithLifecycle()
     val savedAt by session.savedAt.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    // Local state keeps the cursor; the session holds the text that gets saved.
-    var value by remember(session) { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
-    if (value.text != text && status != DiarySession.Status.UNSAVED) value = value.copy(text = text, selection = TextRange(text.length))
-    var focused by remember(session) { mutableStateOf(false) }
-    val selection = value.selection
-    val picked = if (selection.collapsed) null else value.text.substring(selection.min, selection.max).trim().takeIf { it.isNotEmpty() }
+    // External text (a tidy, a restore) lands at the end; our own keystrokes are already equal
+    // and this is a no-op. An external change drops the undo history with it.
+    LaunchedEffect(session) {
+        session.text.collect { t ->
+            if (session.status.value != DiarySession.Status.UNSAVED) state.sync(t)
+        }
+    }
+    val selection = state.value.selection
+    val picked = if (selection.collapsed) null else state.value.text.substring(selection.min, selection.max).trim().takeIf { it.isNotEmpty() }
     LaunchedEffect(picked) { onSelection(picked) }
     DisposableEffect(session) { onDispose { onSelection(null) } }
     // Every day opens for reading, an empty one too: the keyboard comes up only on a tap or a pull.
@@ -844,15 +859,14 @@ private fun Editor(
             Row(Modifier.padding(start = 18.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("无法保存，请先复制内容", color = cs.onErrorContainer, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 TextButton(onClick = {
-                    context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("日记", value.text))
+                    context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("日记", state.value.text))
                 }) { Text("复制全部") }
             }
         }
     }
-    val lineHeight = 31.sp
     // Writing straight on the page, as in a paper journal: no box around it. While typing, a
     // slim bar of the accent grows down the margin to say where the keyboard goes.
-    val mark by animateFloatAsState(if (focused) 1f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "editor")
+    val mark by animateFloatAsState(if (state.focused) 1f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "editor")
     val accent = cs.primary
     Box(
         Modifier.fillMaxWidth().drawBehind {
@@ -866,63 +880,43 @@ private fun Editor(
             }
         },
     ) {
-        Column(Modifier.padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
-            val style = MaterialTheme.typography.bodyLarge.copy(
-                color = cs.onSurface,
-                fontSize = 17.sp,
-                lineHeight = lineHeight,
-                letterSpacing = 0.3.sp,
-                lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
-            )
-            Box(Modifier.fillMaxWidth().heightIn(min = 270.dp)) {
-                if (value.text.isEmpty()) Text("今天过得怎么样？", style = style.copy(color = cs.outline))
-                BasicTextField(
-                    value = value,
-                    onValueChange = {
-                        value = it
-                        onInput(it.text)
-                    },
-                    textStyle = style,
-                    cursorBrush = SolidColor(cs.primary),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 270.dp)
-                        .then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
-                        .onFocusChanged {
-                            focused = it.isFocused
-                            onFocus(it.isFocused)
-                        }
-                        // Selecting text offers to take just that into a note.
-                        .appendTextContextMenuComponents {
-                            val sel = value.selection
-                            if (!sel.collapsed && value.text.substring(sel.min, sel.max).isNotBlank()) {
-                                separator()
-                                item(EXTRACT_ITEM, "提炼到笔记") {
-                                    onExtract(value.text.substring(sel.min, sel.max).trim())
-                                    close()
-                                }
-                            }
-                        },
-                )
-            }
-            Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val count = value.text.count { !it.isWhitespace() }
-                Text("$count 字", style = MaterialTheme.typography.labelMedium.merge(com.assetboard.ui.theme.NumberStyle), color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-                val label = when {
-                    status != DiarySession.Status.READY -> null
-                    session.dirty -> "正在保存…"
-                    savedAt != null -> "已保存 " + Dates.time(savedAt!!)
-                    value.text.isNotEmpty() -> "已保存"
-                    else -> null
+        MarkdownBody(
+            state = state,
+            minHeight = 270.dp,
+            lineHeight = 31.sp,
+            focusRequester = focus,
+            // Selecting text offers to take just that into a note.
+            fieldExtras = Modifier.appendTextContextMenuComponents {
+                val sel = state.value.selection
+                if (!sel.collapsed && state.value.text.substring(sel.min, sel.max).isNotBlank()) {
+                    separator()
+                    item(EXTRACT_ITEM, "提炼到笔记") {
+                        onExtract(state.value.text.substring(sel.min, sel.max).trim())
+                        close()
+                    }
                 }
-                label?.let {
-                    Icon(Icons.Outlined.CloudDone, null, tint = cs.outline, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(it, style = MaterialTheme.typography.labelMedium, color = cs.outline)
+            },
+            onFocus = onFocus,
+            hint = { style -> Text("今天过得怎么样？", style = style.copy(color = cs.outline)) },
+            footer = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val count = state.value.text.count { !it.isWhitespace() }
+                    Text("$count 字", style = MaterialTheme.typography.labelMedium.merge(com.assetboard.ui.theme.NumberStyle), color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    val label = when {
+                        status != DiarySession.Status.READY -> null
+                        session.dirty -> "正在保存…"
+                        savedAt != null -> "已保存 " + Dates.time(savedAt!!)
+                        state.value.text.isNotEmpty() -> "已保存"
+                        else -> null
+                    }
+                    label?.let {
+                        Icon(Icons.Outlined.CloudDone, null, tint = cs.outline, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(it, style = MaterialTheme.typography.labelMedium, color = cs.outline)
+                    }
                 }
-            }
-        }
+            },
+        )
     }
 }
 

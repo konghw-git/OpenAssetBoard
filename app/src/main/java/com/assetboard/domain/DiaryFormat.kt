@@ -11,9 +11,10 @@ package com.assetboard.domain
  *   or a lone `…` an ellipsis `……`, and parentheses around Chinese `（）`; a time keeps `10:30`;
  *
  * then blank lines fold to one and none is left at either end, and every paragraph starts with
- * two ideographic spaces, except a list item, a line starting with a time, and a short first line
- * without closing punctuation that reads as a title. The text's own line breaks stay: nothing is
- * joined and no blank line is added.
+ * two ideographic spaces, except a list item, a line starting with a time, a Markdown block
+ * marker (indented, the renderer would stop reading it as one), and a short first line without
+ * closing punctuation that reads as a title. The text's own line breaks stay: nothing is joined
+ * and no blank line is added.
  */
 object DiaryFormat {
     const val INDENT = "　　"
@@ -27,7 +28,7 @@ object DiaryFormat {
         while (kept.lastOrNull()?.isEmpty() == true) kept.removeAt(kept.lastIndex)
         val titled = kept.size > 1 && isTitle(kept.first())
         return kept.mapIndexed { i, l ->
-            if (l.isEmpty() || (i == 0 && titled) || LIST.containsMatchIn(l)) l else INDENT + l
+            if (l.isEmpty() || (i == 0 && titled) || LIST.containsMatchIn(l) || MARKDOWN.containsMatchIn(l)) l else INDENT + l
         }.joinToString("\n")
     }
 
@@ -66,9 +67,9 @@ object DiaryFormat {
         return TIME.replace(r, "$1:$2")
     }
 
-    /** Short, nothing closing it, and not a list item: a heading over what follows. */
+    /** Short, nothing closing it, and not a list item or a Markdown block: a heading over what follows. */
     private fun isTitle(line: String): Boolean =
-        line.length <= TITLE_MAX && line.last() !in CLOSING && !LIST.containsMatchIn(line)
+        line.length <= TITLE_MAX && line.last() !in CLOSING && !LIST.containsMatchIn(line) && !MARKDOWN.containsMatchIn(line)
 
     private fun isHan(c: Char?): Boolean = c != null && Character.UnicodeScript.of(c.code) == Character.UnicodeScript.HAN
 
@@ -88,4 +89,7 @@ object DiaryFormat {
 
     /** Bullets, numbering (not a decimal), 一、 headings and a leading time: these sit flush. */
     private val LIST = Regex("^(?:[-*·•] |\\d{1,3}[.、)）](?!\\d)|[（(]\\d{1,3}[)）]|[①-⑳]|[一二三四五六七八九十]{1,3}、|\\d{1,2}:\\d{2})")
+
+    /** Markdown block markers: indented, the renderer would stop reading them as blocks. */
+    private val MARKDOWN = Regex("^(?:#{1,6} |> |-{3,}$|\\*{3,}$|_{3,}$)")
 }
