@@ -10,6 +10,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Update
+import com.assetboard.domain.notes.NoteMarkdown
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 
@@ -95,13 +96,11 @@ data class SourceRef(val kind: String, val ref: String) {
 object NoteText {
     const val UNTITLED = "无标题"
 
-    fun title(body: String): String = body.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: UNTITLED
+    /** The first line with something to read, without its Markdown marker. */
+    fun title(body: String): String = NoteMarkdown.title(body).ifEmpty { UNTITLED }
 
-    /** What follows the title, folded into one line for a list row. */
-    fun preview(body: String): String {
-        val lines = body.lineSequence().map { it.trim() }.dropWhile { it.isEmpty() }.drop(1)
-        return lines.filter { it.isNotEmpty() }.joinToString(" ").take(160)
-    }
+    /** What follows the title, folded into one line for a list row, with list items marked. */
+    fun preview(body: String): String = NoteMarkdown.preview(body)
 
     /** The block an append adds, dated like a diary draft that goes back into its entry. */
     fun block(date: String, text: String) = "— $date\n$text"

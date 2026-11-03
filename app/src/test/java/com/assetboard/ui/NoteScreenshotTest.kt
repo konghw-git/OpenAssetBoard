@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextInputSelection
+import androidx.compose.ui.text.TextRange
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
 import com.assetboard.CloseTestContainers
@@ -95,7 +96,8 @@ class NoteScreenshotTest {
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("资产")).fetchSemanticsNodes().isNotEmpty() }
     }
 
-    private fun waitFor(text: String) = compose.waitUntil(8_000) { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() }
+    private fun waitFor(text: String, substring: Boolean = false) =
+        compose.waitUntil(8_000) { compose.onAllNodes(hasText(text, substring = substring)).fetchSemanticsNodes().isNotEmpty() }
 
     private fun capture(name: String) {
         compose.mainClock.advanceTimeBy(1_500)
@@ -171,6 +173,85 @@ class NoteScreenshotTest {
         compose.onNodeWithText("火锅局的启发").performClick()
         waitFor("摘自")
         capture("53-note")
+    }
+
+    @Test fun richNoteReadsAsADocument() {
+        val c = demo()
+        runBlocking(c.gate.bound()) {
+            c.notes.create(
+                """
+                # 本周复盘
+                这周把定投纪律写下来。#投资
+                ## 做成了
+                - [x] 周一、周三各跑五公里
+                - [ ] 整理读书笔记
+                - [ ] 给爸妈打电话
+                ## 想法
+                > 真正难的不是算清楚，而是在什么都没发生的那些年里不下车。
+                ---
+                **下周三**前读完《置身事内》第三章。
+                """.trimIndent(),
+                null,
+            )
+        }
+        show(c)
+        openTab()
+        waitFor("本周复盘")
+        compose.onNodeWithText("本周复盘").performClick()
+        waitFor("想法", substring = true)
+        capture("53b-note-rich")
+    }
+
+    @Test fun richNoteInTheDark() {
+        val c = demo()
+        runBlocking(c.gate.bound()) {
+            c.notes.create(
+                "# 夜读\n- [x] 读完一章\n- [ ] 写下摘录\n---\n> 慢慢来，比较快。",
+                null,
+            )
+        }
+        show(c, dark = true)
+        openTab()
+        waitFor("夜读")
+        compose.onNodeWithText("夜读").performClick()
+        waitFor("慢慢来", substring = true)
+        capture("53e-note-rich-dark")
+    }
+
+    @Test fun richNoteWhileEditing() {
+        val c = demo()
+        runBlocking(c.gate.bound()) {
+            c.notes.create("# 一起读书\n- [ ] 读完第三章\n- [x] 做笔记\n---\n> 慢一点也没关系。", null)
+        }
+        show(c)
+        openTab()
+        waitFor("一起读书")
+        compose.onNodeWithText("一起读书").performClick()
+        waitFor("慢一点也没关系", substring = true)
+        compose.onNode(hasSetTextAction()).performClick()
+        compose.onNode(hasSetTextAction()).performTextInputSelection(TextRange(0))
+        compose.waitUntil(8_000) {
+            compose.onAllNodes(hasContentDescription("待办清单")).fetchSemanticsNodes().isNotEmpty()
+        }
+        capture("53c-note-editing")
+    }
+
+    @Test fun outlineShowsTheHeadings() {
+        val c = demo()
+        runBlocking(c.gate.bound()) {
+            c.notes.create(
+                "# 年度复盘\n## 做成了\n- [x] 存下三个月开销\n## 没做成\n- [ ] 跑完半马",
+                null,
+            )
+        }
+        show(c)
+        openTab()
+        waitFor("年度复盘")
+        compose.onNodeWithText("年度复盘").performClick()
+        compose.waitUntil(8_000) { compose.onAllNodes(hasContentDescription("大纲")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("大纲").performClick()
+        waitFor("3 个小标题", substring = true)
+        capture("53d-note-outline")
     }
 
     @Test fun noteNew() {

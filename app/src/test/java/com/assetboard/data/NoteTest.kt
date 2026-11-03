@@ -568,6 +568,8 @@ class NoteTest {
         assertEquals("标题", NoteText.title("\n  标题  \n正文"))
         assertEquals(NoteText.UNTITLED, NoteText.title(" \n "))
         assertEquals("正文 第二行", NoteText.preview("标题\n\n正文\n第二行"))
+        assertEquals("周末清单", NoteText.title("# 周末清单\n- [x] 买菜"))
+        assertEquals("☑ 买菜", NoteText.preview("# 周末清单\n- [x] 买菜"))
         assertEquals(listOf("一段\n同一段", "二段"), NoteText.paragraphs("一段\n同一段\n\n二段\n"))
         assertEquals(listOf("一行", "二行"), NoteText.paragraphs("一行\n二行"))
         assertEquals("块", NoteText.join("  \n", "块"))
