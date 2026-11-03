@@ -99,7 +99,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -432,9 +434,13 @@ fun DiaryScreen(
     }
         // Over the keyboard: the format bar, with the extract button stacked above it while a
         // selection lasts (the system's selection menu puts app items last; this one is close).
+        // The floating tab bar holds the bottom when the keyboard is down, so step over it then.
         AnimatedVisibility(
             visible = editing,
-            modifier = Modifier.align(Alignment.BottomCenter).imePadding().padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .imePadding()
+                .padding(bottom = if (WindowInsets.isImeVisible) 0.dp else TabPageBottomInset)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 },
             exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { it / 2 },
         ) {
