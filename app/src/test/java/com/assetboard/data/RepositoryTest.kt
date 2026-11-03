@@ -77,6 +77,17 @@ class RepositoryTest {
         assertEquals(-20_000_00L, l.currentTotals().netWorth)
     }
 
+    @Test fun anAccountKeepsTheIconItsOwnerPicked() = runBlocking(gate.bound()) {
+        val g = group()
+        val id = repo.createAccount(AccountDraft(g, "钱包", icon = "wallet"), 0, 100_00, null)
+        assertEquals("wallet", repo.loadOnce().accountById[id]!!.icon)
+        repo.updateAccount(id, AccountDraft(g, "钱包", icon = "savings"))
+        assertEquals("savings", repo.loadOnce().accountById[id]!!.icon)
+        // Clearing it goes back to following the name and institution.
+        repo.updateAccount(id, AccountDraft(g, "钱包"))
+        assertEquals(null, repo.loadOnce().accountById[id]!!.icon)
+    }
+
     @Test fun case6_flowBeforeBaselineIsRejected() = runBlocking(gate.bound()) {
         val g = group()
         val cash = repo.createAccount(AccountDraft(g, "cash"), 0, 10_000_00, null)

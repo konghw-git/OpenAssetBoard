@@ -26,6 +26,8 @@ data class AccountDraft(
     val code: String? = null,
     val lockedUntil: Long? = null,
     val includeInTotal: Boolean = true,
+    /** See [Account.icon]. */
+    val icon: String? = null,
     val note: String? = null,
 )
 
@@ -130,6 +132,7 @@ class LedgerRepository(
             baselineAt = baselineAt,
             baselineCost = if (draft.kind == AccountKind.INVESTMENT) (baselineCostDisplay?.let { sign * it } ?: value) else null,
             includeInTotal = draft.includeInTotal,
+            icon = draft.icon?.trim()?.ifEmpty { null },
             note = draft.note?.trim()?.ifEmpty { null },
             sortOrder = dao.maxAccountOrder() + 1,
             createdAt = now,
@@ -163,6 +166,7 @@ class LedgerRepository(
                 lockedUntil = draft.lockedUntil,
                 baselineCost = cost,
                 includeInTotal = draft.includeInTotal,
+                icon = draft.icon?.trim()?.ifEmpty { null },
                 note = draft.note?.trim()?.ifEmpty { null },
             ),
         )

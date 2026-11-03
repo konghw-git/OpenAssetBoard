@@ -49,6 +49,8 @@ data class Account(
     @ColumnInfo(name = "baseline_cost") val baselineCost: Long? = null,
     @ColumnInfo(name = "include_in_total") val includeInTotal: Boolean = true,
     @ColumnInfo(name = "is_disabled") val isDisabled: Boolean = false,
+    /** The icon the user picked, by its key in `AccountIcons`; null follows the name and institution. */
+    val icon: String? = null,
     val note: String? = null,
     @ColumnInfo(name = "sort_order") val sortOrder: Int = 0,
     @ColumnInfo(name = "created_at") val createdAt: Long,

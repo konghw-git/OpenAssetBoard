@@ -339,6 +339,27 @@ class MigrationTest {
         }
     }
 
+    @Test fun migrationThirteenToFourteenGivesAccountsNoIconAndKeepsTheLedger() {
+        val before = helper.createDatabase(name, 13).use { db ->
+            seedV1(db)
+            db.dump("accounts")
+        }
+        helper.runMigrationsAndValidate(name, 14, true, Migrations.MIGRATION_13_14).use { db ->
+            fun List<Any?>.col(name: String) = this[indexOf(name) - size / 2]
+            val after = db.dump("accounts")
+            assertEquals(before.size, after.size)
+            // The new column starts empty, and every old field survives untouched.
+            for (i in before.indices) {
+                assertEquals(null, after[i].col("icon"))
+                assertEquals(before[i].col("name"), after[i].col("name"))
+                assertEquals(before[i].col("baseline_at"), after[i].col("baseline_at"))
+                assertEquals(before[i].col("include_in_total"), after[i].col("include_in_total"))
+            }
+            db.execSQL("UPDATE accounts SET icon = 'wallet' WHERE id = 'a1'")
+            assertEquals("wallet", db.dump("accounts").first { it.col("id") == "a1" }.col("icon"))
+        }
+    }
+
     @Test fun databaseAtThreeOpensWithRoomAfterTheHealthMigration() = runBlocking {
         helper.createDatabase(name, 1).use(::seedV1)
         val context = ApplicationProvider.getApplicationContext<Application>()

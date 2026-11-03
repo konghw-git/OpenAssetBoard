@@ -42,6 +42,23 @@ class BackupFixtureTest {
         return Uri.fromFile(File(f.context.cacheDir, name).apply { writeText(text) })
     }
 
+    @Test fun formatFifteenRestoresAccountIcons() = f.run {
+        val uri = fixture("format-15.json")
+        assertEquals(15, f.backup.inspect(uri).formatVersion)
+        f.backup.restore(uri)
+        val accounts = f.ledger.loadOnce().accounts.associateBy { it.name }
+        assertEquals("invest", accounts.getValue("基金").icon)
+        // An account the file gives no icon still follows its name.
+        assertEquals(null, accounts.getValue("银行").icon)
+        assertEquals(5_000_00L, f.ledger.loadOnce().currentBalance(accounts.getValue("基金").id))
+    }
+
+    /** A file from before account icons reads with every account following its name. */
+    @Test fun formatFourteenHasNoAccountIcons() = f.run {
+        f.backup.restore(fixture("format-14.json"))
+        assertTrue(f.ledger.loadOnce().accounts.all { it.icon == null })
+    }
+
     @Test fun formatFourteenRestoresCountdowns() = f.run {
         val uri = fixture("format-14.json")
         assertEquals(14, f.backup.inspect(uri).formatVersion)
@@ -141,7 +158,7 @@ class BackupFixtureTest {
         f.ledger.saveFlow(MoneyFlow(newId(), FlowKind.EXPENSE, bank, null, 35_50, at = f.now - 3_600_000, note = "午饭", createdAt = f.now, category = "food"))
         f.ledger.saveFlow(MoneyFlow(newId(), FlowKind.INCOME, null, bank, 8_000_00, at = f.now - 7_200_000, createdAt = f.now, category = "salary"))
         val fund = f.ledger.createGroup("投资", false, 1)
-        f.ledger.createAccount(AccountDraft(fund, "基金"), 0, 5_000_00, null)
+        f.ledger.createAccount(AccountDraft(fund, "基金", icon = "invest"), 0, 5_000_00, null)
         val list = f.todos.createList("论文")
         val paper = f.todos.create(TodoDraft("写引言", listId = list, planDate = date("2026-10-21"), remindTime = java.time.LocalTime.of(9, 30)))
         f.todos.editInline(paper, "写引言", listOf(InlineItem(null, "查文献"), InlineItem(null, "列提纲")))

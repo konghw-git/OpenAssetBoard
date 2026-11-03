@@ -12,9 +12,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
+import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.CurrencyBitcoin
+import androidx.compose.material.icons.rounded.Diamond
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.Flight
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.LocalHospital
 import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.Redeem
+import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,6 +65,36 @@ object AccountIcons {
 
     data class Brand(@DrawableRes val res: Int, val fit: Fit)
 
+    /** One choice in the account's icon picker. [key] is what [Account.icon] stores. */
+    data class Option(val key: String, val label: String, val vector: ImageVector)
+
+    /**
+     * The icons an account can wear instead of the automatic mark. Keys persist in the database
+     * and in backups, so they never change; [label] is the picker's accessibility name.
+     */
+    val options: List<Option> = listOf(
+        Option("wallet", "钱包", Icons.Rounded.AccountBalanceWallet),
+        Option("card", "银行卡", Icons.Rounded.CreditCard),
+        Option("bank", "银行", Icons.Rounded.AccountBalance),
+        Option("savings", "储蓄", Icons.Rounded.Savings),
+        Option("invest", "投资", Icons.AutoMirrored.Rounded.ShowChart),
+        Option("cash", "现金", Icons.Rounded.Payments),
+        Option("pay", "支付", Icons.Rounded.QrCodeScanner),
+        Option("home", "房子", Icons.Rounded.Home),
+        Option("car", "车", Icons.Rounded.DirectionsCar),
+        Option("travel", "旅行", Icons.Rounded.Flight),
+        Option("education", "教育", Icons.Rounded.School),
+        Option("medical", "医疗", Icons.Rounded.LocalHospital),
+        Option("insurance", "保险", Icons.Rounded.Shield),
+        Option("gold", "黄金", Icons.Rounded.Diamond),
+        Option("digital", "数字资产", Icons.Rounded.CurrencyBitcoin),
+        Option("gift", "红包", Icons.Rounded.Redeem),
+        Option("other", "其他", Icons.Rounded.Star),
+    )
+
+    /** The icon stored under [key], or null when the account follows its name. */
+    fun vectorOf(key: String?): ImageVector? = options.firstOrNull { it.key == key }?.vector
+
     private class Rule(val keys: List<String>, val brand: Brand, val investmentOnly: Boolean = false)
 
     private fun rule(vararg keys: String, res: Int, fit: Fit, investmentOnly: Boolean = false) =
@@ -84,8 +127,8 @@ object AccountIcons {
         return match(a.name) ?: match(a.institution)
     }
 
-    /** A drawn symbol for accounts without a brand, or null for the name's first character. */
-    fun glyphOf(a: Account): ImageVector? = when {
+    /** The user's icon first; otherwise a drawn symbol, or null for the name's first character. */
+    fun glyphOf(a: Account): ImageVector? = vectorOf(a.icon) ?: when {
         "现金" in a.name -> Icons.Rounded.Payments
         listOf("贷款", "助学", "学贷").any { it in a.name } -> Icons.Rounded.School
         listOf("信用卡", "月付").any { it in a.name } -> Icons.Rounded.CreditCard
@@ -111,7 +154,9 @@ fun AccountAvatar(account: Account, color: Color, modifier: Modifier = Modifier,
     val cs = MaterialTheme.colorScheme
     val tint = if (muted) cs.onSurfaceVariant else color
     val shape = RoundedCornerShape(size * 0.3f)
-    val brand = AccountIcons.brandOf(account)
+    // A picked icon replaces the automatic brand and glyph, but the number badge still applies.
+    val custom = AccountIcons.vectorOf(account.icon)
+    val brand = if (custom == null) AccountIcons.brandOf(account) else null
     Box(modifier.size(size)) {
         val tile = Modifier.size(size).clip(shape)
         when {
