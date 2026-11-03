@@ -85,7 +85,6 @@ import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -494,7 +493,7 @@ fun NotesScreen(
                 DeckCard(
                     key = NotesViewModel.ALL, title = "全部", count = notes.size, countLabel = "${notes.size} 篇笔记",
                     accent = cs.primary,
-                    icon = Icons.Outlined.GridView, footnote = "所有主题与未归类的笔记",
+                    footnote = "所有主题与未归类的笔记",
                     preview = previewOf(null, everything = true), previewEmpty = "还没有笔记",
                     manageable = false,
                 ),
@@ -504,7 +503,7 @@ fun NotesScreen(
                 add(
                     DeckCard(
                         key = t.id, title = t.name, count = count, countLabel = "$count 篇笔记",
-                        accent = AppTheme.extra.group(i), icon = Icons.AutoMirrored.Outlined.Label,
+                        accent = AppTheme.extra.group(i),
                         preview = previewOf(t.id), previewEmpty = "这个主题下还没有笔记",
                     ),
                 )
@@ -514,7 +513,7 @@ fun NotesScreen(
                 add(
                     DeckCard(
                         key = NotesViewModel.UNSORTED, title = "未归类", count = count, countLabel = "$count 篇笔记",
-                        accent = cs.onSurfaceVariant, icon = Icons.Outlined.Drafts, footnote = "还没有主题的笔记",
+                        accent = cs.onSurfaceVariant, footnote = "还没有主题的笔记",
                         preview = previewOf(null), previewEmpty = "没有未归类的笔记",
                         manageable = false,
                     ),

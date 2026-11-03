@@ -2,8 +2,6 @@ package com.assetboard.ui
 
 import android.app.Application
 import androidx.activity.ComponentActivity
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -41,7 +39,7 @@ class DeckPagerTest {
 
     private fun card(key: String, title: String) = DeckCard(
         key = key, title = title, count = 1, accent = Color(0xFF23864D),
-        icon = Icons.Outlined.FormatListBulleted, countLabel = "1 项未完成",
+        countLabel = "1 项未完成",
     )
 
     private fun show(

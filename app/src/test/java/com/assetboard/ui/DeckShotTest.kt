@@ -5,10 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.automirrored.outlined.Label
-import androidx.compose.material.icons.outlined.FormatListBulleted
-import androidx.compose.material.icons.outlined.GridView
 import com.assetboard.data.ThemeMode
 import com.assetboard.ui.components.CardDeckContent
 import com.assetboard.ui.components.DeckCard
@@ -45,12 +41,12 @@ class DeckShotTest {
         count: Int,
         group: Int,
         footnote: String?,
-        icon: ImageVector,
         countLabel: String? = null,
         preview: List<String> = emptyList(),
+        progress: Float? = null,
     ) = DeckCard(
-        key = key, title = title, count = count, accent = AppTheme.extra.group(group), icon = icon, footnote = footnote,
-        countLabel = countLabel, preview = preview, previewEmpty = "里面还没有内容",
+        key = key, title = title, count = count, accent = AppTheme.extra.group(group), footnote = footnote,
+        countLabel = countLabel, preview = preview, previewEmpty = "里面还没有内容", progress = progress,
     )
 
     @Test fun todoLists() {
@@ -58,14 +54,14 @@ class DeckShotTest {
             CardDeckContent(
                 title = "清单",
                 cards = listOf(
-                    card("a", "搬家", 4, 0, "3 个分区", androidx.compose.material.icons.Icons.Outlined.FormatListBulleted,
-                        countLabel = "4 项未完成", preview = listOf("打包书架", "预约搬家车", "改地址")),
-                    card("b", "论文", 2, 1, "截止还剩 2 天 · 2 个分区", androidx.compose.material.icons.Icons.Outlined.FormatListBulleted,
-                        countLabel = "2 项未完成", preview = listOf("第三章初稿", "参考文献")),
-                    card("c", "旅行", 1, 2, "截止 11月的小长假", androidx.compose.material.icons.Icons.Outlined.FormatListBulleted,
-                        countLabel = "1 项未完成", preview = listOf("订机票")),
-                    card("d", "英语", 0, 3, null, androidx.compose.material.icons.Icons.Outlined.FormatListBulleted,
-                        countLabel = "没有未完成"),
+                    card("a", "搬家", 4, 0, "3 个分区",
+                        countLabel = "4 项未完成", preview = listOf("打包书架", "预约搬家车", "改地址"), progress = 0.25f),
+                    card("b", "论文", 2, 1, "截止还剩 2 天 · 2 个分区",
+                        countLabel = "2 项未完成", preview = listOf("第三章初稿", "参考文献"), progress = 0.6f),
+                    card("c", "旅行", 1, 2, "截止 11月的小长假",
+                        countLabel = "1 项未完成", preview = listOf("订机票"), progress = 0.8f),
+                    card("d", "英语", 0, 3, null,
+                        countLabel = "没有未完成", progress = 1f),
                 ),
                 selected = "b",
                 onPick = {},
@@ -84,7 +80,7 @@ class DeckShotTest {
             AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) {
                 val cards = if (loaded.value) {
                     (0 until 7).map { i ->
-                        card("t$i", "主题$i", i, i % 4, null, androidx.compose.material.icons.Icons.AutoMirrored.Outlined.Label)
+                        card("t$i", "主题$i", i, i % 4, null)
                     }
                 } else {
                     emptyList()
@@ -108,13 +104,13 @@ class DeckShotTest {
             CardDeckContent(
                 title = "主题",
                 cards = listOf(
-                    card("all", "全部", 5, 0, "所有主题与未归类的笔记", androidx.compose.material.icons.Icons.Outlined.GridView,
+                    card("all", "全部", 5, 0, "所有主题与未归类的笔记",
                         countLabel = "5 篇笔记", preview = listOf("一本书的摘要", "早睡的真正障碍", "火锅局的启发")),
-                    card("t1", "读书", 2, 1, null, androidx.compose.material.icons.Icons.AutoMirrored.Outlined.Label,
+                    card("t1", "读书", 2, 1, null,
                         countLabel = "2 篇笔记", preview = listOf("一本书的摘要", "读到一半的书")),
-                    card("t2", "健身", 1, 2, null, androidx.compose.material.icons.Icons.AutoMirrored.Outlined.Label,
+                    card("t2", "健身", 1, 2, null,
                         countLabel = "1 篇笔记", preview = listOf("早睡的真正障碍")),
-                    card("t3", "投资", 2, 3, null, androidx.compose.material.icons.Icons.AutoMirrored.Outlined.Label,
+                    card("t3", "投资", 2, 3, null,
                         countLabel = "2 篇笔记", preview = listOf("火锅局的启发", "定投清单")),
                 ),
                 selected = "all",
@@ -136,8 +132,7 @@ class DeckShotTest {
                 title = "主题",
                 cards = names.mapIndexed { i, name ->
                     val count = (i % 4) + 1
-                    card("t$i", name, count, i, null, androidx.compose.material.icons.Icons.AutoMirrored.Outlined.Label,
-                        countLabel = "$count 篇笔记", preview = listOf("一篇 $name 的笔记"))
+                    card("t$i", name, count, i, null, countLabel = "$count 篇笔记", preview = listOf("一篇 $name 的笔记"))
                 },
                 selected = "t2",
                 onPick = {},
@@ -157,11 +152,11 @@ class DeckShotTest {
             CardDeckContent(
                 title = "清单",
                 cards = listOf(
-                    card("a", "搬家", 4, 0, "3 个分区", androidx.compose.material.icons.Icons.Outlined.FormatListBulleted,
+                    card("a", "搬家", 4, 0, "3 个分区",
                         countLabel = "4 项未完成", preview = listOf("打包书架", "预约搬家车", "改地址")),
-                    card("b", "论文", 2, 1, "截止还剩 2 天 · 2 个分区", androidx.compose.material.icons.Icons.Outlined.FormatListBulleted,
+                    card("b", "论文", 2, 1, "截止还剩 2 天 · 2 个分区",
                         countLabel = "2 项未完成", preview = listOf("第三章初稿", "参考文献")),
-                    card("c", "旅行", 1, 2, "截止 11月的小长假", androidx.compose.material.icons.Icons.Outlined.FormatListBulleted,
+                    card("c", "旅行", 1, 2, "截止 11月的小长假",
                         countLabel = "1 项未完成", preview = listOf("订机票")),
                 ),
                 selected = "b",

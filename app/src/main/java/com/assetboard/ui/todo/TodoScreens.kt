@@ -716,12 +716,12 @@ fun TodoHomeScreen(
                 count = r.open,
                 countLabel = if (r.open == 0) "没有未完成" else "${r.open} 项未完成",
                 accent = listColor(d, r.id) ?: cs.primary,
-                icon = Icons.Outlined.FormatListBulleted,
                 footnote = listOfNotNull(r.deadline, if (r.sections > 0) "${r.sections} 个分区" else null).joinToString(" · ").ifEmpty { null },
                 // What is still open in the list, so two lists with similar names can be told apart
                 // without opening either one.
                 preview = r.preview,
                 previewEmpty = "清单里没有未完成的待办",
+                progress = r.progress,
             )
         }
         CardDeckDialog(

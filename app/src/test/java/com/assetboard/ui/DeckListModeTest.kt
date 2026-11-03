@@ -2,8 +2,6 @@ package com.assetboard.ui
 
 import android.app.Application
 import androidx.activity.ComponentActivity
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -47,7 +45,7 @@ class DeckListModeTest {
 
     private fun card(key: String, title: String, manageable: Boolean = true) = DeckCard(
         key = key, title = title, count = 1, accent = Color(0xFF23864D),
-        icon = Icons.Outlined.FormatListBulleted, countLabel = "1 项未完成", manageable = manageable,
+        countLabel = "1 项未完成", manageable = manageable,
     )
 
     private fun show(cards: List<DeckCard>, undoEvents: SharedFlow<UndoEvent>? = null, onUndo: ((UndoEvent) -> Unit)? = null) {
