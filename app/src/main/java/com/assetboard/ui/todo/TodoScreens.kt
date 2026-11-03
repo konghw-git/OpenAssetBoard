@@ -704,13 +704,23 @@ fun TodoHomeScreen(
         val cards = listOrder.map { l ->
             val deadline = TodoViews.parse(l.deadline)?.let { TodoViews.deadlineBadge(it, today)?.text }
             val sections = d?.sections?.count { it.listId == l.id && it.deletedAt == null } ?: 0
+            val open = TodoViews.countInList(l.id, d?.todos.orEmpty())
             DeckCard(
                 key = ViewKey.list(l.id),
                 title = l.name,
-                count = TodoViews.countInList(l.id, d?.todos.orEmpty()),
+                count = open,
+                countLabel = if (open == 0) "没有未完成" else "$open 项未完成",
                 accent = listColor(d, l.id) ?: cs.primary,
                 icon = Icons.Outlined.FormatListBulleted,
                 footnote = listOfNotNull(deadline, if (sections > 0) "$sections 个分区" else null).joinToString(" · ").ifEmpty { null },
+                // What is still open in the list, so two lists with similar names can be told apart
+                // without opening either one.
+                preview = d?.todos.orEmpty()
+                    .filter { it.listId == l.id && TodoViews.isOpen(it) }
+                    .sortedBy { it.sortOrder }
+                    .take(3)
+                    .map { it.title },
+                previewEmpty = "清单里没有未完成的待办",
             )
         }
         CardDeckDialog(
@@ -719,7 +729,8 @@ fun TodoHomeScreen(
             selected = selected.takeIf { ViewKey.listId(it) != null },
             onPick = { selected = it; listsOpen = false },
             onDismiss = { listsOpen = false },
-            hint = "左右滑动挑一张清单，点一下打开",
+            hint = "左右滑动浏览，点中间那张打开",
+            gridHint = "点一张卡直接打开",
             createLabel = "新建清单",
             onCreate = { name ->
                 listsOpen = false

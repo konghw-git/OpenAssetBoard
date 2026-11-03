@@ -20,6 +20,13 @@ All notable changes to this project are documented here. The format follows
   group's share to the right of the figure (dots, names and percentages, no ring). On a narrow
   phone, or when the figure is too long to share the line, the legend moves under it instead of
   clipping the amount.
+- The 清单 and 主题 decks are a short coverflow carousel instead of one full-screen card: three
+  compact cards share the screen, the neighbours lean in beside the front card, the row snaps
+  one card to the middle, and a spotlight below lists what the front card holds (its open todos
+  or newest notes). Decks with more than six cards open as a page of compact cards instead, and
+  a header toggle swaps either layout. A tap on a neighbour brings it forward; a tap on the
+  front card, or the spotlight's button, opens it. New lists and topics are still named in the
+  deck, and the topic deck still links to 管理主题.
 
 ## [1.2.1] - 2026-11-02
 

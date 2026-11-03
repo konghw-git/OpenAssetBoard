@@ -473,27 +473,40 @@ fun NotesScreen(
 
     if (deckOpen) {
         val cs = MaterialTheme.colorScheme
+        // The newest notes behind each topic, so the deck can say what a topic holds without
+        // opening it; the deck is small enough for three lines to be readable.
+        fun previewOf(topicId: String?, everything: Boolean = false): List<String> =
+            (if (everything) notes else notes.filter { it.topicId == topicId })
+                .sortedByDescending { it.updatedAt }
+                .take(3)
+                .map { it.title }
         val cards = buildList {
             add(
                 DeckCard(
-                    key = NotesViewModel.ALL, title = "全部", count = notes.size, accent = cs.primary,
+                    key = NotesViewModel.ALL, title = "全部", count = notes.size, countLabel = "${notes.size} 篇笔记",
+                    accent = cs.primary,
                     icon = Icons.Outlined.GridView, footnote = "所有主题与未归类的笔记",
+                    preview = previewOf(null, everything = true), previewEmpty = "还没有笔记",
                 ),
             )
             topics.forEachIndexed { i, t ->
+                val count = counts[t.id] ?: 0
                 add(
                     DeckCard(
-                        key = t.id, title = t.name, count = counts[t.id] ?: 0,
+                        key = t.id, title = t.name, count = count, countLabel = "$count 篇笔记",
                         accent = AppTheme.extra.group(i), icon = Icons.AutoMirrored.Outlined.Label,
                         footnote = "主题",
+                        preview = previewOf(t.id), previewEmpty = "这个主题下还没有笔记",
                     ),
                 )
             }
             if (topics.isNotEmpty() && ((counts[null] ?: 0) > 0 || filter == NotesViewModel.UNSORTED)) {
+                val count = counts[null] ?: 0
                 add(
                     DeckCard(
-                        key = NotesViewModel.UNSORTED, title = "未归类", count = counts[null] ?: 0,
+                        key = NotesViewModel.UNSORTED, title = "未归类", count = count, countLabel = "$count 篇笔记",
                         accent = cs.onSurfaceVariant, icon = Icons.Outlined.Drafts, footnote = "还没有主题的笔记",
+                        preview = previewOf(null), previewEmpty = "没有未归类的笔记",
                     ),
                 )
             }
@@ -504,7 +517,9 @@ fun NotesScreen(
             selected = filter,
             onPick = { vm.filter.value = it; deckOpen = false },
             onDismiss = { deckOpen = false },
-            hint = "左右滑动挑一个主题，点一下筛选",
+            hint = "左右滑动浏览，点中间那张筛选",
+            gridHint = "点一张卡直接筛选",
+            openVerb = "筛选",
             createLabel = "新建主题",
             onCreate = { name ->
                 deckOpen = false
