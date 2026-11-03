@@ -301,7 +301,7 @@ class RoundThreeShotTest {
                 c.db.noteDao().insert(com.assetboard.data.Note("n$i", null, "$t\n正文", bodyRev = 1, position = i.toLong(), createdAt = at, updatedAt = at))
             }
         }
-        set(c) { NotesScreen({}, {}, {}, {}, {}) }
+        set(c) { NotesScreen({}, {}, {}, {}) }
         waitFor("周计划")
         hold("周计划")
         compose.onNodeWithText("旅行清单").performClick()

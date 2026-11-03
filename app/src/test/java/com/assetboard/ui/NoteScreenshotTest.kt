@@ -282,17 +282,6 @@ class NoteScreenshotTest {
         capture("55-note-search")
     }
 
-    @Test fun noteTopics() {
-        show(demo())
-        openTab()
-        // The topics as a deck, from the one pill above the list.
-        compose.onNodeWithText("主题").performClick()
-        waitFor("管理主题")
-        compose.onNodeWithText("管理主题").performClick()
-        waitFor("笔记主题")
-        capture("56b-note-topics")
-    }
-
     @Test fun swipeActions() {
         show(demo())
         openTab()

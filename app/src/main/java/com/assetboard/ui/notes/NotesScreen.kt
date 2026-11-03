@@ -205,7 +205,15 @@ class NotesViewModel(private val container: AppContainer) : ActionViewModel(cont
     fun togglePin(n: Note) = action { notes.setPinned(n.id, !n.pinned) }
     fun setTopic(n: Note, topicId: String?) = action { notes.setTopic(n.id, topicId) }
     fun createTopic(name: String, onCreated: (String) -> Unit = {}) = action { onCreated(notes.createTopic(name)) }
+    fun renameTopic(id: String, name: String) = action { notes.renameTopic(id, name) }
     fun reorder(ids: List<String>) = action { notes.reorder(ids) }
+    fun reorderTopics(ids: List<String>) = action { notes.reorderTopics(ids) }
+
+    /** The topic goes and its notes fall to 未归类; one undo brings the topic back. */
+    fun deleteTopic(id: String) = action {
+        val d = notes.deleteTopic(id) ?: return@action
+        _events.tryEmit(UndoEvent("主题「${d.topic.name}」已删除，笔记移到未归类") { notes.undoDeleteTopic(d) })
+    }
 
     fun delete(n: Note) = action {
         val batch = notes.delete(n.id)
@@ -241,7 +249,6 @@ fun NotesScreen(
     onOpen: (String) -> Unit,
     onNew: (topicId: String?) -> Unit,
     onSearch: () -> Unit,
-    onTopics: () -> Unit,
     onSettings: () -> Unit,
 ) {
     val container = LocalContainer.current
@@ -258,6 +265,8 @@ fun NotesScreen(
     var draftsOpen by rememberSaveable { mutableStateOf(false) }
     var deckOpen by rememberSaveable { mutableStateOf(false) }
     var filingId by rememberSaveable { mutableStateOf<String?>(null) }
+    // The topic the deck's list mode is renaming, through the swiped row's button.
+    var renamingTopic by remember { mutableStateOf<String?>(null) }
     ErrorDialog(error) { vm.error.value = null }
     val cs = MaterialTheme.colorScheme
     val snackbar = remember { SnackbarHostState() }
@@ -487,6 +496,7 @@ fun NotesScreen(
                     accent = cs.primary,
                     icon = Icons.Outlined.GridView, footnote = "所有主题与未归类的笔记",
                     preview = previewOf(null, everything = true), previewEmpty = "还没有笔记",
+                    manageable = false,
                 ),
             )
             topics.forEachIndexed { i, t ->
@@ -495,7 +505,6 @@ fun NotesScreen(
                     DeckCard(
                         key = t.id, title = t.name, count = count, countLabel = "$count 篇笔记",
                         accent = AppTheme.extra.group(i), icon = Icons.AutoMirrored.Outlined.Label,
-                        footnote = "主题",
                         preview = previewOf(t.id), previewEmpty = "这个主题下还没有笔记",
                     ),
                 )
@@ -507,6 +516,7 @@ fun NotesScreen(
                         key = NotesViewModel.UNSORTED, title = "未归类", count = count, countLabel = "$count 篇笔记",
                         accent = cs.onSurfaceVariant, icon = Icons.Outlined.Drafts, footnote = "还没有主题的笔记",
                         preview = previewOf(null), previewEmpty = "没有未归类的笔记",
+                        manageable = false,
                     ),
                 )
             }
@@ -518,19 +528,30 @@ fun NotesScreen(
             onPick = { vm.filter.value = it; deckOpen = false },
             onDismiss = { deckOpen = false },
             hint = "左右滑动浏览，点中间那张筛选",
-            gridHint = "点一张卡直接筛选",
+            listHint = "点一行筛选 · 右滑重命名 · 左滑删除 · 长按拖动排序",
             openVerb = "筛选",
             createLabel = "新建主题",
             onCreate = { name ->
                 deckOpen = false
                 vm.createTopic(name) { vm.filter.value = it }
             },
-            manageLabel = "管理主题",
-            onManage = { deckOpen = false; onTopics() },
+            onRename = { renamingTopic = it },
+            onDelete = { vm.deleteTopic(it) },
+            onReorder = { vm.reorderTopics(it) },
+            undoEvents = vm.events,
+            onUndo = vm::undo,
             emptyText = "还没有主题",
             rememberedMode = container.settings.deckMode(SettingsStore.DECK_TOPICS),
             onModeChange = { container.settings.setDeckMode(SettingsStore.DECK_TOPICS, it) },
         )
+        val renaming = renamingTopic?.let { id -> topics.firstOrNull { it.id == id } }
+        if (renaming != null) {
+            TopicNameDialog(
+                "重命名主题", renaming.name,
+                onDismiss = { renamingTopic = null },
+                onSave = { name -> renamingTopic = null; vm.renameTopic(renaming.id, name) },
+            )
+        }
     }
     filingId?.let { id ->
         val n = notes.firstOrNull { it.id == id }

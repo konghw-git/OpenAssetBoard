@@ -122,15 +122,15 @@ class NoteShellTest {
             c.notes.create("一本书的摘要", null, topicId = topic)
         }
         show(c)
-        // The lists' deck is switched to the page of cards and closed.
+        // The lists' deck is switched to the list of rows and closed.
         compose.onNodeWithText("待办").performClick()
         waitFor("清单")
         compose.onNodeWithText("清单").performClick()
         waitFor("左右滑动浏览，点中间那张打开")
-        compose.onNodeWithContentDescription("网格展示").performClick()
-        waitFor("点一张卡直接打开")
+        compose.onNodeWithContentDescription("列表展示").performClick()
+        waitFor("点一行打开 · 右滑编辑 · 左滑删除 · 长按拖动排序")
         compose.onNodeWithContentDescription("关闭").performClick()
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一张卡直接打开")).fetchSemanticsNodes().isEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一行打开 · 右滑编辑 · 左滑删除 · 长按拖动排序")).fetchSemanticsNodes().isEmpty() }
         // The topics' deck knows nothing of that choice and opens on its carousel.
         compose.onNodeWithText("笔记").performClick()
         waitFor("一本书的摘要")
@@ -141,7 +141,7 @@ class NoteShellTest {
         compose.onNodeWithText("待办").performClick()
         waitFor("清单")
         compose.onNodeWithText("清单").performClick()
-        waitFor("点一张卡直接打开")
+        waitFor("点一行打开 · 右滑编辑 · 左滑删除 · 长按拖动排序")
     }
 
     @Test fun unsavedNoteAsksBeforeGoingBack() {

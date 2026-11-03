@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -75,7 +74,6 @@ fun TopicSheet(
     onPick: (String) -> Unit,
     onCreate: (String) -> Unit,
     onDismiss: () -> Unit,
-    onManage: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     var query by rememberSaveable { mutableStateOf("") }
@@ -88,13 +86,6 @@ fun TopicSheet(
                 Column(Modifier.weight(1f)) {
                     Text(title, style = MaterialTheme.typography.titleLarge)
                     Text(if (topics.isEmpty()) "还没有主题" else "${topics.size} 个主题", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                }
-                if (onManage != null && topics.isNotEmpty()) {
-                    TextButton(onClick = onManage) {
-                        Icon(Icons.Outlined.Tune, null, modifier = Modifier.size(17.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("管理")
-                    }
                 }
             }
             if (topics.size > SEARCH_FROM) {

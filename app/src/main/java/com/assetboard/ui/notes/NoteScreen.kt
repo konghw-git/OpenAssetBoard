@@ -73,6 +73,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -331,14 +332,19 @@ fun TopicNameDialog(title: String, initial: String, onDismiss: () -> Unit, onSav
     var name by rememberSaveable { mutableStateOf(initial) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // A full-screen window behind a fixed panel: in the default wrap-content dialog window a text
+    // field measures in a loop forever, which also keeps a test from ever seeing the dialog idle.
+    // A tap outside the panel still dismisses: the dialog hit-tests its content, not its window.
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.width(328.dp),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         title = { Text(title) },
         text = {
             OutlinedTextField(
                 name, { name = it.take(com.assetboard.data.NoteRepository.TOPIC_NAME_MAX) },
                 label = { Text("主题名") }, placeholder = { Text("比如 投资、健身、读书") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                modifier = Modifier.width(280.dp).focusRequester(focus),
             )
         },
         confirmButton = { TextButton(onClick = { onSave(name) }, enabled = name.isNotBlank()) { Text("保存") } },

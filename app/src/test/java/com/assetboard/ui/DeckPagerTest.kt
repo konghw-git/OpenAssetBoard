@@ -133,16 +133,16 @@ class DeckPagerTest {
         front("丙")
     }
 
-    @Test fun aLongDeckOpensAsAGridAndCanReturnToTheCarousel() {
+    @Test fun aLongDeckOpensAsAListAndCanReturnToTheCarousel() {
         show((0 until 7).map { card("k$it", "卡$it") })
-        compose.onNodeWithText("点一张卡直接打开").assertExists()
+        compose.onNodeWithText("点一行打开 · 右滑重命名 · 左滑删除 · 长按拖动排序").assertExists()
         compose.onNodeWithContentDescription("环绕展示").performClick()
         compose.onNodeWithText("左右滑动浏览，点中间那张打开").assertExists()
     }
 
     @Test fun aRememberedListModeOpensEvenAShortDeckAsAList() {
         show(listOf(card("a", "甲"), card("b", "乙"), card("c", "丙")), rememberedMode = DeckMode.LIST)
-        compose.onNodeWithText("点一张卡直接打开").assertExists()
+        compose.onNodeWithText("点一行打开 · 右滑重命名 · 左滑删除 · 长按拖动排序").assertExists()
     }
 
     @Test fun aRememberedCarouselModeKeepsALongDeckOnTheCarousel() {
@@ -153,7 +153,7 @@ class DeckPagerTest {
     @Test fun switchingTheModeAsksForItToBeRemembered() {
         val remembered = mutableListOf<DeckMode>()
         show(listOf(card("a", "甲"), card("b", "乙"), card("c", "丙")), onModeChange = { remembered += it })
-        compose.onNodeWithContentDescription("网格展示").performClick()
+        compose.onNodeWithContentDescription("列表展示").performClick()
         compose.onNodeWithContentDescription("环绕展示").performClick()
         assertEquals(listOf(DeckMode.LIST, DeckMode.CAROUSEL), remembered)
     }

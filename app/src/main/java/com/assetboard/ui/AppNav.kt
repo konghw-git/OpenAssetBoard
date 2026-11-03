@@ -120,7 +120,6 @@ import com.assetboard.ui.health.FoodScreen
 import com.assetboard.ui.health.HealthScreen
 import com.assetboard.ui.notes.NoteScreen
 import com.assetboard.ui.notes.NoteSearchScreen
-import com.assetboard.ui.notes.NoteTopicsScreen
 import com.assetboard.ui.notes.NotesScreen
 import com.assetboard.ui.overview.OverviewScreen
 import com.assetboard.ui.record.FlowEditScreen
@@ -192,7 +191,6 @@ object Routes {
     const val BILLS = "bills"
     const val DIARY_SEARCH = "diary_search"
     const val NOTE_SEARCH = "note_search"
-    const val NOTE_TOPICS = "note_topics"
     /** A note's page; without [id] a new note, placed in [topicId] on its first write. */
     fun note(id: String? = null, topicId: String? = null) = "note?id=${id.orEmpty()}&topic=${topicId.orEmpty()}"
     fun health(record: Boolean = false) = "health?record=${if (record) "1" else ""}"
@@ -418,7 +416,6 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit, backdrop: Backd
                                 onOpen = openNote,
                                 onNew = { topicId -> nav.navigate(Routes.note(topicId = topicId)) },
                                 onSearch = { nav.navigate(Routes.NOTE_SEARCH) },
-                                onTopics = { nav.navigate(Routes.NOTE_TOPICS) },
                                 onSettings = settings,
                             )
                         }
@@ -442,7 +439,6 @@ private fun Shell(open: OpenRequest?, onOpenHandled: () -> Unit, backdrop: Backd
                     // The results stay underneath: back from a note returns to them.
                     NoteSearchScreen(onBack = back, onOpen = openNote)
                 }
-                composable(Routes.NOTE_TOPICS) { NoteTopicsScreen(onBack = back) }
                 composable(Routes.TRASH) { TrashScreen(onBack = back) }
                 composable(Routes.PRE_RESTORE) { PreRestoreScreen(onBack = back) }
                 composable(Routes.REMINDER_GUIDE) { ReminderGuideScreen(onBack = back) }

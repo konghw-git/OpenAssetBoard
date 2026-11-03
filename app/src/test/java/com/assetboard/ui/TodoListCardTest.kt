@@ -3,6 +3,7 @@ package com.assetboard.ui
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.core.app.ApplicationProvider
@@ -170,8 +172,8 @@ class TodoListCardTest {
         compose.onNodeWithText("改地址").assertIsDisplayed()
     }
 
-    /** Past a handful, the deck opens as a page of cards and one tap picks the list. */
-    @Test fun manyListsOpenAsAPageAndPickInOneTap() {
+    /** Past a handful, the deck opens as a list of rows and one tap picks the list. */
+    @Test fun manyListsOpenAsAListAndPickInOneTap() {
         val c = TestContainers.open(ApplicationProvider.getApplicationContext())
         runBlocking(c.gate.bound()) { (1..8).forEach { c.todos.createList("项目$it") } }
         compose.setContent {
@@ -181,7 +183,7 @@ class TodoListCardTest {
         }
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("清单")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("清单").performClick()
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一张卡直接打开")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一行打开 · 右滑编辑 · 左滑删除 · 长按拖动排序")).fetchSemanticsNodes().isNotEmpty() }
         compose.mainClock.advanceTimeBy(800)
         compose.onNodeWithContentDescription("环绕展示").assertExists()
         compose.onNodeWithText("项目8").performClick()
@@ -189,12 +191,12 @@ class TodoListCardTest {
         compose.onNodeWithContentDescription("清单菜单").assertExists()
     }
 
-    /** A short deck can be laid out as a page too; the switch is in the header. */
-    @Test fun theGridSwitchPicksInOneTap() {
+    /** A short deck can be laid out as a list too; the switch is in the header. */
+    @Test fun theListSwitchPicksInOneTap() {
         show()
         openDeck()
-        compose.onNodeWithContentDescription("网格展示").performClick()
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一张卡直接打开")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("列表展示").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一行打开 · 右滑编辑 · 左滑删除 · 长按拖动排序")).fetchSemanticsNodes().isNotEmpty() }
         compose.mainClock.advanceTimeBy(600)
         compose.onNodeWithText("旅行").performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasContentDescription("清单菜单")).fetchSemanticsNodes().isNotEmpty() }
@@ -215,12 +217,97 @@ class TodoListCardTest {
     @Test fun theDeckOpensInLastChosenModeEvenWhenTheListIsShort() {
         show()
         openDeck()
-        compose.onNodeWithContentDescription("网格展示").performClick()
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一张卡直接打开")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("列表展示").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一行打开 · 右滑编辑 · 左滑删除 · 长按拖动排序")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("关闭").performClick()
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一张卡直接打开")).fetchSemanticsNodes().isEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一行打开 · 右滑编辑 · 左滑删除 · 长按拖动排序")).fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithText("清单").performClick()
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一张卡直接打开")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一行打开 · 右滑编辑 · 左滑删除 · 长按拖动排序")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("左右滑动浏览，点中间那张打开").assertDoesNotExist()
+    }
+
+    private fun openDeckAsList() {
+        openDeck()
+        compose.onNodeWithContentDescription("列表展示").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("点一行打开 · 右滑编辑 · 左滑删除 · 长按拖动排序")).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(600)
+    }
+
+    /** Short of the full-swipe threshold, so the action button shows instead of running. */
+    private fun revealRight(text: String) {
+        compose.onNodeWithText(text).performTouchInput {
+            down(center)
+            repeat(8) { moveBy(Offset(10f, 0f)) }
+            repeat(4) { moveBy(Offset(20f, 0f)) }
+            up()
+        }
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+    }
+
+    /** A deliberate drag past the threshold, which turns the row to dust. */
+    private fun swipeAway(text: String) {
+        compose.onNodeWithText(text).performTouchInput {
+            down(center)
+            repeat(8) { moveBy(Offset(-10f, 0f)) }
+            moveBy(Offset(-400f, 0f)); moveBy(Offset(-400f, 0f)); up()
+        }
+    }
+
+    /** Held, then moved by [dx], [dy] in a few steps before letting go. */
+    private fun drag(text: String, dx: Float, dy: Float) {
+        compose.mainClock.autoAdvance = false
+        val node = compose.onNodeWithText(text)
+        node.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(800)
+        repeat(6) {
+            node.performTouchInput { moveBy(Offset(dx / 6, dy / 6)) }
+            compose.mainClock.advanceTimeBy(50)
+        }
+        compose.mainClock.advanceTimeBy(100)
+        node.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(100)
+        compose.mainClock.autoAdvance = true
+    }
+
+    /** The row's right swipe opens the list's edit dialog, the one the header menu opens. */
+    @Test fun editingFromADeckRowOpensTheListDialog() {
+        val c = show()
+        openDeckAsList()
+        revealRight("搬家")
+        compose.onNodeWithText("编辑").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("编辑清单")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasSetTextAction() and hasText("搬家")).performTextReplacement("搬新家")
+        compose.onNodeWithText("保存").performClick()
+        compose.waitUntil(5_000) { lists(c).any { it.name == "搬新家" } }
+    }
+
+    /** A swiped-away list goes to the trash as one undo, from the deck's own undo bar. */
+    @Test fun swipeDeletingAListFromTheDeckCanUndo() {
+        val c = show()
+        openDeckAsList()
+        swipeAway("搬家")
+        compose.waitUntil(5_000) { lists(c).none { it.name == "搬家" } }
+        // Pushed frame by frame: waiting idle would run the undo bar's five seconds out. The
+        // screen's bar collects the same event behind the deck; either undo runs it.
+        compose.mainClock.autoAdvance = false
+        repeat(90) {
+            if (compose.onAllNodes(hasText("撤销")).fetchSemanticsNodes().isEmpty()) {
+                Thread.sleep(20)
+                compose.mainClock.advanceTimeByFrame()
+            }
+        }
+        compose.onAllNodes(hasText("撤销"))[0].performClick()
+        compose.mainClock.autoAdvance = true
+        compose.waitUntil(5_000) { lists(c).any { it.name == "搬家" } }
+    }
+
+    /** A long press drags a row into order, and the order is what the repository saves. */
+    @Test fun draggingDeckRowsSavesTheListOrder() {
+        val c = show()
+        openDeckAsList()
+        drag("搬家", dx = 0f, dy = 260f)
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(listOf("论文", "搬家", "旅行"), shown(c))
     }
 }

@@ -144,6 +144,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -275,6 +276,8 @@ fun TodoHomeScreen(
     var moveFor by remember { mutableStateOf<List<String>?>(null) }
     var mergeFor by remember { mutableStateOf<List<String>?>(null) }
     var listDialog by remember { mutableStateOf<String?>(null) }
+    // The list the deck's list mode is editing, through the swiped row's button.
+    var deckEditId by remember { mutableStateOf<String?>(null) }
     var sectionDialog by remember { mutableStateOf<Pair<String, String>?>(null) } // (section id or "", name)
     val listState = rememberLazyListState()
     // The unfolded layout's side column, where the dial and the field are then.
@@ -728,7 +731,13 @@ fun TodoHomeScreen(
             onPick = { selected = it; listsOpen = false },
             onDismiss = { listsOpen = false },
             hint = "左右滑动浏览，点中间那张打开",
-            gridHint = "点一张卡直接打开",
+            listHint = "点一行打开 · 右滑编辑 · 左滑删除 · 长按拖动排序",
+            renameLabel = "编辑",
+            onRename = { deckEditId = ViewKey.listId(it) },
+            onDelete = { key -> ViewKey.listId(key)?.let { id -> vm.deleteList(id) {} } },
+            onReorder = { keys -> vm.reorderLists(keys.mapNotNull(ViewKey::listId)) },
+            undoEvents = vm.events,
+            onUndo = vm::undo,
             createLabel = "新建清单",
             onCreate = { name ->
                 listsOpen = false
@@ -738,6 +747,15 @@ fun TodoHomeScreen(
             rememberedMode = settings.deckMode(SettingsStore.DECK_LISTS),
             onModeChange = { settings.setDeckMode(SettingsStore.DECK_LISTS, it) },
         )
+        deckEditId?.let { id ->
+            val edit = d?.listById?.get(id)
+            if (edit != null) {
+                ListEditDialog(edit, onDismiss = { deckEditId = null }) { name, notes, deadline ->
+                    deckEditId = null
+                    vm.updateList(edit.id, name, notes, deadline)
+                }
+            }
+        }
     }
     if (pickingCalendar) {
         CalendarPickerDialog(
@@ -1248,10 +1266,15 @@ private fun Banner(text: String, action: String, warning: Boolean = true, onClic
 @Composable
 fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var name by rememberSaveable { mutableStateOf(initial) }
+    // A full-screen window behind a fixed panel: in the default wrap-content dialog window a text
+    // field measures in a loop forever, which also keeps a test from ever seeing the dialog idle.
+    // A tap outside the panel still dismisses: the dialog hit-tests its content, not its window.
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.width(328.dp),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         title = { Text(title) },
-        text = { OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+        text = { OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.width(280.dp)) },
         confirmButton = { TextButton(onClick = { onSave(name) }, enabled = name.isNotBlank()) { Text("保存") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
@@ -1358,13 +1381,18 @@ private fun ListEditDialog(list: TodoList, onDismiss: () -> Unit, onSave: (Strin
     var notes by rememberSaveable { mutableStateOf(list.notes) }
     var deadline by rememberSaveable { mutableStateOf(list.deadline) }
     var picking by remember { mutableStateOf(false) }
+    // A full-screen window behind a fixed panel: in the default wrap-content dialog window a text
+    // field measures in a loop forever, which also keeps a test from ever seeing the dialog idle.
+    // A tap outside the panel still dismisses: the dialog hit-tests its content, not its window.
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.width(328.dp),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         title = { Text("编辑清单") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(notes, { notes = it }, label = { Text("备注") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(name, { name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.width(280.dp))
+                OutlinedTextField(notes, { notes = it }, label = { Text("备注") }, minLines = 2, modifier = Modifier.width(280.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(deadline?.let { "截止 $it" } ?: "没有截止日", modifier = Modifier.weight(1f))
                     TextButton(onClick = { picking = true }) { Text("选择") }

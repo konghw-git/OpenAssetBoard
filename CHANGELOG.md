@@ -9,8 +9,20 @@ All notable changes to this project are documented here. The format follows
 ### Added
 
 - **The decks remember how they were last opened.** 清单 and 主题 each keep their own choice of
-  the carousel or the page of cards, so the deck opens the way it was left instead of falling
+  the carousel or the one-tap list, so the deck opens the way it was left instead of falling
   back to the old cards-count rule.
+- **The one-tap list manages in place.** A swipe right renames (edits, for 清单), a swipe left
+  deletes — the row turns to dust and an undo waits at the foot of the deck — and a long press
+  drags the order home. 全部 and 未归类 only filter.
+
+### Changed
+
+- **The one-tap mode is a list of entry rows, one per line**, replacing the grid of small cards.
+
+### Removed
+
+- **The standalone 管理主题 page.** Renaming, deleting and ordering topics now live in the 主题
+  deck's one-tap list.
 
 ## [1.3.1] - 2026-11-03
 

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,9 +27,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
@@ -42,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.ViewCarousel
 import androidx.compose.material3.ButtonDefaults
@@ -51,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -100,6 +101,7 @@ import androidx.compose.ui.zIndex
 import com.assetboard.data.DeckMode
 import com.assetboard.ui.theme.AppTheme
 import com.assetboard.ui.theme.Gilded
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
@@ -118,7 +120,9 @@ private fun Int.floorMod(other: Int): Int {
  * One card in a [CardDeckContent]: what it picks, what it says and the colour its art wears.
  * [countLabel] says what the count badge counts; [preview] is a few lines from inside the
  * card, so the deck can say what a card holds without being opened; [previewEmpty] is said
- * instead when there is nothing to list.
+ * instead when there is nothing to list. [manageable] marks a card that stands for something
+ * that can be renamed, deleted and dragged into order; the deck's fixed picks (全部, 未归类)
+ * are not, and the list mode leaves them out of its gestures.
  */
 @Immutable
 data class DeckCard(
@@ -131,13 +135,15 @@ data class DeckCard(
     val countLabel: String? = null,
     val preview: List<String> = emptyList(),
     val previewEmpty: String? = null,
+    val manageable: Boolean = true,
 )
 
 /**
  * A deck of glass cards standing in for a long row of lists: a short carousel shows the card in
  * front and its neighbours leaning away in 3D like a turned drum — swiping past either end wraps
- * to the other — and a grid lays every card out at once when there are too many to walk through.
- * Tapping the card in front picks it. Used by the todo tab for its lists and by the notes tab for
+ * to the other — and the one-tap mode lays every card out as a row of entry cards that open on a
+ * tap and manage in place: a swipe right renames, a swipe left deletes (to an undo), and a long
+ * press drags the row into order. Used by the todo tab for its lists and by the notes tab for
  * its topics.
  *
  * The look is the app's own: the page's ambient colour fields seen through translucent glass,
@@ -152,12 +158,16 @@ fun CardDeckDialog(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
     hint: String = "左右滑动浏览，点中间那张打开",
-    gridHint: String = "点一张卡直接打开",
+    listHint: String = "点一行打开 · 右滑重命名 · 左滑删除 · 长按拖动排序",
     openVerb: String = "打开",
     createLabel: String? = null,
     onCreate: ((String) -> Unit)? = null,
-    manageLabel: String? = null,
-    onManage: (() -> Unit)? = null,
+    renameLabel: String = "重命名",
+    onRename: ((String) -> Unit)? = null,
+    onDelete: ((String) -> Unit)? = null,
+    onReorder: ((List<String>) -> Unit)? = null,
+    undoEvents: Flow<UndoEvent>? = null,
+    onUndo: ((UndoEvent) -> Unit)? = null,
     emptyText: String = "还没有内容",
     rememberedMode: DeckMode? = null,
     onModeChange: ((DeckMode) -> Unit)? = null,
@@ -168,8 +178,9 @@ fun CardDeckDialog(
     ) {
         CardDeckContent(
             title = title, cards = cards, selected = selected, onPick = onPick, onDismiss = onDismiss,
-            hint = hint, gridHint = gridHint, openVerb = openVerb, createLabel = createLabel, onCreate = onCreate,
-            manageLabel = manageLabel, onManage = onManage, emptyText = emptyText,
+            hint = hint, listHint = listHint, openVerb = openVerb, createLabel = createLabel, onCreate = onCreate,
+            renameLabel = renameLabel, onRename = onRename, onDelete = onDelete, onReorder = onReorder,
+            undoEvents = undoEvents, onUndo = onUndo, emptyText = emptyText,
             rememberedMode = rememberedMode, onModeChange = onModeChange,
         )
     }
@@ -184,12 +195,16 @@ fun CardDeckContent(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     hint: String = "左右滑动浏览，点中间那张打开",
-    gridHint: String = "点一张卡直接打开",
+    listHint: String = "点一行打开 · 右滑重命名 · 左滑删除 · 长按拖动排序",
     openVerb: String = "打开",
     createLabel: String? = null,
     onCreate: ((String) -> Unit)? = null,
-    manageLabel: String? = null,
-    onManage: (() -> Unit)? = null,
+    renameLabel: String = "重命名",
+    onRename: ((String) -> Unit)? = null,
+    onDelete: ((String) -> Unit)? = null,
+    onReorder: ((List<String>) -> Unit)? = null,
+    undoEvents: Flow<UndoEvent>? = null,
+    onUndo: ((UndoEvent) -> Unit)? = null,
     emptyText: String = "还没有内容",
     rememberedMode: DeckMode? = null,
     onModeChange: ((DeckMode) -> Unit)? = null,
@@ -208,6 +223,10 @@ fun CardDeckContent(
     val scope = rememberCoroutineScope()
     val createFocus = remember { FocusRequester() }
     val ambient = rememberAmbient()
+    // The deck is its own dialog window: the app's dust and undo bar live behind it, so the rows'
+    // dissolves and undo messages are hosted in here, over the deck's own glass.
+    val deckDust = remember { DustState() }
+    val undoHost = remember { SnackbarHostState() }
     // One burst as the deck is laid out; it is a reveal, not a loop, so the page stays quiet.
     val burst = remember { Animatable(0f) }
     val reveal = remember { Animatable(0f) }
@@ -224,7 +243,7 @@ fun CardDeckContent(
             onCreate?.invoke(n)
         }
     }
-    CompositionLocalProvider(LocalAmbient provides ambient) {
+    CompositionLocalProvider(LocalAmbient provides ambient, LocalDust provides deckDust) {
         Box(
             modifier
                 .fillMaxSize()
@@ -285,7 +304,7 @@ fun CardDeckContent(
                         Text(
                             when {
                                 cards.isEmpty() -> emptyText
-                                listMode -> gridHint
+                                listMode -> listHint
                                 else -> hint
                             },
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp),
@@ -298,7 +317,7 @@ fun CardDeckContent(
                         }) {
                             Icon(
                                 if (listMode) Icons.Outlined.ViewCarousel else Icons.Outlined.GridView,
-                                if (listMode) "环绕展示" else "网格展示", tint = cs.onSurfaceVariant,
+                                if (listMode) "环绕展示" else "列表展示", tint = cs.onSurfaceVariant,
                             )
                         }
                     }
@@ -309,26 +328,18 @@ fun CardDeckContent(
                         Text(emptyText, style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant)
                     }
                 } else if (listMode) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 104.dp),
-                        modifier = Modifier.weight(1f).fillMaxWidth()
-                            .graphicsLayer {
-                                alpha = reveal.value
-                                translationY = (1f - reveal.value) * 24.dp.toPx()
-                            },
-                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        items(cards, key = { it.key }) { card ->
-                            GridDeckCard(
-                                card = card,
-                                selected = card.key == selected,
-                                onClick = { onPick(card.key) },
-                                modifier = Modifier.fillMaxWidth().testTag("deck:${card.key}"),
-                            )
-                        }
-                    }
+                    DeckListPane(
+                        cards = cards,
+                        selected = selected,
+                        onPick = onPick,
+                        renameLabel = renameLabel,
+                        onRename = onRename,
+                        onDelete = onDelete,
+                        onReorder = onReorder,
+                        reveal = reveal,
+                        g = g,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    )
                 } else {
                     CarouselPane(
                         cards = cards,
@@ -376,13 +387,15 @@ fun CardDeckContent(
                             ) { Text(createLabel) }
                         }
                     }
-                    if (onManage != null && manageLabel != null && !naming) {
-                        TextButton(
-                            onClick = onManage, modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.textButtonColors(contentColor = cs.onSurface),
-                        ) { Text(manageLabel) }
-                    }
                 }
+            }
+            DustHost(deckDust, Modifier.matchParentSize())
+            if (undoEvents != null) {
+                UndoMessages(undoEvents, undoHost, onUndo ?: {})
+                GlassSnackbarHost(
+                    undoHost,
+                    Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 78.dp),
+                )
             }
         }
     }
@@ -677,49 +690,127 @@ private fun DeckSpotlight(card: DeckCard, selected: Boolean, openVerb: String, g
 }
 
 /**
- * A card in the grid: the same glass, cut smaller, with the name, its count and one quiet line
- * under it. The card in use wears a check instead of the count.
+ * The one-tap mode: every card as its own entry row in a column, one per line. Tapping a row
+ * picks it; a swipe right renames (or edits) it, a swipe left deletes it the way a todo entry
+ * does — the row turns to dust, and an undo waits at the foot of the deck; a long press on a
+ * [DeckCard.manageable] row drags it into order. The fixed picks (全部, 未归类) only open.
  */
 @Composable
-private fun GridDeckCard(card: DeckCard, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun DeckListPane(
+    cards: List<DeckCard>,
+    selected: String?,
+    onPick: (String) -> Unit,
+    renameLabel: String,
+    onRename: ((String) -> Unit)?,
+    onDelete: ((String) -> Unit)?,
+    onReorder: ((List<String>) -> Unit)?,
+    reveal: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>,
+    g: Gilded,
+    modifier: Modifier = Modifier,
+) {
+    val cs = MaterialTheme.colorScheme
+    val listState = rememberLazyListState()
+    val swipe = rememberSwipeGroup()
+    val shape = RoundedCornerShape(18.dp)
+    // The order on screen; a drag rearranges it here and [onReorder] saves it on release.
+    var order by remember(cards) { mutableStateOf(cards) }
+    val reorder = rememberReorderState(
+        listState,
+        onMove = { from, to ->
+            val a = order.indexOfFirst { it.key == from }
+            val b = order.indexOfFirst { it.key == to }
+            if (a < 0 || b < 0 || !order[a].manageable || !order[b].manageable) {
+                false
+            } else {
+                order = order.toMutableList().apply { add(b, removeAt(a)) }
+                true
+            }
+        },
+        onDrop = { _ -> onReorder?.invoke(order.filter { it.manageable }.map { it.key }) },
+    )
+    LazyColumn(
+        modifier.graphicsLayer {
+            alpha = reveal.value
+            translationY = (1f - reveal.value) * 24.dp.toPx()
+        },
+        state = listState,
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(order, key = { it.key }) { card ->
+            val key = card.key
+            val dragged = reorder.dragging == key
+            Box(
+                Modifier
+                    .zIndex(if (reorder.isLifted(key)) 1f else 0f)
+                    .graphicsLayer { translationY = reorder.translationOf(key) }
+                    .then(if (dragged) Modifier else Modifier.animateItem()),
+            ) {
+                SwipeActionsBox(
+                    key = key,
+                    group = swipe,
+                    shape = shape,
+                    actions = if (card.manageable && onRename != null) {
+                        listOf(SwipeAction(renameLabel, Icons.Outlined.Edit, cs.tertiary) { onRename(key) })
+                    } else {
+                        emptyList()
+                    },
+                    onDelete = if (card.manageable && onDelete != null) ({ onDelete(key) }) else null,
+                    enabled = reorder.dragging == null,
+                ) {
+                    DeckListRow(
+                        card = card,
+                        selected = key == selected,
+                        onClick = { if (!reorder.ownsClick(key)) onPick(key) },
+                        g = g,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("deck:$key")
+                            .reorderable(reorder, key, enabled = card.manageable && onReorder != null),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One entry row of the one-tap mode: its colour dot, name and what the card counts. */
+@Composable
+private fun DeckListRow(card: DeckCard, selected: Boolean, onClick: () -> Unit, g: Gilded, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
     val source = remember { MutableInteractionSource() }
     val outer = RoundedCornerShape(18.dp)
-    Box(
+    val subtitle = listOfNotNull(card.countLabel, card.footnote).joinToString(" · ").ifEmpty { null }
+    Row(
         modifier
-            .aspectRatio(0.76f)
-            .pressScale(source, 0.97f)
+            .pressScale(source, 0.98f)
             .glass(
                 outer, glass,
                 tint = if (selected) cs.primary.copy(alpha = 0.10f) else Color.Unspecified,
                 elevation = if (selected) 14.dp else 8.dp,
             )
             .clip(outer)
-            .clickable(interactionSource = source, indication = null, onClick = onClick),
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            Modifier.fillMaxSize().padding(7.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            ArtWindow(
-                card,
-                crest = 52.dp, medallion = 30.dp, icon = 15.dp, countSize = 21.dp,
-                checked = selected,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
-            Spacer(Modifier.height(5.dp))
+        Box(Modifier.size(14.dp).background(card.accent, CircleShape))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
             Text(
-                card.title, style = MaterialTheme.typography.titleSmall, color = cs.onSurface,
-                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
+                card.title, style = MaterialTheme.typography.bodyLarge, color = cs.onSurface,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            if (card.footnote != null) {
+            if (subtitle != null) {
                 Text(
-                    card.footnote, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
-                    textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(top = 3.dp, start = 2.dp, end = 2.dp),
+                    subtitle, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
                 )
             }
+        }
+        if (selected) {
+            Spacer(Modifier.width(10.dp))
+            Icon(Icons.Filled.Check, "已选", tint = cs.primary, modifier = Modifier.size(18.dp))
         }
     }
 }
