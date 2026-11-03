@@ -4,29 +4,38 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -35,6 +44,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.ViewCarousel
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,6 +58,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,16 +85,22 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import com.assetboard.ui.theme.AppTheme
 import com.assetboard.ui.theme.Gilded
 import kotlinx.coroutines.launch
@@ -92,7 +110,12 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
-/** One card in a [CardDeckContent]: what it picks, what it says and the colour its art wears. */
+/**
+ * One card in a [CardDeckContent]: what it picks, what it says and the colour its art wears.
+ * [countLabel] says what the gemstone's number counts; [preview] is a few lines from inside the
+ * card, so the deck can say what a card holds without being opened; [previewEmpty] is said
+ * instead when there is nothing to list.
+ */
 @Immutable
 data class DeckCard(
     val key: String,
@@ -101,12 +124,16 @@ data class DeckCard(
     val accent: Color,
     val icon: ImageVector,
     val footnote: String? = null,
+    val countLabel: String? = null,
+    val preview: List<String> = emptyList(),
+    val previewEmpty: String? = null,
 )
 
 /**
- * A deck of gilded cards standing in for a long row of lists: one card fills the screen, the
- * neighbours lean away in 3D, and a swipe or a tap brings the next one forward. Tapping the card
- * in front picks it. Used by the todo tab for its lists and by the notes tab for its topics.
+ * A deck of gilded cards standing in for a long row of lists: a short carousel shows the card in
+ * front and its neighbours leaning away in 3D, a swipe (or a tap on a neighbour) turns the deck,
+ * and a grid lays every card out at once when there are too many to walk through. Tapping the
+ * card in front picks it. Used by the todo tab for its lists and by the notes tab for its topics.
  *
  * The look is a brass frame around deep enamel, with a count gemstone, a name plate and a foil
  * sweep when a card comes to the front: the app's own jewel-green-and-brass palette rather than
@@ -119,7 +146,9 @@ fun CardDeckDialog(
     selected: String?,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
-    hint: String = "左右滑动挑一张，点一下打开",
+    hint: String = "左右滑动浏览，点中间那张打开",
+    gridHint: String = "点一张卡直接打开",
+    openVerb: String = "打开",
     createLabel: String? = null,
     onCreate: ((String) -> Unit)? = null,
     manageLabel: String? = null,
@@ -132,7 +161,7 @@ fun CardDeckDialog(
     ) {
         CardDeckContent(
             title = title, cards = cards, selected = selected, onPick = onPick, onDismiss = onDismiss,
-            hint = hint, createLabel = createLabel, onCreate = onCreate,
+            hint = hint, gridHint = gridHint, openVerb = openVerb, createLabel = createLabel, onCreate = onCreate,
             manageLabel = manageLabel, onManage = onManage, emptyText = emptyText,
         )
     }
@@ -146,7 +175,9 @@ fun CardDeckContent(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    hint: String = "左右滑动挑一张，点一下打开",
+    hint: String = "左右滑动浏览，点中间那张打开",
+    gridHint: String = "点一张卡直接打开",
+    openVerb: String = "打开",
     createLabel: String? = null,
     onCreate: ((String) -> Unit)? = null,
     manageLabel: String? = null,
@@ -156,15 +187,21 @@ fun CardDeckContent(
     val g = AppTheme.extra.gilded
     var naming by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
-    val initial = remember(cards.size, selected) { cards.indexOfFirst { it.key == selected }.coerceAtLeast(0) }
-    val pager = rememberPagerState(initialPage = initial, pageCount = { cards.size })
+    // Many cards are quicker to pick from a page of the whole deck than from a carousel; the
+    // toggle in the header swaps between the two and remembers the choice while this deck is open.
+    // Keyed on the threshold so a deck whose data arrives after it opened still starts on the
+    // page when it turns out to be long; a toggle on a steady deck is kept.
+    var grid by rememberSaveable(cards.size > 6) { mutableStateOf(cards.size > 6) }
     val scope = rememberCoroutineScope()
-    val haptic = LocalHapticFeedback.current
-    val pick by rememberUpdatedState(onPick)
     val createFocus = remember { FocusRequester() }
+    val accent = cards.firstOrNull { it.key == selected }?.accent ?: cards.firstOrNull()?.accent ?: g.glow
     // One burst as the deck is laid out; it is a reveal, not a loop, so the page stays quiet.
     val burst = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { burst.animateTo(1f, tween(1_250, easing = FastOutSlowInEasing)) }
+    val reveal = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        burst.animateTo(1f, tween(1_250, easing = FastOutSlowInEasing))
+        reveal.animateTo(1f, tween(520, easing = FastOutSlowInEasing))
+    }
     LaunchedEffect(naming) { if (naming) runCatching { createFocus.requestFocus() } }
     fun createNow() {
         val n = name.trim()
@@ -174,10 +211,6 @@ fun CardDeckContent(
             onCreate?.invoke(n)
         }
     }
-    LaunchedEffect(pager.currentPage) {
-        if (cards.isNotEmpty()) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
-    }
-    val accent = cards.getOrNull(pager.currentPage.coerceIn(0, (cards.size - 1).coerceAtLeast(0)))?.accent ?: g.glow
     Box(
         modifier
             .fillMaxSize()
@@ -189,16 +222,16 @@ fun CardDeckContent(
                 drawCircle(
                     Brush.radialGradient(
                         listOf(g.tableGlow.copy(alpha = 0.46f), g.tableGlow.copy(alpha = 0.13f), Color.Transparent),
-                        center = Offset(w * 0.5f, h * 0.47f), radius = w * 1.05f,
+                        center = Offset(w * 0.5f, h * 0.45f), radius = w * 1.05f,
                     ),
-                    w * 1.05f, Offset(w * 0.5f, h * 0.47f),
+                    w * 1.05f, Offset(w * 0.5f, h * 0.45f),
                 )
                 drawCircle(
                     Brush.radialGradient(
                         listOf(accent.copy(alpha = 0.16f), Color.Transparent),
-                        center = Offset(w * 0.5f, h * 0.52f), radius = w * 0.72f,
+                        center = Offset(w * 0.5f, h * 0.46f), radius = w * 0.72f,
                     ),
-                    w * 0.72f, Offset(w * 0.5f, h * 0.52f),
+                    w * 0.72f, Offset(w * 0.5f, h * 0.46f),
                 )
                 drawRect(
                     Brush.radialGradient(
@@ -223,8 +256,15 @@ fun CardDeckContent(
                     Offset(w - inset - 1.dp.toPx(), h - inset - 1.dp.toPx()),
                 ).forEach { drawDiamond(it, 2.4.dp.toPx(), g.spark.copy(alpha = 0.6f)) }
             },
+        contentAlignment = Alignment.Center,
     ) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+        Column(
+            Modifier
+                .fillMaxHeight()
+                .widthIn(max = 640.dp)
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+        ) {
             Row(
                 Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -234,11 +274,30 @@ fun CardDeckContent(
                         Text(title, style = MaterialTheme.typography.headlineSmall, color = g.ink, letterSpacing = 2.sp)
                         Spacer(Modifier.width(10.dp))
                         OrnamentRule(g)
+                        if (cards.isNotEmpty()) {
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                "共 ${cards.size} 张", style = MaterialTheme.typography.labelMedium,
+                                color = g.muted.copy(alpha = 0.9f),
+                            )
+                        }
                     }
                     Text(
-                        if (cards.isEmpty()) emptyText else hint,
+                        when {
+                            cards.isEmpty() -> emptyText
+                            grid -> gridHint
+                            else -> hint
+                        },
                         style = MaterialTheme.typography.bodySmall, color = g.muted, modifier = Modifier.padding(top = 2.dp),
                     )
+                }
+                if (cards.isNotEmpty()) {
+                    IconButton(onClick = { grid = !grid }) {
+                        Icon(
+                            if (grid) Icons.Outlined.ViewCarousel else Icons.Outlined.GridView,
+                            if (grid) "环绕展示" else "网格展示", tint = g.rim[2],
+                        )
+                    }
                 }
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "关闭", tint = g.muted) }
             }
@@ -246,47 +305,38 @@ fun CardDeckContent(
                 Box(Modifier.weight(1f).fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                     Text(emptyText, style = MaterialTheme.typography.titleMedium, color = g.muted)
                 }
-            } else {
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    DeckAura(burst.value, accent, g, Modifier.matchParentSize())
-                    HorizontalPager(
-                        state = pager,
-                        pageSpacing = 12.dp,
-                        contentPadding = PaddingValues(horizontal = 52.dp),
-                        beyondViewportPageCount = 1,
-                        modifier = Modifier.widthIn(max = 560.dp).fillMaxHeight().fillMaxWidth().padding(vertical = 12.dp),
-                    ) { page ->
-                        val card = cards[page]
-                        val current = page == pager.currentPage
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            DeckCardView(
-                                card,
-                                current = current,
-                                selected = card.key == selected,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 470.dp)
-                                    .graphicsLayer {
-                                        val rel = (page - pager.currentPage) - pager.currentPageOffsetFraction
-                                        val d = rel.coerceIn(-1.7f, 1.7f)
-                                        transformOrigin = TransformOrigin(0.5f, 0.5f)
-                                        cameraDistance = 22f * density
-                                        rotationY = -d * 36f
-                                        rotationZ = -d * 1.2f
-                                        translationY = abs(d) * 10.dp.toPx()
-                                        val s = 1f - 0.12f * abs(d).coerceAtMost(1f)
-                                        scaleX = s
-                                        scaleY = s
-                                        alpha = (1f - 0.30f * abs(d).coerceIn(0f, 1f)).coerceIn(0f, 1f)
-                                    },
-                                onClick = {
-                                    if (current) pick(card.key) else scope.launch { pager.animateScrollToPage(page) }
-                                },
-                            )
-                        }
+            } else if (grid) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 104.dp),
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                        .graphicsLayer {
+                            alpha = reveal.value
+                            translationY = (1f - reveal.value) * 24.dp.toPx()
+                        },
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(cards, key = { it.key }) { card ->
+                        GridDeckCard(
+                            card = card,
+                            selected = card.key == selected,
+                            onClick = { onPick(card.key) },
+                            modifier = Modifier.fillMaxWidth().testTag("deck:${card.key}"),
+                        )
                     }
                 }
-                DeckDots(cards.size, pager.currentPage, g)
+            } else {
+                CarouselPane(
+                    cards = cards,
+                    selected = selected,
+                    onPick = onPick,
+                    openVerb = openVerb,
+                    burst = burst,
+                    reveal = reveal,
+                    g = g,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
             }
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
@@ -344,6 +394,132 @@ private fun OrnamentRule(g: Gilded) {
     }
 }
 
+/**
+ * The carousel and what the card in front holds. The cards are small enough to see three at a
+ * time, and the row snaps one card to the middle, so a swipe never leaves the deck between two
+ * cards the way the old full-page pager did. [reveal] fades the pane in; [burst] is the one puff
+ * of light as the deck opens.
+ *
+ * The row is a [LazyRow] with content padding and a snap fling, in the manner of compose-coverflow:
+ * the padding gives every card a slot whose centre is the screen's centre, and the 3D transforms
+ * are read in `graphicsLayer`, so scrolling invalidates a layer instead of recomposing each card.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CarouselPane(
+    cards: List<DeckCard>,
+    selected: String?,
+    onPick: (String) -> Unit,
+    openVerb: String,
+    burst: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>,
+    reveal: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>,
+    g: Gilded,
+    modifier: Modifier = Modifier,
+) {
+    val initial = remember(cards, selected) { cards.indexOfFirst { it.key == selected }.coerceAtLeast(0) }
+    val state = rememberLazyListState(initialFirstVisibleItemIndex = initial)
+    val centered by remember(state, cards.size) {
+        derivedStateOf {
+            val info = state.layoutInfo
+            val center = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+            info.visibleItemsInfo
+                .asSequence()
+                .filter { it.index in cards.indices }
+                .minByOrNull { abs(it.offset + it.size / 2f - center) }
+                ?.index ?: initial
+        }
+    }
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(centered) {
+        if (cards.isNotEmpty()) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+    }
+    val current = cards.getOrNull(centered.coerceIn(0, cards.lastIndex))
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val byWidth = maxWidth * 0.42f
+        // The spotlight is part of the same block, so leave it room before growing the cards; the
+        // block is centred as a whole, instead of the cards floating in all the spare height.
+        val byHeight = (maxHeight - 220.dp) / 1.42f
+        val cardWidth = minOf(byWidth, byHeight).coerceIn(120.dp, 212.dp)
+        val cardHeight = cardWidth * 1.42f
+        val edge = ((maxWidth - cardWidth) / 2).coerceAtLeast(0.dp)
+        val unit = LocalDensity.current
+        val viewportPx = with(unit) { maxWidth.toPx() }
+        val cardPx = with(unit) { cardWidth.toPx() }
+        Column(
+            Modifier.fillMaxWidth().graphicsLayer {
+                alpha = reveal.value
+                translationY = (1f - reveal.value) * 24.dp.toPx()
+            },
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.fillMaxWidth().height(cardHeight + 30.dp)) {
+                DeckAura(burst.value, current?.accent ?: g.glow, g, Modifier.matchParentSize())
+                LazyRow(
+                    state = state,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    contentPadding = PaddingValues(horizontal = edge),
+                    flingBehavior = rememberSnapFlingBehavior(lazyListState = state),
+                ) {
+                    itemsIndexed(cards, key = { _, card -> card.key }) { index, card ->
+                        // The item's position is read inside graphicsLayer, so scrolling only
+                        // invalidates the layer instead of recomposing the card on every frame.
+                        var x by remember(card.key) { mutableStateOf<Float?>(null) }
+                        val isFront = index == centered
+                        Box(
+                            Modifier
+                                .width(cardWidth)
+                                .fillMaxHeight()
+                                .onGloballyPositioned { coordinates -> x = coordinates.positionInParent().x }
+                                .zIndex(if (isFront) 2f else 1f),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            DeckCardView(
+                                card,
+                                current = isFront,
+                                selected = card.key == selected,
+                                modifier = Modifier
+                                    .requiredWidth(cardWidth)
+                                    .requiredHeight(cardHeight)
+                                    .graphicsLayer {
+                                        val e = x?.let {
+                                            (((it + cardPx / 2f - viewportPx / 2f) / cardPx).coerceIn(-1.8f, 1.8f))
+                                                .coerceIn(-1f, 1f)
+                                        } ?: 0f
+                                        transformOrigin = TransformOrigin(0.5f, 0.5f)
+                                        cameraDistance = 18f * density
+                                        rotationY = -e * 36f
+                                        rotationZ = -e * 1.2f
+                                        translationX = e * cardPx * 0.03f
+                                        translationY = abs(e) * 10.dp.toPx()
+                                        val s = 1f - 0.14f * abs(e)
+                                        scaleX = s
+                                        scaleY = s
+                                        alpha = if (x == null) 0f else 1f - 0.18f * abs(e)
+                                    },
+                                onClick = {
+                                    if (isFront) onPick(card.key) else scope.launch { state.animateScrollToItem(index) }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+            DeckDots(cards.size, centered, g)
+            current?.let {
+                DeckSpotlight(
+                    card = it,
+                    selected = it.key == selected,
+                    openVerb = openVerb,
+                    g = g,
+                    onOpen = { onPick(it.key) },
+                )
+            }
+        }
+    }
+}
+
 /** The light the deck sheds: a pool under the cards and one short burst as it opens. */
 @Composable
 private fun DeckAura(progress: Float, accent: Color, g: Gilded, modifier: Modifier = Modifier) {
@@ -391,7 +567,7 @@ private fun DeckAura(progress: Float, accent: Color, g: Gilded, modifier: Modifi
 @Composable
 private fun DeckDots(count: Int, current: Int, g: Gilded) {
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -412,19 +588,162 @@ private fun DeckDots(count: Int, current: Int, g: Gilded) {
 }
 
 /**
- * One gilded card: brushed-brass frame, deep enamel face, a window of painted light around the
- * card's own colour, a brass name plate and a gemstone with its count. The front card catches a
- * foil sweep as it comes forward; opening the deck flips every card up off the table.
+ * What is in the card in front: a few names from inside it, so choosing between two lists means
+ * reading their contents instead of opening each one. The button opens the card.
  */
 @Composable
-private fun DeckCardView(card: DeckCard, current: Boolean, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun DeckSpotlight(card: DeckCard, selected: Boolean, openVerb: String, g: Gilded, onOpen: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
+            .shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.30f), spotColor = g.glow.copy(alpha = 0.35f))
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(g.face[0], g.face[2])))
+            .border(
+                1.dp,
+                Brush.linearGradient(listOf(g.rim[1].copy(alpha = 0.75f), g.rimDark.copy(alpha = 0.65f), g.rim[2].copy(alpha = 0.55f))),
+                shape,
+            )
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Canvas(Modifier.size(7.dp)) { drawDiamond(center, size.minDimension * 0.5f, g.rim[2]) }
+            Spacer(Modifier.width(7.dp))
+            Text(
+                if (selected) "当前使用" else "当前选中",
+                style = MaterialTheme.typography.labelMedium, color = g.muted, letterSpacing = 1.sp,
+            )
+            Spacer(Modifier.weight(1f))
+            if (card.count != null) {
+                Text(
+                    card.countLabel ?: "共 ${card.count} 项", style = MaterialTheme.typography.labelMedium,
+                    color = g.muted.copy(alpha = 0.9f),
+                )
+            }
+        }
+        Spacer(Modifier.height(5.dp))
+        if (card.preview.isEmpty()) {
+            Text(
+                card.previewEmpty ?: "里面还没有内容",
+                style = MaterialTheme.typography.bodyMedium, color = g.muted.copy(alpha = 0.9f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            card.preview.take(3).forEach { line ->
+                Row(Modifier.padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Canvas(Modifier.size(5.dp)) { drawDiamond(center, size.minDimension * 0.5f, g.rim[2]) }
+                    Spacer(Modifier.width(9.dp))
+                    Text(
+                        line, style = MaterialTheme.typography.bodyMedium, color = g.ink,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(9.dp))
+        val source = remember { MutableInteractionSource() }
+        Box(
+            Modifier.fillMaxWidth().height(38.dp)
+                .pressScale(source, 0.98f)
+                .clip(RoundedCornerShape(11.dp))
+                .background(Brush.verticalGradient(g.plate))
+                .clickable(interactionSource = source, indication = null, onClick = onOpen),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "$openVerb「${card.title}」", style = MaterialTheme.typography.titleSmall,
+                    color = g.onPlate, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Icon(Icons.Default.KeyboardArrowRight, null, tint = g.onPlate, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+/**
+ * A card in the grid: the same brass and enamel, cut smaller, with the name, its count and one
+ * quiet line under it. The card in use wears a check instead of a gem.
+ */
+@Composable
+private fun GridDeckCard(card: DeckCard, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val g = AppTheme.extra.gilded
     val source = remember { MutableInteractionSource() }
-    val outer = RoundedCornerShape(26.dp)
-    val inner = RoundedCornerShape(21.dp)
-    val enter = remember { Animatable(0f) }
+    val outer = RoundedCornerShape(18.dp)
+    val inner = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        modifier
+            .aspectRatio(0.76f)
+            .pressScale(source, 0.97f)
+            .shadow(
+                if (selected) 14.dp else 8.dp, outer,
+                ambientColor = Color.Black.copy(alpha = 0.32f), spotColor = g.glow.copy(alpha = if (selected) 0.55f else 0.30f),
+            )
+            .clip(outer)
+            .background(Brush.linearGradient(g.rim))
+            .clickable(interactionSource = source, indication = null, onClick = onClick),
+    ) {
+        Canvas(Modifier.matchParentSize()) { drawMetalSheen() }
+        Column(
+            Modifier.fillMaxSize().padding(4.dp).clip(inner)
+                .background(Brush.verticalGradient(g.face))
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                Modifier.fillMaxWidth().weight(1f).clip(shape)
+                    .border(1.dp, g.rim[1].copy(alpha = 0.55f), shape),
+            ) {
+                Canvas(Modifier.matchParentSize()) { drawCardArt(card.accent, card.key, g) }
+                ArtCrest(
+                    card.icon, card.accent, g,
+                    crest = 52.dp, medallion = 30.dp, iconSize = 15.dp,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                if (card.count != null) {
+                    CountGem(card.count, g, size = 21.dp, textStyle = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.TopEnd).padding(5.dp))
+                }
+                if (selected) {
+                    Box(
+                        Modifier.align(Alignment.TopStart).padding(5.dp).size(18.dp)
+                            .clip(CircleShape).background(Brush.linearGradient(g.plate)),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Default.Check, "正在使用", tint = g.onPlate, modifier = Modifier.size(12.dp)) }
+                }
+            }
+            Spacer(Modifier.height(5.dp))
+            NamePlate(card.title, g, textStyle = MaterialTheme.typography.titleSmall, horizontal = 12.dp, vertical = 3.dp, corner = 7.dp)
+            if (card.footnote != null) {
+                Text(
+                    card.footnote, style = MaterialTheme.typography.labelSmall, color = g.muted,
+                    textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(top = 3.dp, start = 2.dp, end = 2.dp),
+                )
+            }
+        }
+        Canvas(Modifier.matchParentSize()) { drawCardOrnaments(g, compact = true) }
+    }
+}
+
+/**
+ * One gilded card in the carousel: brushed-brass frame, deep enamel face, a window of painted
+ * light around the card's own colour, a brass name plate and a gemstone with its count. The front
+ * card catches a foil sweep as it comes forward.
+ */
+@Composable
+private fun DeckCardView(
+    card: DeckCard,
+    current: Boolean,
+    selected: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    val g = AppTheme.extra.gilded
+    val source = remember { MutableInteractionSource() }
+    val outer = RoundedCornerShape(21.dp)
+    val inner = RoundedCornerShape(17.dp)
     val foil = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { enter.animateTo(1f, tween(640, easing = FastOutSlowInEasing)) }
     LaunchedEffect(card.key, current) {
         if (current) {
             foil.snapTo(0f)
@@ -433,20 +752,10 @@ private fun DeckCardView(card: DeckCard, current: Boolean, selected: Boolean, mo
     }
     Box(
         modifier
-            .graphicsLayer {
-                // The card is dealt up from the table as the deck appears.
-                val e = enter.value
-                rotationY += (1f - e) * 68f
-                rotationX = (1f - e) * 8f
-                translationY += (1f - e) * 46.dp.toPx()
-                scaleX *= 0.93f + 0.07f * e
-                scaleY *= 0.93f + 0.07f * e
-                alpha *= e
-            }
             .testTag("deck:${card.key}")
             .pressScale(source, 0.975f)
             .shadow(
-                if (current) 26.dp else 9.dp, outer,
+                if (current) 20.dp else 8.dp, outer,
                 ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = g.glow.copy(alpha = 0.55f),
             )
             .clip(outer)
@@ -455,32 +764,37 @@ private fun DeckCardView(card: DeckCard, current: Boolean, selected: Boolean, mo
     ) {
         Canvas(Modifier.matchParentSize()) { drawMetalSheen() }
         Column(
-            Modifier.fillMaxSize().padding(6.dp).clip(inner)
+            Modifier.fillMaxSize().padding(4.dp).clip(inner)
                 .background(Brush.verticalGradient(g.face))
-                .padding(8.dp),
+                .padding(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            ArtWindow(card, Modifier.fillMaxWidth().weight(1f))
-            Spacer(Modifier.height(8.dp))
-            NamePlate(card.title, g)
+            ArtWindow(
+                card, g,
+                crest = 92.dp, medallion = 50.dp, icon = 24.dp, countSize = 27.dp,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+            Spacer(Modifier.height(6.dp))
+            NamePlate(
+                card.title, g,
+                textStyle = MaterialTheme.typography.titleMedium,
+                horizontal = 18.dp, vertical = 4.dp, corner = 8.dp,
+            )
             if (card.footnote != null) {
                 Text(
                     card.footnote, style = MaterialTheme.typography.bodySmall, color = g.muted,
                     textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp, start = 6.dp, end = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, start = 4.dp, end = 4.dp),
                 )
             }
-            Box(Modifier.fillMaxWidth().height(34.dp), contentAlignment = Alignment.Center) {
-                if (selected) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(18.dp).clip(CircleShape).background(Brush.linearGradient(g.plate)),
-                            contentAlignment = Alignment.Center,
-                        ) { Icon(Icons.Default.Check, null, tint = g.onPlate, modifier = Modifier.size(12.dp)) }
-                        Spacer(Modifier.width(7.dp))
-                        Text("正在使用", style = MaterialTheme.typography.labelLarge, color = g.ink)
-                    }
-                } else {
-                    Text("轻点打开", style = MaterialTheme.typography.labelLarge, color = g.muted.copy(alpha = 0.85f))
+            if (selected) {
+                Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(16.dp).clip(CircleShape).background(Brush.linearGradient(g.plate)),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Default.Check, null, tint = g.onPlate, modifier = Modifier.size(11.dp)) }
+                    Spacer(Modifier.width(5.dp))
+                    Text("正在使用", style = MaterialTheme.typography.labelSmall, color = g.ink)
                 }
             }
         }
@@ -493,12 +807,19 @@ private fun DeckCardView(card: DeckCard, current: Boolean, selected: Boolean, mo
 
 /** The painted window: the card's colour, lit from above, with a crest and a count gem. */
 @Composable
-private fun ArtWindow(card: DeckCard, modifier: Modifier = Modifier) {
-    val g = AppTheme.extra.gilded
-    val shape = RoundedCornerShape(14.dp)
+private fun ArtWindow(
+    card: DeckCard,
+    g: Gilded,
+    crest: Dp,
+    medallion: Dp,
+    icon: Dp,
+    countSize: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(12.dp)
     Box(modifier.clip(shape).border(1.dp, g.rim[1].copy(alpha = 0.55f), shape)) {
         Canvas(Modifier.matchParentSize()) { drawCardArt(card.accent, card.key, g) }
-        ArtCrest(card.icon, card.accent, g, Modifier.align(Alignment.Center))
+        ArtCrest(card.icon, card.accent, g, crest = crest, medallion = medallion, iconSize = icon, modifier = Modifier.align(Alignment.Center))
         // A soft floor so the gem sits on the picture rather than floats.
         Box(
             Modifier.matchParentSize().background(
@@ -507,20 +828,32 @@ private fun ArtWindow(card: DeckCard, modifier: Modifier = Modifier) {
                 ),
             ),
         )
-        Canvas(Modifier.align(Alignment.TopStart).padding(12.dp).size(16.dp)) {
-            drawStar(center, size.minDimension * 0.5f, g.spark.copy(alpha = 0.65f))
+        if (crest >= 80.dp) {
+            Canvas(Modifier.align(Alignment.TopStart).padding(10.dp).size(14.dp)) {
+                drawStar(center, size.minDimension * 0.5f, g.spark.copy(alpha = 0.65f))
+            }
         }
-        Row(Modifier.fillMaxWidth().padding(10.dp)) {
+        Row(Modifier.fillMaxWidth().padding(7.dp)) {
             Spacer(Modifier.weight(1f))
-            if (card.count != null) CountGem(card.count, g)
+            if (card.count != null) {
+                CountGem(card.count, g, size = countSize, textStyle = MaterialTheme.typography.labelMedium)
+            }
         }
     }
 }
 
 /** The card's emblem: its icon struck in a brass ring, with a diamond outline behind it. */
 @Composable
-private fun ArtCrest(icon: ImageVector, accent: Color, g: Gilded, modifier: Modifier = Modifier) {
-    Box(modifier.size(164.dp), contentAlignment = Alignment.Center) {
+private fun ArtCrest(
+    icon: ImageVector,
+    accent: Color,
+    g: Gilded,
+    crest: Dp,
+    medallion: Dp,
+    iconSize: Dp,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.size(crest), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val c = center
             val r = size.minDimension / 2f
@@ -532,38 +865,46 @@ private fun ArtCrest(icon: ImageVector, accent: Color, g: Gilded, modifier: Modi
                 r, c,
             )
             drawCircle(g.spark.copy(alpha = 0.52f), r * 0.91f, c, style = androidx.compose.ui.graphics.drawscope.Stroke(1.2.dp.toPx()))
-            drawCircle(g.rim[1].copy(alpha = 0.46f), r * 0.98f, c, style = androidx.compose.ui.graphics.drawscope.Stroke(0.7.dp.toPx()))
-            repeat(8) { i ->
-                val a = i * PI.toFloat() / 4f + PI.toFloat() / 8f
-                drawDiamond(c + Offset(cos(a) * r * 0.91f, sin(a) * r * 0.91f), 2.2.dp.toPx(), g.spark.copy(alpha = 0.8f))
+            if (size.minDimension > 70.dp.toPx()) {
+                drawCircle(g.rim[1].copy(alpha = 0.46f), r * 0.98f, c, style = androidx.compose.ui.graphics.drawscope.Stroke(0.7.dp.toPx()))
+                repeat(8) { i ->
+                    val a = i * PI.toFloat() / 4f + PI.toFloat() / 8f
+                    drawDiamond(c + Offset(cos(a) * r * 0.91f, sin(a) * r * 0.91f), 2.2.dp.toPx(), g.spark.copy(alpha = 0.8f))
+                }
+                // A diamond drawn just outside the medallion, woven through its ring.
+                val d = r * 0.70f
+                Path().apply {
+                    moveTo(c.x, c.y - d)
+                    lineTo(c.x + d * 0.78f, c.y)
+                    lineTo(c.x, c.y + d)
+                    lineTo(c.x - d * 0.78f, c.y)
+                    close()
+                }.also { drawPath(it, g.spark.copy(alpha = 0.16f), style = androidx.compose.ui.graphics.drawscope.Stroke(0.8.dp.toPx())) }
             }
-            // A diamond drawn just outside the medallion, woven through its ring.
-            val d = r * 0.70f
-            Path().apply {
-                moveTo(c.x, c.y - d)
-                lineTo(c.x + d * 0.78f, c.y)
-                lineTo(c.x, c.y + d)
-                lineTo(c.x - d * 0.78f, c.y)
-                close()
-            }.also { drawPath(it, g.spark.copy(alpha = 0.16f), style = androidx.compose.ui.graphics.drawscope.Stroke(0.8.dp.toPx())) }
         }
         Box(
-            Modifier.size(76.dp).clip(CircleShape)
+            Modifier.size(medallion).clip(CircleShape)
                 .background(Brush.radialGradient(listOf(lerp(accent, Color.Black, 0.24f), g.face[2])))
                 .border(1.dp, g.rim[1].copy(alpha = 0.62f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, null, tint = g.ink, modifier = Modifier.size(36.dp))
+            Icon(icon, null, tint = g.ink, modifier = Modifier.size(iconSize))
         }
     }
 }
 
 /** The count in a cut gemstone: brass rim, enamel heart, brass figures. */
 @Composable
-private fun CountGem(count: Int, g: Gilded) {
+private fun CountGem(
+    count: Int,
+    g: Gilded,
+    size: Dp = 34.dp,
+    textStyle: TextStyle = MaterialTheme.typography.labelLarge,
+    modifier: Modifier = Modifier,
+) {
     Box(
-        Modifier.size(34.dp)
-            .shadow(8.dp, CircleShape, spotColor = g.glow.copy(alpha = 0.55f))
+        modifier.size(size)
+            .shadow((size.value * 0.22f).dp, CircleShape, spotColor = g.glow.copy(alpha = 0.55f))
             .clip(CircleShape)
             .background(Brush.linearGradient(g.gem))
             .padding(2.5.dp)
@@ -573,7 +914,7 @@ private fun CountGem(count: Int, g: Gilded) {
     ) {
         Text(
             count.toString(),
-            style = MaterialTheme.typography.labelLarge.merge(com.assetboard.ui.theme.NumberStyle),
+            style = textStyle.merge(com.assetboard.ui.theme.NumberStyle),
             color = g.ink, fontWeight = FontWeight.Bold,
         )
     }
@@ -581,11 +922,18 @@ private fun CountGem(count: Int, g: Gilded) {
 
 /** The name on a strip of lit brass, the way a card is titled. */
 @Composable
-private fun NamePlate(title: String, g: Gilded) {
-    val shape = RoundedCornerShape(10.dp)
+private fun NamePlate(
+    title: String,
+    g: Gilded,
+    textStyle: TextStyle = MaterialTheme.typography.titleLarge,
+    horizontal: Dp = 26.dp,
+    vertical: Dp = 6.dp,
+    corner: Dp = 10.dp,
+) {
+    val shape = RoundedCornerShape(corner)
     Box(
         Modifier.fillMaxWidth().padding(horizontal = 2.dp)
-            .shadow(5.dp, shape, spotColor = Color.Black.copy(alpha = 0.35f))
+            .shadow(4.dp, shape, spotColor = Color.Black.copy(alpha = 0.35f))
             .clip(shape)
             .background(Brush.verticalGradient(g.plate))
             .border(1.dp, g.rimDark.copy(alpha = 0.65f), shape),
@@ -601,13 +949,15 @@ private fun NamePlate(title: String, g: Gilded) {
                     listOf(g.rimDark.copy(alpha = 0.30f), Color.Transparent, Color.Transparent, g.rimDark.copy(alpha = 0.30f)),
                 ),
             )
-            drawDiamond(Offset(11.dp.toPx(), size.height / 2f), 2.2.dp.toPx(), g.rimDark.copy(alpha = 0.45f))
-            drawDiamond(Offset(size.width - 11.dp.toPx(), size.height / 2f), 2.2.dp.toPx(), g.rimDark.copy(alpha = 0.45f))
+            if (horizontal >= 12.dp) {
+                drawDiamond(Offset(9.dp.toPx(), size.height / 2f), 2.0.dp.toPx(), g.rimDark.copy(alpha = 0.45f))
+                drawDiamond(Offset(size.width - 9.dp.toPx(), size.height / 2f), 2.0.dp.toPx(), g.rimDark.copy(alpha = 0.45f))
+            }
         }
         Text(
-            title, style = MaterialTheme.typography.titleLarge, color = g.onPlate,
+            title, style = textStyle, color = g.onPlate,
             fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 26.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = horizontal, vertical = vertical),
         )
     }
 }
@@ -670,7 +1020,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCardArt(accent:
 }
 
 /** The frame's cut line, corner curls and crests. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCardOrnaments(g: Gilded) {
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCardOrnaments(g: Gilded, compact: Boolean = false) {
     val inset = 7.dp.toPx()
     val corner = CornerRadius(20.dp.toPx())
     val stroke = 1.dp.toPx()
@@ -689,8 +1039,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCardOrnaments(g
         size = Size(size.width - inset * 2 - 2.4.dp.toPx(), size.height - inset * 2 - 2.4.dp.toPx()),
         cornerRadius = corner, style = androidx.compose.ui.graphics.drawscope.Stroke(0.7.dp.toPx()),
     )
-    val pad = 12.dp.toPx()
-    val len = 14.dp.toPx()
+    val pad = (if (compact) 9.dp else 12.dp).toPx()
+    val len = (if (compact) 9.dp else 14.dp).toPx()
     listOf(
         Triple(Offset(pad, pad), 1f, 1f),
         Triple(Offset(size.width - pad, pad), -1f, 1f),

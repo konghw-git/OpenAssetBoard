@@ -103,7 +103,7 @@ class NoteShellTest {
         val pillText = pill.config[androidx.compose.ui.semantics.SemanticsProperties.Text].map { it.text }
         assertTrue("the pill should say one topic: $pillText", pillText.contains("1"))
         compose.onNodeWithText("主题").performClick()
-        waitFor("左右滑动挑一个主题，点一下筛选")
+        waitFor("左右滑动浏览，点中间那张筛选")
         // The deck opens on 全部; swipe to 读书, then pick it.
         compose.onNodeWithText("所有主题与未归类的笔记").performTouchInput { swipeLeft() }
         compose.mainClock.advanceTimeBy(900)
