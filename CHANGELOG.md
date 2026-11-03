@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-03
+
 ### Added
 
 - **Undo and redo in the editors.** The format bar's back button steps back through typing,
