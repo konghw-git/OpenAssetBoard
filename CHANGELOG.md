@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Undo and redo in the editors.** The format bar's back button steps back through typing,
+  formats and checkbox ticks one at a time (typed runs merge into a step, a pause starts the
+  next), putting the text and the cursor back; the redo button walks forward again, and an
+  external rewrite drops the history it could no longer apply.
+- **The diary is now a live Markdown editor too.** It shares the note page's writing surface —
+  rendered headings, quotes and rules, tappable checkboxes, smart list continuation, the first
+  line reading as the title — keeping its own accent margin, the 提炼到笔记 selection menu and
+  its footer. 一键排版 leaves Markdown block markers flush, so a tidy can no longer unmake a
+  heading, quote or rule.
+
+### Changed
+
+- **The decks are glass, and their carousel turns like a drum.** The 清单 and 主题 decks wear
+  the app's glass over the page's colour fields with brass hairlines instead of the dark gilded
+  table, and swiping past either end wraps around to the other (three cards or more; a deck of
+  two stops at its ends).
+- **Opening a deck is quicker.** Its cards are built in one pass per data change, instead of
+  scanning every todo and note once per card inside composition.
+- **The format bar wraps instead of scrolling.** Every button stays on screen: the groups fold
+  into two or three rows on a phone and shrink to a single row on a wide screen.
+
 ## [1.3.0] - 2026-11-03
 
 ### Added
