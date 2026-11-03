@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-04
+
 ### Added
 
 - **AI 排版 and 润色 in the editors.** The format bar gains two buttons after its own: AI 排版
@@ -27,6 +29,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **The carousel turns like a drum.** The cards ride the drum's circle and wrap out of sight at
+  the edges under two brass rims, each wearing a seal — its title's first character on a
+  medallion of its own colour, ringed with the finished share of what is inside (the list's
+  settled todos). What is inside moves onto the card itself, three preview lines under a brass
+  hairline, and the spotlight keeps the count and the open button alone.
 - **The one-tap mode is a list of entry rows, one per line**, replacing the grid of small cards.
 
 ### Removed
