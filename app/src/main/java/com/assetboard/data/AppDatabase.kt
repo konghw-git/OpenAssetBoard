@@ -159,7 +159,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun countdownDao(): CountdownDao
 
     companion object {
-        const val SCHEMA_VERSION = 13
+        const val SCHEMA_VERSION = 14
 
         /** [name] is null only in tests and for a pre-profile install; the app names every profile's file. */
         fun build(context: Context, name: String? = null): AppDatabase =

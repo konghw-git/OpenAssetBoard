@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Accounts can wear an icon of your own.** The account editor now shows the tile as the list
+  will draw it and offers a picker (钱包, 银行卡, 银行, 储蓄, 投资, 现金, 支付, 房子, 车, 旅行,
+  教育, 医疗, 保险, 黄金, 数字资产, 红包, 其他) beside 自动, which keeps matching the name and
+  institution to a brand. The choice follows the account through the list, detail page,
+  stocktake, bills and the backup (format 15).
+
+### Changed
+
+- The separate 资产配置 card is gone: the net worth card now carries a compact legend of each
+  group's share to the right of the figure (dots, names and percentages, no ring). On a narrow
+  phone, or when the figure is too long to share the line, the legend moves under it instead of
+  clipping the amount.
+
 ## [1.2.1] - 2026-11-02
 
 ### Changed

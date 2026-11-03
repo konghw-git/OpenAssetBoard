@@ -54,7 +54,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.input.KeyboardType
 import com.assetboard.ui.components.GlassSheet
 import com.assetboard.domain.GoalProgress
@@ -78,7 +77,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -191,8 +189,6 @@ import com.assetboard.ui.components.AccountAvatar
 import com.assetboard.ui.components.ChartPoint
 import com.assetboard.ui.components.ChartSeries
 import com.assetboard.ui.components.Dot
-import com.assetboard.ui.components.DonutChart
-import com.assetboard.ui.components.DonutSlice
 import com.assetboard.ui.components.ErrorDialog
 import com.assetboard.ui.components.LineChart
 import com.assetboard.ui.components.ListRow
@@ -434,8 +430,7 @@ fun OverviewScreen(
                             PullToCreateBox(pull, PULL_HINT, PULL_ARMED, Modifier.weight(1.1f), icon = Icons.AutoMirrored.Outlined.ReceiptLong) {
                                 LazyColumn(Modifier.fillMaxSize().imePadding().scrollIndicator(listState), state = listState, contentPadding = PaddingValues(start = 16.dp, top = pullTop, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                     item { Box(Modifier.appear(0)) { hero(s) } }
-                                    item(key = "allocation") { Box(Modifier.appear(1)) { HeroAllocation(s.allocation) } }
-                                    accountSections(s, onOpenAccount, onAddAccount, rows, first = 2)
+                                    accountSections(s, onOpenAccount, onAddAccount, rows, first = 1)
                                 }
                             }
                             Column(
@@ -457,12 +452,11 @@ fun OverviewScreen(
                                 verticalArrangement = Arrangement.spacedBy(14.dp),
                             ) {
                                 item { Box(Modifier.appear(0)) { hero(s) } }
-                                // Today's food and weight right under the figure, before the allocation.
+                                // Today's food and weight right under the figure, before the accounts.
                                 item(key = "tiles") { Box(Modifier.appear(1)) { Tiles(food, health, onFood, onHealth) } }
                                 // This month's 记账, which the pull above records into.
                                 ledger?.let { l -> item(key = "bills") { Box(Modifier.appear(2)) { BillCard(l, onBills, onRecord = { recording = true }, onEdit = { billEditing = it.id }) } } }
-                                item(key = "allocation") { Box(Modifier.appear(3)) { HeroAllocation(s.allocation) } }
-                                accountSections(s, onOpenAccount, onAddAccount, rows, first = 4)
+                                accountSections(s, onOpenAccount, onAddAccount, rows, first = 3)
                             }
                         }
                     }
@@ -483,7 +477,8 @@ private fun LazyListScope.accountSections(s: OverviewState, onOpenAccount: (Stri
 
 /**
  * One primary figure, its supporting totals and two actionable details, on warm glass whose
- * colour drifts slowly under it; allocation has its own surface below this card.
+ * colour drifts slowly under it; each group's share of the assets sits beside the figure as a
+ * compact legend, so the page needs no separate allocation card.
  */
 @Composable
 private fun Hero(s: OverviewState, goal: Long?, onStocktake: () -> Unit, onGoal: () -> Unit, onCash: () -> Unit) {
@@ -527,37 +522,61 @@ private fun HeroContent(s: OverviewState, goal: Long?, onStocktake: () -> Unit, 
             if (s.hasAccounts) StocktakeButton(onStocktake)
         }
         Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                "¥",
-                style = MaterialTheme.typography.titleLarge.copy(brush = Brush.linearGradient(aurora.flame)),
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 7.dp, end = 5.dp),
-            )
-            Text(
-                amount(Money.format(net)),
-                style = MaterialTheme.typography.displayMedium.merge(NumberStyle).copy(brush = Brush.linearGradient(aurora.figure)),
-                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = 42.sp),
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-            )
-        }
-        s.changeSinceLast?.takeIf { it != 0L }?.let { c ->
-            val up = c > 0
-            val tone = extra.signed(c)
-            Row(
-                Modifier
-                    .padding(top = 8.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(aurora.pane)
-                    .border(1.dp, aurora.paneRim, RoundedCornerShape(50))
-                    .padding(start = 6.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(if (up) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, null, tint = tone, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("较上次盘点 ", color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium)
-                Text(amount(Money.format(c, signed = true)), color = tone, style = MaterialTheme.typography.labelMedium.merge(NumberStyle), fontWeight = FontWeight.SemiBold)
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // Beside the figure when there is room; on a narrow phone, or with a figure too long
+            // to share the line, the shares go under it rather than clipping the amount. The
+            // decision uses the settled total, not the count-up, so the layout never jumps.
+            val needForAmount = with(LocalDensity.current) { (20.sp * 0.65f * Money.format(s.totals.netWorth).length).toDp() + 26.dp }
+            val beside = maxWidth >= 270.dp && maxWidth >= allocationLegendRoom + needForAmount
+            Column {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        "¥",
+                        style = MaterialTheme.typography.titleLarge.copy(brush = Brush.linearGradient(aurora.flame)),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 7.dp, end = 5.dp),
+                    )
+                    Text(
+                        amount(Money.format(net)),
+                        style = MaterialTheme.typography.displayMedium.merge(NumberStyle).copy(brush = Brush.linearGradient(aurora.figure)),
+                        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = 42.sp),
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                    )
+                    if (beside && s.allocation.isNotEmpty()) {
+                        Box(
+                            Modifier
+                                .align(Alignment.CenterVertically)
+                                .padding(horizontal = 10.dp)
+                                .width(1.dp)
+                                .height(34.dp)
+                                .background(extra.onHero.copy(alpha = 0.14f)),
+                        )
+                        AllocationLegend(s.allocation)
+                    }
+                }
+                s.changeSinceLast?.takeIf { it != 0L }?.let { c ->
+                    val up = c > 0
+                    val tone = extra.signed(c)
+                    Row(
+                        Modifier
+                            .padding(top = 8.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(aurora.pane)
+                            .border(1.dp, aurora.paneRim, RoundedCornerShape(50))
+                            .padding(start = 6.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(if (up) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, null, tint = tone, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("较上次盘点 ", color = extra.onHeroMuted, style = MaterialTheme.typography.labelMedium)
+                        Text(amount(Money.format(c, signed = true)), color = tone, style = MaterialTheme.typography.labelMedium.merge(NumberStyle), fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                if (!beside && s.allocation.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    AllocationStrip(s.allocation)
+                }
             }
         }
         Spacer(Modifier.height(20.dp))
@@ -745,92 +764,68 @@ private fun HeroStat(label: String, cents: Long, modifier: Modifier) {
     }
 }
 
+/** The beside-the-figure legend and the divider + padding that keep it clear of the amount. */
+private val allocationLegendWidth = 104.dp
+private val allocationLegendRoom = allocationLegendWidth + 21.dp
+
 /**
- * Where the assets sit: a small ring and a row per group, largest first. Tapping a row lifts its
- * slice and puts its share in the middle; tapping it again lets go.
+ * The page's allocation: one line per group beside the net worth figure, largest first, with the
+ * group's colour as the key to the account list below. No ring: the percentages say it all.
  */
 @Composable
-private fun HeroAllocation(allocation: List<AllocationUi>) {
-    if (allocation.isEmpty()) return
+private fun AllocationLegend(allocation: List<AllocationUi>) {
     val extra = AppTheme.extra
-    val cs = MaterialTheme.colorScheme
-    val parts = allocation.sortedByDescending { it.value }
+    val parts = remember(allocation) { allocation.sortedByDescending { it.value } }
     val total = parts.sumOf { it.value }
-    val shades = parts.map { extra.group(it.group.colorIndex) }
-    var picked by rememberSaveable { mutableStateOf<String?>(null) }
-    val index = parts.indexOfFirst { it.group.id == picked }.takeIf { it >= 0 }
-    // The share bars grow in just after the ring starts drawing.
-    val reveal = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { reveal.animateTo(1f, tween(900, delayMillis = 150, easing = Motion.Decelerate)) }
-    SectionCard(contentPadding = PaddingValues(16.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("资产配置", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-            Text("${parts.size} 个分组", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-        }
-        Spacer(Modifier.height(8.dp))
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val ringSize = if (maxWidth / LocalDensity.current.fontScale < 280.dp) 60.dp else 96.dp
-        Row(verticalAlignment = Alignment.CenterVertically) {
-        // The ring turns into place as it draws, the way the todo dial does.
-        DonutChart(
-            slices = parts.mapIndexed { i, a -> DonutSlice(a.value.toFloat(), shades[i]) },
-            modifier = Modifier.size(ringSize).graphicsLayer {
-                val t = reveal.value
-                rotationZ = -70f * (1f - t)
-                val sc = 0.86f + 0.14f * t
-                scaleX = sc; scaleY = sc
-                alpha = (0.2f + 0.8f * t).coerceAtMost(1f)
-            },
-            thickness = if (ringSize < 96.dp) 7.dp else 11.dp,
-            highlighted = index,
-            track = cs.outlineVariant,
-        ) {
-            val h = index?.let { parts[it] }
-            Text(
-                h?.let { Money.percent(it.value, total) } ?: "配置",
-                color = if (h == null) cs.onSurfaceVariant else cs.onSurface,
-                style = (if (h == null) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge).merge(NumberStyle),
-                modifier = Modifier.width(ringSize - 28.dp), textAlign = TextAlign.Center, maxLines = 1,
-                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = 14.sp),
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            parts.forEachIndexed { i, a ->
-                val on = picked == a.group.id
-                val wash by animateColorAsState(if (on) shades[i].copy(alpha = 0.10f) else Color.Transparent, tween(200), label = "pick")
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(wash)
-                        .clickable { picked = if (on) null else a.group.id }
-                        .heightIn(min = 40.dp)
-                        .semantics { selected = on }
-                        .padding(horizontal = 6.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Dot(shades[i], 7.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Amounts already live in the account list; allocation only compares shares.
-                            Text(a.group.name, color = cs.onSurface, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            Text(
-                                Money.percent(a.value, total), color = if (on) shades[i] else cs.onSurfaceVariant, style = MaterialTheme.typography.labelLarge.merge(NumberStyle),
-                                maxLines = 1, textAlign = TextAlign.End, modifier = Modifier.padding(start = 8.dp),
-                            )
-                        }
-                        // Each share as a thin bar too, so the legend reads at a glance without the ring.
-                        Box(Modifier.fillMaxWidth().padding(top = 5.dp).height(3.dp).clip(RoundedCornerShape(50)).background(shades[i].copy(alpha = 0.16f))) {
-                            Box(Modifier.fillMaxWidth((a.value.toFloat() / total * reveal.value).coerceIn(0.02f, 1f)).fillMaxHeight().background(shades[i]))
-                        }
-                    }
-                }
-            }
+    if (total <= 0) return
+    Column(Modifier.width(allocationLegendWidth), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text("资产配置", color = extra.onHeroMuted.copy(alpha = 0.75f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        parts.forEach { ShareLine(it.group.name, it.value, total, extra.group(it.group.colorIndex)) }
+    }
+}
+
+/** The same shares in one wrapping row, for a phone too narrow to hold them beside the figure. */
+@Composable
+private fun AllocationStrip(allocation: List<AllocationUi>) {
+    val extra = AppTheme.extra
+    val parts = remember(allocation) { allocation.sortedByDescending { it.value } }
+    val total = parts.sumOf { it.value }
+    if (total <= 0) return
+    Column(Modifier.fillMaxWidth()) {
+        Text("资产配置", color = extra.onHeroMuted.copy(alpha = 0.75f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        Spacer(Modifier.height(4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            parts.forEach { StripShare(it.group.name, it.value, total, extra.group(it.group.colorIndex)) }
         }
     }
+}
+
+/** One named share in the beside-the-figure legend: dot, name, percentage, right-aligned. */
+@Composable
+private fun ShareLine(name: String, value: Long, total: Long, dot: Color) {
+    val extra = AppTheme.extra
+    Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+        Dot(dot, 6.dp)
+        Spacer(Modifier.width(5.dp))
+        Text(name, color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(4.dp))
+        Text(
+            Money.percent(value, total), color = extra.onHero, style = MaterialTheme.typography.labelSmall.merge(NumberStyle),
+            fontWeight = FontWeight.SemiBold, maxLines = 1,
+        )
     }
+}
+
+/** One named share in the narrow-phone strip; no weights, so the row wraps whole. */
+@Composable
+private fun StripShare(name: String, value: Long, total: Long, dot: Color) {
+    val extra = AppTheme.extra
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
+        Dot(dot, 6.dp)
+        Spacer(Modifier.width(5.dp))
+        Text(name, color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        Spacer(Modifier.width(5.dp))
+        Text(Money.percent(value, total), color = extra.onHero, style = MaterialTheme.typography.labelSmall.merge(NumberStyle), fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 

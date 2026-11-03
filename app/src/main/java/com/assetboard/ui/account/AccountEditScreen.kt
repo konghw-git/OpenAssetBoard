@@ -2,9 +2,13 @@ package com.assetboard.ui.account
 
 import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,14 +17,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -43,6 +50,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,6 +65,8 @@ import com.assetboard.ui.components.FieldShape
 import com.assetboard.ui.components.glassFieldColors
 import com.assetboard.ui.components.GlassScaffold
 import com.assetboard.ui.components.glassBarColors
+import com.assetboard.ui.components.AccountAvatar
+import com.assetboard.ui.components.AccountIcons
 import com.assetboard.AppContainer
 import com.assetboard.data.Account
 import com.assetboard.data.AccountDraft
@@ -105,6 +120,8 @@ class AccountEditViewModel(
     var code by mutableStateOf("")
     var lockedUntil by mutableStateOf<Long?>(null)
     var includeInTotal by mutableStateOf(true)
+    /** Null follows the name and institution; see [com.assetboard.ui.components.AccountIcons]. */
+    var icon by mutableStateOf<String?>(null)
     var note by mutableStateOf("")
 
     // New accounts only.
@@ -128,6 +145,7 @@ class AccountEditViewModel(
                 code = a.code.orEmpty()
                 lockedUntil = a.lockedUntil
                 includeInTotal = a.includeInTotal
+                icon = a.icon
                 note = a.note.orEmpty()
                 balanceDisplay = l.toDisplay(a.id, l.currentBalance(a.id))
                 baselineDisplay = l.toDisplay(a.id, l.valuationsOf(a.id).firstOrNull { it.at == a.baselineAt }?.value ?: 0L)
@@ -161,6 +179,7 @@ class AccountEditViewModel(
         code = code,
         lockedUntil = if (kind == AccountKind.INVESTMENT) lockedUntil else null,
         includeInTotal = includeInTotal,
+        icon = icon,
         note = note,
     )
 
@@ -225,6 +244,7 @@ fun AccountEditScreen(
     val cs = MaterialTheme.colorScheme
     val extra = AppTheme.extra
     val isNew = accountId == null
+    val accountTint = extra.group(vm.group?.colorIndex ?: 0)
 
     var pickGroup by rememberSaveable { mutableStateOf(false) }
     var moreOpen by rememberSaveable { mutableStateOf(false) }
@@ -263,8 +283,40 @@ fun AccountEditScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             SectionCard(contentPadding = PaddingValues(20.dp)) {
-                OutlinedTextField(vm.name, { vm.name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = FieldShape, colors = glassFieldColors())
-                Spacer(Modifier.height(10.dp))
+                // The tile next to the name is the account as the list will show it; picking an
+                // icon redraws it at once, so the picker needs no preview of its own.
+                val preview = Account(
+                    id = "preview",
+                    groupId = vm.groupId.orEmpty(),
+                    name = vm.name.trim().ifEmpty { "账户" },
+                    kind = vm.kind,
+                    institution = vm.institution.trim().ifEmpty { null },
+                    icon = vm.icon,
+                    baselineAt = 0,
+                    createdAt = 0,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AccountAvatar(preview, accountTint, size = 56.dp)
+                    Spacer(Modifier.width(14.dp))
+                    OutlinedTextField(vm.name, { vm.name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.weight(1f), shape = FieldShape, colors = glassFieldColors())
+                }
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("图标", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    Text(
+                        if (vm.icon == null) "自动" else "自定义",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (vm.icon == null) cs.onSurfaceVariant else accountTint,
+                    )
+                }
+                Text(
+                    "默认按名称和机构自动匹配，选一个就固定用它。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+                )
+                IconPicker(vm.icon, accountTint) { vm.icon = it }
+                Spacer(Modifier.height(14.dp))
                 OutlinedTextField(
                     vm.purpose, { vm.purpose = it },
                     label = { Text("用途") },
@@ -481,6 +533,39 @@ fun AccountEditScreen(
             onConfirm = { deleteDialog = false; vm.delete(onDeleted) },
             onDismiss = { deleteDialog = false },
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun IconPicker(selected: String?, tint: Color, onPick: (String?) -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 自动 is the first choice: the brand or initial the account would get on its own.
+        IconChoice(Icons.Rounded.AutoAwesome, "自动", selected == null, tint, shape) { onPick(null) }
+        AccountIcons.options.forEach { option ->
+            IconChoice(option.vector, option.label, selected == option.key, tint, shape) { onPick(option.key) }
+        }
+    }
+}
+
+/** One tile in [IconPicker]; a filled tint means chosen, and [label] is what a screen reader says. */
+@Composable
+private fun IconChoice(icon: ImageVector, label: String, on: Boolean, tint: Color, shape: RoundedCornerShape, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .size(38.dp)
+            .clip(shape)
+            .background(if (on) tint else cs.onSurface.copy(alpha = 0.06f))
+            .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = label
+                selected = on
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, null, tint = if (on) cs.surface else cs.onSurfaceVariant, modifier = Modifier.size(19.dp))
     }
 }
 

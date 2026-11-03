@@ -35,8 +35,8 @@ import java.security.MessageDigest
  * format 7 the net worth goal, format 8 the habits themselves (a file without them reads as the
  * five built in), format 9 what was eaten, format 10 the diary's mood and the habits' rest days,
  * format 11 each habit's rubric, format 12 how far ahead a todo reminds, format 13 记账 (flows
- * of kind 支出 and 收入 with a category), format 14 the countdowns; older files read with the
- * newer tables empty and the newer fields unset. Device-local
+ * of kind 支出 and 收入 with a category), format 14 the countdowns, format 15 an account's own
+ * icon; older files read with the newer tables empty and the newer fields unset. Device-local
  * state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
@@ -819,7 +819,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 14
+        const val FORMAT_VERSION = 15
         private const val MAX_BACKUP_BYTES = 64L * 1024 * 1024
 
         /**

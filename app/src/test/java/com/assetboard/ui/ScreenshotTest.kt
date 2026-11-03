@@ -47,6 +47,7 @@ import com.assetboard.data.StocktakeEntry
 import com.assetboard.data.ThemeMode
 import com.assetboard.data.newId
 import com.assetboard.data.seedDemo
+import com.assetboard.domain.Money
 import com.assetboard.ui.account.AccountDetailScreen
 import com.assetboard.ui.account.AccountEditScreen
 import com.assetboard.ui.overview.OverviewScreen
@@ -174,17 +175,45 @@ class ScreenshotTest {
         shot("01-overview", c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
     }
 
-    /** Picking a group under the hero's ring puts its share in the middle; picking it again lets go. */
-    @Test fun allocationReturnsToTotal() {
+    /** The shares ride on the hero beside the figure: a dot and a percentage per group, no ring. */
+    @Test fun allocationSitsOnTheHero() {
         val c = demoContainer()
         show(c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
-        compose.onNode(hasScrollAction()).performScrollToKey("allocation")
-        compose.mainClock.advanceTimeBy(800)
-        compose.onNodeWithText("配置", useUnmergedTree = true).assertExists()
-        compose.onAllNodesWithText("储蓄账户")[0].performClick()
+        // The ring's centre label went with the separate card; the legend is named on the hero.
         compose.onNodeWithText("配置", useUnmergedTree = true).assertDoesNotExist()
-        compose.onAllNodesWithText("储蓄账户")[0].performClick()
-        compose.onNodeWithText("配置", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("资产配置").assertExists()
+        // The largest group is named with its share without scrolling, and nothing else is needed
+        // to read the rest: their percentages follow it at the top of the page.
+        val l = runBlocking { c.repository.loadOnce() }
+        val groups = l.groups.filter { !it.isLiability }.map { g ->
+            g.name to l.accounts.filter { it.groupId == g.id && it.includeInTotal && !it.isDisabled }
+                .sumOf { maxOf(0L, l.toDisplay(it.id, l.currentBalance(it.id))) }
+        }.filter { it.second > 0 }
+        val top = groups.maxBy { it.second }
+        val total = groups.sumOf { it.second }
+        assert(compose.onAllNodesWithText(top.first, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+        assert(compose.onAllNodesWithText(Money.percent(top.second, total), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+    }
+
+    /** The compact legend still names every asset group; none is folded away behind 其他. */
+    @Test fun everyAssetGroupIsNamedOnTheHero() {
+        val c = demoContainer()
+        val names = listOf("饮食", "出行", "学习", "礼物")
+        runBlocking(c.gate.bound()) {
+            names.forEachIndexed { i, name ->
+                val group = c.repository.createGroup(name, false, i + 3)
+                c.repository.createAccount(com.assetboard.data.AccountDraft(group, "${name}账户"), AppClock.millis(), (i + 1) * 100_00L, null)
+            }
+        }
+        show(c) { OverviewScreen({}, noop, {}, noop, noop, {}) }
+        names.forEach { name ->
+            assert(compose.onAllNodesWithText(name, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
+                "the hero should name $name"
+            }
+        }
+        assert(compose.onAllNodesWithText("其他", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()) {
+            "no group should be folded into 其他"
+        }
     }
 
     /** Groups start folded; one opens on tap, and the header opens them all. */
@@ -195,8 +224,8 @@ class ScreenshotTest {
         compose.onNode(hasScrollAction()).performScrollToKey("accounts")
         compose.mainClock.advanceTimeBy(1_500)
         compose.onRoot().captureRoboImage("screenshots/01c-overview-accounts.png", roborazziOptions = SHOT_OPTIONS)
-        // [0] is the hero's legend row, [1] the group in the accounts card.
-        compose.onAllNodesWithText("储蓄账户")[1].performClick()
+        // The group is named at the top in the hero legend too; the accounts card has the last one.
+        compose.onAllNodesWithText("储蓄账户").onLast().performClick()
         compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("农行①").assertExists()
         compose.onNodeWithText("全部展开").performClick()
@@ -373,6 +402,29 @@ class ScreenshotTest {
         val c = demoContainer()
         val id = runBlocking { c.repository.loadOnce().accounts.first { it.name == "农行②" }.id }
         shot("08-account-edit", c) { AccountEditScreen(id, null, noop, {}, noop, {}) }
+    }
+
+    /** A new account can wear any icon in the picker, and it is stored with the account. */
+    @Test fun newAccountPicksAnIcon() {
+        val c = demoContainer()
+        val group = runBlocking { c.repository.loadOnce().groups.first { !it.isLiability }.id }
+        var created: String? = null
+        show(c) { AccountEditScreen(null, group, noop, { created = it }, noop, {}) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("图标").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("钱包").performClick()
+        assert(compose.onNodeWithContentDescription("钱包").fetchSemanticsNode().config[SemanticsProperties.Selected])
+        compose.onAllNodes(hasSetTextAction())[0].performTextReplacement("测试钱包")
+        compose.onAllNodes(hasSetTextAction())[2].performTextReplacement("100")
+        compose.onNodeWithText("保存").performClick()
+        // The write runs on Room's executor in real time; waitUntil would run the virtual clock
+        // past it, so give the executor a few real ticks while the page idles.
+        val deadline = System.currentTimeMillis() + 5_000
+        while (created == null && System.currentTimeMillis() < deadline) {
+            compose.waitForIdle()
+            Thread.sleep(20)
+        }
+        assert(created != null)
+        org.junit.Assert.assertEquals("wallet", runBlocking { c.repository.loadOnce() }.accountById.getValue(created!!).icon)
     }
 
     @Test fun flowEdit() {
