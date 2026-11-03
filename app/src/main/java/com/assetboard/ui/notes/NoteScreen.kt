@@ -4,12 +4,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +23,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -32,13 +33,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.PushPin
@@ -47,13 +46,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import com.assetboard.ui.components.glass
 import com.assetboard.ui.components.GlassScaffold
 import com.assetboard.ui.components.glassBarColors
 import com.assetboard.ui.components.GlassSnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,26 +64,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -127,6 +113,9 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
     val context = LocalContext.current
     var askDelete by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
+    var outline by rememberSaveable { mutableStateOf(false) }
+    val editorState = remember(vm) { NoteEditorState(vm::onInput) }
+    val scroll = rememberScrollState()
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     ErrorDialog(error) { vm.error.value = null }
@@ -200,37 +189,66 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
             Gone(Modifier.padding(padding), onBack)
             return@GlassScaffold
         }
-        Column(
-            Modifier.fillMaxSize().padding(padding).imePadding().verticalScrollWithIndicator(rememberScrollState())
-                .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            session?.let { s ->
-                Editor(s, autoFocus = noteId == null, onInput = vm::onInput, onFocus = { editing = it })
-            }
-            if (sources.isNotEmpty()) {
-                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("摘自", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        sources.forEach { src ->
-                            val d = runCatching { LocalDate.parse(src.ref) }.getOrNull() ?: return@forEach
-                            when (src.kind) {
-                                SourceRef.DAY -> SourceChip(d) { leave(NoteViewModel.Leave.Diary(d)) }
-                                // The week page goes on top of this one: nothing here is left behind.
-                                SourceRef.WEEK -> WeekSourceChip(d) { onOpenWeek(d) }
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            Column(
+                Modifier.fillMaxSize().imePadding().verticalScrollWithIndicator(scroll)
+                    .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = if (editing) 112.dp else 80.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                session?.let { s ->
+                    NoteEditor(s, editorState, autoFocus = noteId == null, scrollState = scroll, onFocus = { editing = it })
+                }
+                if (sources.isNotEmpty()) {
+                    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("摘自", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            sources.forEach { src ->
+                                val d = runCatching { LocalDate.parse(src.ref) }.getOrNull() ?: return@forEach
+                                when (src.kind) {
+                                    SourceRef.DAY -> SourceChip(d) { leave(NoteViewModel.Leave.Diary(d)) }
+                                    // The week page goes on top of this one: nothing here is left behind.
+                                    SourceRef.WEEK -> WeekSourceChip(d) { onOpenWeek(d) }
+                                }
                             }
                         }
                     }
                 }
+                note?.takeIf { exists }?.let { n ->
+                    Text(
+                        "创建于 ${Dates.date(n.createdAt)} · 更新于 ${whenLabel(n.updatedAt)}",
+                        style = MaterialTheme.typography.labelMedium, color = cs.outline,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
-            note?.takeIf { exists }?.let { n ->
-                Text(
-                    "创建于 ${Dates.date(n.createdAt)} · 更新于 ${whenLabel(n.updatedAt)}",
-                    style = MaterialTheme.typography.labelMedium, color = cs.outline,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+            AnimatedVisibility(
+                visible = editing,
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .imePadding()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 },
+                exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { it / 2 },
+            ) {
+                NoteFormatBar(editorState)
+            }
+            AnimatedVisibility(
+                visible = !editing,
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(end = 18.dp, bottom = 14.dp),
+                enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 3 },
+                exit = fadeOut(tween(120)),
+            ) {
+                NoteOutlinePill { outline = true }
             }
         }
+    }
+
+    if (outline) {
+        NoteOutlineSheet(
+            doc = editorState.document(),
+            onJump = { offset -> outline = false; editorState.jumpTo?.invoke(offset) },
+            onDismiss = { outline = false },
+        )
     }
 
     if (askDelete) {
@@ -326,102 +344,6 @@ fun TopicNameDialog(title: String, initial: String, onDismiss: () -> Unit, onSav
         confirmButton = { TextButton(onClick = { onSave(name) }, enabled = name.isNotBlank()) { Text("保存") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
-}
-
-/**
- * The writing surface: a sheet of paper whose first line reads as the title. Local state keeps
- * the cursor; the session holds the text that gets saved.
- */
-@Composable
-private fun Editor(session: NoteSession, autoFocus: Boolean, onInput: (String) -> Unit, onFocus: (Boolean) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val text by session.text.collectAsStateWithLifecycle()
-    val status by session.status.collectAsStateWithLifecycle()
-    val savedAt by session.savedAt.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    var value by remember(session) { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
-    if (value.text != text && status != NoteSession.Status.UNSAVED) value = value.copy(text = text, selection = TextRange(text.length))
-    var focused by remember(session) { mutableStateOf(false) }
-    val focus = remember { FocusRequester() }
-    // A new note is for writing: the keyboard comes up at once. An existing one opens for reading.
-    LaunchedEffect(session) { if (autoFocus && session.noteId == null) runCatching { focus.requestFocus() } }
-
-    if (status == NoteSession.Status.UNSAVED) {
-        Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.padding(start = 18.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("无法保存，请先复制内容", color = cs.onErrorContainer, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                TextButton(onClick = {
-                    context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("笔记", value.text))
-                }) { Text("复制全部") }
-            }
-        }
-    }
-    val style = MaterialTheme.typography.bodyLarge.copy(
-        color = cs.onSurface,
-        fontSize = 17.sp,
-        lineHeight = 30.sp,
-        letterSpacing = 0.3.sp,
-        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
-    )
-    val look = remember(cs.primary) { NoteBodyLook(24.sp, cs.primary) }
-    // The words straight on the page, no sheet around them; while typing, a slim bar of the
-    // accent grows down the margin.
-    val mark by animateFloatAsState(if (focused) 1f else 0f, tween(com.assetboard.ui.components.Motion.MEDIUM, easing = com.assetboard.ui.components.Motion.Emphasized), label = "editor")
-    val accent = cs.primary
-    Box(
-        Modifier.fillMaxWidth().drawBehind {
-            if (mark > 0f) {
-                val x = 1.5.dp.toPx()
-                drawLine(
-                    Brush.verticalGradient(listOf(accent.copy(alpha = 0.7f), accent.copy(alpha = 0f)), endY = size.height * mark),
-                    Offset(x, 8.dp.toPx()), Offset(x, 8.dp.toPx() + (size.height - 16.dp.toPx()) * mark),
-                    strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round,
-                )
-            }
-        },
-    ) {
-        Column(Modifier.padding(start = 16.dp, end = 10.dp, top = 8.dp, bottom = 6.dp)) {
-            Box(Modifier.fillMaxWidth().heightIn(min = 360.dp)) {
-                if (value.text.isEmpty()) {
-                    Column {
-                        Text("标题", style = style.copy(color = cs.outline, fontSize = 24.sp, fontWeight = FontWeight.SemiBold))
-                        Text("第一行是标题，接着写下你的想法。#标签 会高亮。", style = style.copy(color = cs.outline))
-                    }
-                }
-                BasicTextField(
-                    value = value,
-                    onValueChange = {
-                        value = it
-                        onInput(it.text)
-                    },
-                    textStyle = style,
-                    visualTransformation = look,
-                    cursorBrush = SolidColor(cs.primary),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 360.dp).focusRequester(focus).onFocusChanged {
-                        focused = it.isFocused
-                        onFocus(it.isFocused)
-                    },
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val count = value.text.count { !it.isWhitespace() }
-                Text("$count 字", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-                val label = when {
-                    status != NoteSession.Status.READY -> null
-                    session.dirty -> "正在保存…"
-                    savedAt != null -> "已保存 " + Dates.time(savedAt!!)
-                    value.text.isNotEmpty() -> "已保存"
-                    else -> null
-                }
-                label?.let {
-                    Icon(Icons.Outlined.CloudDone, null, tint = cs.outline, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(it, style = MaterialTheme.typography.labelMedium, color = cs.outline)
-                }
-            }
-        }
-    }
 }
 
 @Composable

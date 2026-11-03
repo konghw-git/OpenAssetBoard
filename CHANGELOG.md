@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The note page is now a live Markdown editor.** # / ## / ### render as real heading levels,
+  `- [ ]` items get a tappable box and a strikethrough once done, `---` becomes a hairline
+  divider, `>` a quoted paragraph with a margin bar, and bold, italic, strikethrough, inline
+  code and links render in place. Syntax shows only on the line being edited, as on Obsidian
+  mobile, but the body stays plain text, so autosave, sync and backup are unchanged.
+- **A formatting bar above the keyboard.** Headings 1–3, checklist, bullet and numbered lists,
+  quote, divider, bold, italic, strikethrough, code and indent/outdent, all acting on every
+  selected line.
+- **An outline.** A floating 大纲 pill opens the note's headings at their level, with a summary
+  count and a shortcut to the first unfinished checklist item; tapping a heading scrolls to it.
+- Enter now carries a checklist, bullet, numbered or quote marker onto the next line, and
+  backspace at the start of a marker removes the whole marker instead of one hidden character.
+- Notes in the list, the widget and the diary previews now show their titles and previews
+  without Markdown syntax, with ☑/☐ and • marks kept.
+
 ## [1.2.1] - 2026-11-02
 
 ### Changed

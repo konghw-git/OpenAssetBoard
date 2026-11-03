@@ -45,12 +45,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.assetboard.data.Note
 import com.assetboard.data.NoteText
@@ -84,34 +80,6 @@ fun tagged(text: String, color: Color): AnnotatedString = buildAnnotatedString {
         at = m.range.last + 1
     }
     append(text.substring(at))
-}
-
-/**
- * The editor's look without touching the text: the title line larger and bold, `#标签` in the
- * accent colour. Offsets map one to one, so the cursor and selection are never disturbed.
- */
-class NoteBodyLook(private val titleSize: TextUnit, private val tagColor: Color) : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText {
-        val s = text.text
-        val styled = buildAnnotatedString {
-            append(s)
-            // The first line with something on it is the title, as NoteText.title reads it.
-            var start = 0
-            while (start <= s.length) {
-                val end = s.indexOf('\n', start).let { if (it < 0) s.length else it }
-                if (s.substring(start, end).isNotBlank()) {
-                    addStyle(SpanStyle(fontSize = titleSize, fontWeight = FontWeight.SemiBold), start, end)
-                    break
-                }
-                start = end + 1
-            }
-            for (m in NoteText.TAG.findAll(s)) addStyle(SpanStyle(color = tagColor, fontWeight = FontWeight.Medium), m.range.first, m.range.last + 1)
-        }
-        return TransformedText(styled, OffsetMapping.Identity)
-    }
-
-    override fun equals(other: Any?) = other is NoteBodyLook && other.titleSize == titleSize && other.tagColor == tagColor
-    override fun hashCode() = titleSize.hashCode() * 31 + tagColor.hashCode()
 }
 
 /** A small rounded label in a topic's colour. */
@@ -149,6 +117,7 @@ fun NoteCard(
     val cs = MaterialTheme.colorScheme
     val source = remember { MutableInteractionSource() }
     val topic = topics.firstOrNull { it.id == note.topicId }
+    val title = remember(note.body) { note.title }
     val body = preview ?: remember(note.body, cs.primary) { tagged(NoteText.preview(note.body), cs.primary) }
     val lift by animateFloatAsState(if (lifted) 1f else 0f, spring(stiffness = Spring.StiffnessMediumLow), label = "lift")
     val ring by animateColorAsState(if (selected) cs.primary.copy(alpha = 0.7f) else Color.Transparent, tween(180), label = "noteRing")
@@ -169,9 +138,9 @@ fun NoteCard(
         // a note is two lines of reading, not a block with a footer.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                note.title,
+                title,
                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp, letterSpacing = 0.1.sp),
-                color = if (note.title == NoteText.UNTITLED) cs.outline else cs.onSurface,
+                color = if (title == NoteText.UNTITLED) cs.outline else cs.onSurface,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
