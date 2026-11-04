@@ -53,6 +53,8 @@
 
 登录自建账号后，**同一个 `BackupFile` 也是同步载荷**：客户端整份上传，服务器按 revision 保存，保留最近 10 个版本；两边都改过时不会合并，由用户在 App 里选择保留本机还是使用云端。服务器不解析账本，只校验顶层的 `formatVersion` / `schemaVersion` 并原样保存。协议、部署和冲突语义见 [`server/README.md`](../server/README.md)。
 
+云端下载就是走本地恢复的全流程：同一套校验、`WriteGate` 与数据纪元，快照不合格时整库不动。此外客户端在**决定下载之前**就比对云端快照的 `formatVersion` / `schemaVersion`，比本机新时直接提示升级 App（且不上传覆盖），而不是等恢复阶段才失败。
+
 ## 原子替换
 
 系统文件提供者不保证 `rename` 可用，也不保证写入不中断。`replaceInFolder` 的顺序是：

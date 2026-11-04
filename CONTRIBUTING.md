@@ -39,6 +39,7 @@
 |---|---|
 | 计算规则（余额、净投入、盈亏、趋势） | 写在 `domain/` 的纯函数里，并在同目录的测试中新增用例；不要在 UI 里算 |
 | 数据写入 | 必须经过 `data/` 的仓储方法与 `WriteGate.write`，不要直接调 DAO |
+| 层次依赖 | `domain/` 的纯函数可以使用 `data/` 的实体数据类，但不要 import DAO / Repository；页面状态从 ViewModel 暴露的字段取，不要绕过它直读仓储 |
 | 数据模型 / 备份格式 | 同时更新 `app/schemas/`、`Migrations.kt`、迁移测试；备份改动还要考虑旧版本兼容 |
 | 界面 | 跟随现有 Compose 写法与 `ui/components` 里的共享控件；不要在页面里自造颜色和间距 |
 | 新的依赖 | 先说明为什么现有代码不够；优先能减小 APK 或已有等价实现的方案 |
@@ -48,6 +49,7 @@
 - 沿用周围代码的命名、注释密度和写法。注释解释「为什么」，不复述「做了什么」。
 - 注释与提交信息使用英文；界面文案是中文。
 - 提交信息用一句话说明改了什么，例如 `Fix restore rejecting a stale epoch`。
+- 错误提示分两条通道：规则类 `LedgerException` 经 `ActionViewModel.action` 弹 ErrorDialog；非 `LedgerException` 的操作失败（AI、网络）走 snackbar / `message`，不弹全屏 dialog。
 
 ## 界面文字
 
