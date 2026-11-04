@@ -45,14 +45,14 @@ class NoteAiEditTest {
     @get:Rule val rules: TestRule = RuleChain.outerRule(composeRule).around(CloseTestContainers())
     private val compose get() = composeRule
 
-    /** Echoes what it got back in «», so a test sees exactly which text the pass ran on. */
+    /** Echoes the pass's target in «», so a test sees exactly which text the pass ran on. */
     private class MarkingAi : AiGateway {
         /** When set, the reply waits for it — long enough for the test to type. */
         var gate: CompletableDeferred<Unit>? = null
 
         override suspend fun complete(system: String, user: String): String {
             gate?.await()
-            return "«$user»"
+            return "«${com.assetboard.domain.AiEdit.targetOf(user)}»"
         }
     }
 

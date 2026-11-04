@@ -3,7 +3,9 @@ package com.assetboard.ui.diary
 import com.assetboard.domain.AppClock
 import androidx.lifecycle.viewModelScope
 import com.assetboard.AppContainer
+import com.assetboard.data.AiDayTools
 import com.assetboard.data.AppendResult
+import com.assetboard.data.ChatTurn
 import com.assetboard.data.DiaryDraft
 import com.assetboard.data.DiaryEntry
 import com.assetboard.data.DiarySession
@@ -12,12 +14,11 @@ import com.assetboard.data.Place
 import com.assetboard.data.SourceRef
 import com.assetboard.data.Todo
 import com.assetboard.data.WeatherResult
-import com.assetboard.data.WeatherService
 import com.assetboard.domain.AiAction
+import com.assetboard.domain.AiAgent
 import com.assetboard.domain.AiEdit
-import com.assetboard.domain.HabitDay
+import com.assetboard.domain.DocKind
 import com.assetboard.domain.Mood
-import com.assetboard.domain.Money
 import com.assetboard.domain.NetWorthPoint
 import com.assetboard.domain.todo.TodoViews
 import com.assetboard.ui.ActionViewModel
@@ -257,7 +258,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
 
     fun discardDraft(draft: DiaryDraft) = action { diary.discardDraft(draft.id) }
 
-    // ------------------------------------------------------------ mood and AI 排版
+    // ------------------------------------------------------------ mood and AI
 
     /** The open day's mood; null clears it. */
     fun setMood(mood: Mood?) {
@@ -278,7 +279,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     /** AI 润色: only the wording, on the selection or the whole body. */
     fun aiPolish(selStart: Int = -1, selEnd: Int = -1) = aiEdit(AiAction.POLISH, selStart, selEnd)
 
-    /** 生成日记: a fresh body for the day, written from its records (the day card's facts). */
+    /** 生成日记: a fresh body for the day, written from its records — the model may pull more. */
     fun aiGenerate() = aiEdit(AiAction.GENERATE, -1, -1)
 
     /**
@@ -299,8 +300,9 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         aiBusy.value = kind
         launchBound {
             try {
-                val user = if (kind == AiAction.GENERATE) AiEdit.daySummary(dayFacts()) else before.substring(range)
-                val out = AiEdit.unwrap(container.ai.complete(AiEdit.systemFor(kind), user))
+                val out = if (kind == AiAction.GENERATE) generate() else {
+                    AiEdit.editText(container.ai::complete, kind, DocKind.DIARY, before, range)
+                }
                 // Typed on while the model worked: what was typed wins, the reply is dropped.
                 if (s.text.value != before) {
                     messages.tryEmit("文本已改动，AI 的结果没有应用")
@@ -325,6 +327,24 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
                 aiBusy.value = null
             }
         }
+    }
+
+    /**
+     * The diary agent: seed it with the day read fresh from the database and let it call the data
+     * tools (everything but the notes) for whatever else it wants before writing.
+     */
+    private suspend fun generate(): String {
+        val date = _date.value
+        val tools = dayTools.tools(date)
+        val system = AiEdit.DIARY_SYSTEM + "\n\n你可以调用以下工具查数据：\n" + AiAgent.toolsDoc(tools)
+        val seed = AiEdit.daySummary(dayTools.dayFacts(date)) + "\n\n写这一天的日记。"
+        return AiAgent.run(
+            chat = { history: List<AiAgent.Turn> ->
+                container.ai.chat(system, history.map { ChatTurn(it.role, it.content) })
+            },
+            tools = tools,
+            seed = seed,
+        )
     }
 
     /** Puts the text back as it was before [t], unless it was typed on since. */
@@ -355,38 +375,11 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         AiAction.GENERATE -> "生成日记"
     }
 
-    /** The day's habits, straight from the todo tab's battery; the 生成 draws on them. */
-    val dayHabits: StateFlow<HabitDay?> = _date.flatMapLatest { container.habits.observeDay(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    /** Everything the day card shows, as strings the 生成's prompt may draw on. */
-    private fun dayFacts(): AiEdit.DayFacts {
-        val e = entry.value
-        val h = dayHabits.value
-        val last = stocktakes.value.lastOrNull()
-        return AiEdit.DayFacts(
-            date = _date.value,
-            mood = Mood.of(e?.mood)?.label,
-            weather = e?.let { w ->
-                val temps = when {
-                    w.tempMin != null && w.tempMax != null -> "${w.tempMin!!.toInt()}~${w.tempMax!!.toInt()}°C"
-                    w.tempMax != null -> "${w.tempMax!!.toInt()}°C"
-                    w.tempMin != null -> "${w.tempMin!!.toInt()}°C"
-                    else -> null
-                }
-                listOfNotNull(WeatherService.describe(w.weatherCode).ifBlank { null }, temps, w.city)
-                    .joinToString("，").ifBlank { null }
-            },
-            completed = completed.value.map { it.title },
-            habitsDone = h?.done,
-            habitsDue = h?.due,
-            habits = h?.shown?.map { it.label to (it.key in h.checked) }.orEmpty(),
-            stocktake = last?.let { s ->
-                "¥" + Money.short(s.point.netWorth) +
-                    (s.change?.takeIf { it != 0L }?.let { "（较上次 " + Money.format(it, signed = true) + "）" } ?: "")
-            },
-        )
-    }
+    /** The agent's data window: every domain but the notes, read fresh when a tool runs. */
+    private val dayTools = AiDayTools(
+        container.diary, container.todos, container.habits, container.health, container.food,
+        container.repository, container.countdowns, container.weeks, container.goal,
+    )
 
     // ------------------------------------------------------------ extract into notes
 

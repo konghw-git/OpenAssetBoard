@@ -924,6 +924,8 @@ private fun Editor(
             },
             onFocus = onFocus,
             hint = { style -> Text("今天过得怎么样？", style = style.copy(color = cs.outline)) },
+            // The diary is free editing: its first line is just the first line, not a title.
+            promoteTitle = false,
             footer = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val count = state.value.text.count { !it.isWhitespace() }

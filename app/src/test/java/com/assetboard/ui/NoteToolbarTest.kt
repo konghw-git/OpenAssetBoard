@@ -3,8 +3,11 @@ package com.assetboard.ui
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.remember
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import com.assetboard.data.ThemeMode
 import com.assetboard.ui.notes.NoteEditorState
 import com.assetboard.ui.notes.NoteFormatBar
@@ -62,5 +65,13 @@ class NoteToolbarTest {
     fun theButtonsSitOnOneRowOnAWideScreen() {
         show()
         assertEquals("one row on a wide screen", topOf("撤销"), topOf("润色"))
+    }
+
+    @Test fun aLongPressSaysWhatTheButtonDoes() {
+        show()
+        compose.onNodeWithContentDescription("加粗").performTouchInput { longClick() }
+        compose.waitUntil(3_000) {
+            compose.onAllNodes(hasText("加粗", substring = true)).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 }

@@ -12,9 +12,24 @@ interface AiGateway {
     /** The assistant's reply to one system+user exchange. Throws with a user-readable message. */
     suspend fun complete(system: String, user: String): String
 
+    /**
+     * The assistant's reply to a running conversation (user/assistant turns after the system).
+     * The default folds the transcript into one [complete] call, which is all a plain chat
+     * endpoint or a test fake needs; [AiService] sends the real message list.
+     */
+    suspend fun chat(system: String, history: List<ChatTurn>): String {
+        val user = history.joinToString("\n\n") { turn ->
+            if (turn.role == "assistant") "助手：${turn.content}" else turn.content
+        }
+        return complete(system, user)
+    }
+
     /** A tiny exchange to prove the key, URL and model work; returns the model's greeting. */
     suspend fun testConnection(): String = complete("只回复两个字：正常", "正常")
 }
+
+/** One message of an agent conversation; [role] is "user" or "assistant". */
+data class ChatTurn(val role: String, val content: String)
 
 @Serializable
 private data class ChatMessage(val role: String, val content: String)
@@ -42,7 +57,10 @@ private data class ApiErrorDetail(val message: String? = null)
 class AiService(private val settings: SettingsStore) : AiGateway {
     private val json = Json { ignoreUnknownKeys = true }
 
-    override suspend fun complete(system: String, user: String): String = withContext(Dispatchers.IO) {
+    override suspend fun complete(system: String, user: String): String =
+        chat(system, listOf(ChatTurn("user", user)))
+
+    override suspend fun chat(system: String, history: List<ChatTurn>): String = withContext(Dispatchers.IO) {
         val key = settings.aiApiKey.value.trim()
         if (key.isEmpty()) throw AiException("未配置 API Key，请到设置里填写")
         if (!settings.networkEnabled.value) throw AiException("已关闭联网，请到设置里开启")
@@ -51,7 +69,7 @@ class AiService(private val settings: SettingsStore) : AiGateway {
             ChatRequest.serializer(),
             ChatRequest(
                 settings.aiModel.value.trim().ifEmpty { SettingsStore.DEFAULT_AI_MODEL },
-                listOf(ChatMessage("system", system), ChatMessage("user", user)),
+                listOf(ChatMessage("system", system)) + history.map { ChatMessage(it.role, it.content) },
             ),
         )
         val reply = post("$base/chat/completions", key, body)

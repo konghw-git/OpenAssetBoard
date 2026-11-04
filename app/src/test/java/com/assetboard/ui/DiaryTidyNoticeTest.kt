@@ -50,7 +50,7 @@ class DiaryTidyNoticeTest {
     private val typed = "早上跑了五公里.\n\n\n下午改论文"
 
     private object TidyAi : AiGateway {
-        override suspend fun complete(system: String, user: String): String = DiaryFormat.tidy(user)
+        override suspend fun complete(system: String, user: String): String = DiaryFormat.tidy(com.assetboard.domain.AiEdit.targetOf(user))
     }
 
     /** The local tidy behind a gate: a reply the test lets land only when it says so. */
@@ -59,7 +59,7 @@ class DiaryTidyNoticeTest {
 
         override suspend fun complete(system: String, user: String): String {
             gate.await()
-            return DiaryFormat.tidy(user)
+            return DiaryFormat.tidy(com.assetboard.domain.AiEdit.targetOf(user))
         }
     }
 

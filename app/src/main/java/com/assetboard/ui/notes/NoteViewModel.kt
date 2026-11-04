@@ -9,6 +9,7 @@ import com.assetboard.data.NoteSource
 import com.assetboard.data.NoteTopic
 import com.assetboard.domain.AiAction
 import com.assetboard.domain.AiEdit
+import com.assetboard.domain.DocKind
 import com.assetboard.domain.notes.NoteMarkdownEdit
 import com.assetboard.ui.ActionViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -132,7 +133,7 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
         aiBusy.value = kind
         launchBound {
             try {
-                val out = AiEdit.unwrap(container.ai.complete(AiEdit.systemFor(kind), text.substring(range)))
+                val out = AiEdit.editText(container.ai::complete, kind, DocKind.NOTE, text, range)
                 if (_session.value?.text?.value != text) {
                     messages.tryEmit("文本已改动，AI 的结果没有应用")
                 } else {

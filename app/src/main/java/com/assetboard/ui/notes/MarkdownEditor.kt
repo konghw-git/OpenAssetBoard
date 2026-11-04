@@ -71,6 +71,8 @@ fun MarkdownBody(
     onFocus: (Boolean) -> Unit = {},
     /** Said instead of the text when the body is empty. */
     hint: @Composable (TextStyle) -> Unit = {},
+    /** False on the diary, whose first line is plain text rather than an implicit title. */
+    promoteTitle: Boolean = true,
     footer: @Composable () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
@@ -79,7 +81,7 @@ fun MarkdownBody(
     val activeLines = remember(doc, value.selection, state.focused) {
         if (state.focused) doc.lineIndexRange(value.selection.start, value.selection.end) else null
     }
-    val look = remember(doc, activeLines, cs) {
+    val look = remember(doc, activeLines, cs, promoteTitle) {
         NoteBodyLook(
             doc = doc,
             activeLines = activeLines,
@@ -90,6 +92,7 @@ fun MarkdownBody(
             faintColor = cs.outline,
             accent = cs.primary,
             codeBackground = cs.primary.copy(alpha = 0.06f),
+            promoteTitle = promoteTitle,
         )
     }
     val density = LocalDensity.current

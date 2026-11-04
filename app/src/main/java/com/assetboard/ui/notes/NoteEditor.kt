@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -65,10 +67,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -76,8 +80,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.assetboard.data.NoteSession
 import com.assetboard.domain.AiAction
@@ -224,7 +230,8 @@ private fun EditorFooter(
  * shrink until every one fits on a single row; on a narrow one the groups wrap into two or three
  * rows on their own, so no button hides behind a horizontal scroll. The last group is the AI
  * passes (排版 and 润色), which act on the selection when there is one and the whole body
- * otherwise; while one runs, its button shows the wait and both stay quiet.
+ * otherwise; while one runs, its button shows the wait and both stay quiet. A long press on any
+ * button shows what it does.
  */
 @Composable
 fun NoteFormatBar(
@@ -244,39 +251,39 @@ fun NoteFormatBar(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             BarGroup {
-                FormatButton(Icons.Outlined.Undo, "撤销", active = false, enabled = state.canUndo, size = buttonSize) { state.undo() }
-                FormatButton(Icons.Outlined.Redo, "重做", active = false, enabled = state.canRedo, size = buttonSize) { state.redo() }
+                FormatButton(Icons.Outlined.Undo, "撤销", "撤销上一步", active = false, enabled = state.canUndo, size = buttonSize) { state.undo() }
+                FormatButton(Icons.Outlined.Redo, "重做", "重做被撤销的一步", active = false, enabled = state.canRedo, size = buttonSize) { state.redo() }
             }
             BarGroup {
                 BarDivider()
-                HeadingButton("H1", "一级标题", line.kind == Kind.HEADING && line.level == 1, buttonSize) { state.format(Format.H1) }
-                HeadingButton("H2", "二级标题", line.kind == Kind.HEADING && line.level == 2, buttonSize) { state.format(Format.H2) }
-                HeadingButton("H3", "三级标题", line.kind == Kind.HEADING && line.level == 3, buttonSize) { state.format(Format.H3) }
+                HeadingButton("H1", "一级标题", "一级标题", line.kind == Kind.HEADING && line.level == 1, buttonSize) { state.format(Format.H1) }
+                HeadingButton("H2", "二级标题", "二级标题", line.kind == Kind.HEADING && line.level == 2, buttonSize) { state.format(Format.H2) }
+                HeadingButton("H3", "三级标题", "三级标题", line.kind == Kind.HEADING && line.level == 3, buttonSize) { state.format(Format.H3) }
             }
             BarGroup {
                 BarDivider()
-                FormatButton(Icons.Outlined.CheckBox, "待办清单", line.kind == Kind.CHECKLIST, size = buttonSize) { state.format(Format.CHECKLIST) }
-                FormatButton(Icons.Outlined.FormatListBulleted, "无序列表", line.kind == Kind.BULLET, size = buttonSize) { state.format(Format.BULLET) }
-                FormatButton(Icons.Outlined.FormatListNumbered, "有序列表", line.kind == Kind.NUMBERED, size = buttonSize) { state.format(Format.NUMBERED) }
-                FormatButton(Icons.Outlined.FormatQuote, "引用", line.kind == Kind.QUOTE, size = buttonSize) { state.format(Format.QUOTE) }
-                FormatButton(Icons.Outlined.HorizontalRule, "分割线", false, size = buttonSize) { state.format(Format.DIVIDER) }
+                FormatButton(Icons.Outlined.CheckBox, "待办清单", "待办清单：可勾选的待办", line.kind == Kind.CHECKLIST, size = buttonSize) { state.format(Format.CHECKLIST) }
+                FormatButton(Icons.Outlined.FormatListBulleted, "无序列表", "无序列表", line.kind == Kind.BULLET, size = buttonSize) { state.format(Format.BULLET) }
+                FormatButton(Icons.Outlined.FormatListNumbered, "有序列表", "有序列表", line.kind == Kind.NUMBERED, size = buttonSize) { state.format(Format.NUMBERED) }
+                FormatButton(Icons.Outlined.FormatQuote, "引用", "引用", line.kind == Kind.QUOTE, size = buttonSize) { state.format(Format.QUOTE) }
+                FormatButton(Icons.Outlined.HorizontalRule, "分割线", "分割线", false, size = buttonSize) { state.format(Format.DIVIDER) }
             }
             BarGroup {
                 BarDivider()
-                FormatButton(Icons.Filled.FormatBold, "加粗", false, size = buttonSize) { state.format(Format.BOLD) }
-                FormatButton(Icons.Filled.FormatItalic, "斜体", false, size = buttonSize) { state.format(Format.ITALIC) }
-                FormatButton(Icons.Filled.FormatStrikethrough, "删除线", false, size = buttonSize) { state.format(Format.STRIKE) }
-                FormatButton(Icons.Outlined.Code, "行内代码", false, size = buttonSize) { state.format(Format.CODE) }
+                FormatButton(Icons.Filled.FormatBold, "加粗", "加粗", false, size = buttonSize) { state.format(Format.BOLD) }
+                FormatButton(Icons.Filled.FormatItalic, "斜体", "斜体", false, size = buttonSize) { state.format(Format.ITALIC) }
+                FormatButton(Icons.Filled.FormatStrikethrough, "删除线", "删除线", false, size = buttonSize) { state.format(Format.STRIKE) }
+                FormatButton(Icons.Outlined.Code, "行内代码", "行内代码", false, size = buttonSize) { state.format(Format.CODE) }
             }
             BarGroup {
                 BarDivider()
-                FormatButton(Icons.Outlined.FormatIndentIncrease, "增加缩进", false, size = buttonSize) { state.format(Format.INDENT) }
-                FormatButton(Icons.Outlined.FormatIndentDecrease, "减少缩进", false, size = buttonSize) { state.format(Format.OUTDENT) }
+                FormatButton(Icons.Outlined.FormatIndentIncrease, "增加缩进", "增加缩进", false, size = buttonSize) { state.format(Format.INDENT) }
+                FormatButton(Icons.Outlined.FormatIndentDecrease, "减少缩进", "减少缩进", false, size = buttonSize) { state.format(Format.OUTDENT) }
             }
             BarGroup {
                 BarDivider()
-                AiButton(Icons.Outlined.AutoFixHigh, "AI排版", AiAction.FORMAT, aiBusy, buttonSize) { onAi(AiAction.FORMAT) }
-                AiButton(Icons.Outlined.Spellcheck, "润色", AiAction.POLISH, aiBusy, buttonSize) { onAi(AiAction.POLISH) }
+                AiButton(Icons.Outlined.AutoFixHigh, "AI排版", "AI排版：只整理标点、空行和段落，不改字句；选中文字时只排版选中部分", AiAction.FORMAT, aiBusy, buttonSize) { onAi(AiAction.FORMAT) }
+                AiButton(Icons.Outlined.Spellcheck, "润色", "润色：让表达更通顺自然，原意不变；选中文字时只润色选中部分", AiAction.POLISH, aiBusy, buttonSize) { onAi(AiAction.POLISH) }
             }
         }
     }
@@ -290,19 +297,73 @@ private fun BarGroup(content: @Composable RowScope.() -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, content = content)
 }
 
+/**
+ * A bar button: a tap runs it, a long press says what it does. The tip is a small surface above
+ * the button, gone again on its own, so it never blocks the writing.
+ */
 @Composable
-private fun HeadingButton(text: String, description: String, active: Boolean, size: Dp = 42.dp, onClick: () -> Unit) {
+private fun TooltippedButton(
+    tip: String,
+    enabled: Boolean = true,
+    size: Dp = 42.dp,
+    active: Boolean = false,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current
     val source = remember { MutableInteractionSource() }
+    var showing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    // One timer at a time: a second long press takes over, so the first one's delay cannot
+    // hide the new tip early.
+    var tipJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     Box(
         Modifier.size(size).clip(CircleShape)
             .background(if (active) cs.primary.copy(alpha = 0.14f) else Color.Transparent)
             .focusProperties { canFocus = false }
-            .semantics { contentDescription = description }
-            .clickable(interactionSource = source, indication = ripple(bounded = true), onClick = onClick),
+            .combinedClickable(
+                interactionSource = source, indication = ripple(bounded = true), enabled = enabled,
+                onClick = onClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showing = true
+                    tipJob?.cancel()
+                    tipJob = scope.launch {
+                        kotlinx.coroutines.delay(TIP_MS)
+                        showing = false
+                    }
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = if (active) cs.primary else cs.onSurfaceVariant)
+        content()
+        if (showing) {
+            val density = LocalDensity.current
+            val up = with(density) { (size / 2 + 22.dp).roundToPx() }
+            Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, -up)) {
+                Surface(shape = RoundedCornerShape(10.dp), color = cs.inverseSurface, shadowElevation = 6.dp) {
+                    Text(
+                        tip,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = cs.inverseOnSurface,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private const val TIP_MS = 1_800L
+
+@Composable
+private fun HeadingButton(text: String, label: String, tip: String, active: Boolean, size: Dp = 42.dp, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    TooltippedButton(tip, size = size, active = active, onClick = onClick) {
+        Box(Modifier.semantics { contentDescription = label }) {
+            Text(text, style = MaterialTheme.typography.labelLarge, color = if (active) cs.primary else cs.onSurfaceVariant)
+        }
     }
 }
 
@@ -310,26 +371,21 @@ private fun HeadingButton(text: String, description: String, active: Boolean, si
 private fun FormatButton(
     icon: ImageVector,
     label: String,
+    tip: String,
     active: Boolean,
     enabled: Boolean = true,
     size: Dp = 42.dp,
     onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val source = remember { MutableInteractionSource() }
-    Box(
-        Modifier.size(size).clip(CircleShape)
-            .background(if (active) cs.primary.copy(alpha = 0.14f) else Color.Transparent)
-            .focusProperties { canFocus = false }
-            .semantics { contentDescription = label }
-            .clickable(interactionSource = source, indication = ripple(bounded = true), enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            icon, null,
-            tint = (if (active) cs.primary else cs.onSurfaceVariant).copy(alpha = if (enabled) 1f else 0.4f),
-            modifier = Modifier.size(21.dp),
-        )
+    TooltippedButton(tip, enabled = enabled, size = size, active = active, onClick = onClick) {
+        Box(Modifier.semantics { contentDescription = label }) {
+            Icon(
+                icon, null,
+                tint = (if (active) cs.primary else cs.onSurfaceVariant).copy(alpha = if (enabled) 1f else 0.4f),
+                modifier = Modifier.size(21.dp),
+            )
+        }
     }
 }
 
@@ -338,25 +394,21 @@ private fun FormatButton(
 private fun AiButton(
     icon: ImageVector,
     label: String,
+    tip: String,
     kind: AiAction,
     busy: AiAction?,
     size: Dp = 42.dp,
     onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val source = remember { MutableInteractionSource() }
     val running = busy == kind
-    Box(
-        Modifier.size(size).clip(CircleShape)
-            .focusProperties { canFocus = false }
-            .semantics { contentDescription = label }
-            .clickable(interactionSource = source, indication = ripple(bounded = true), enabled = busy == null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (running) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = cs.primary)
-        } else {
-            Icon(icon, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(21.dp))
+    TooltippedButton(tip, enabled = busy == null, size = size, onClick = onClick) {
+        Box(Modifier.semantics { contentDescription = label }) {
+            if (running) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = cs.primary)
+            } else {
+                Icon(icon, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(21.dp))
+            }
         }
     }
 }

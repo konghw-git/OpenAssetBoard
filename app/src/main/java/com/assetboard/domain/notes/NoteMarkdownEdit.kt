@@ -17,8 +17,9 @@ object NoteMarkdownEdit {
     private data class Replace(val start: Int, val end: Int, val text: String)
 
     fun format(text: String, start: Int, end: Int, format: Format): Result? {
-        val a = start.coerceIn(0, text.length)
-        val b = end.coerceIn(0, text.length)
+        // A selection dragged backwards still covers its text.
+        val a = minOf(start, end).coerceIn(0, text.length)
+        val b = maxOf(start, end).coerceIn(0, text.length)
         return when (format) {
             Format.H1 -> setHeading(text, a, b, 1)
             Format.H2 -> setHeading(text, a, b, 2)

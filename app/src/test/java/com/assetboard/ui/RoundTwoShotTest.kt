@@ -76,7 +76,7 @@ class RoundTwoShotTest {
 
     /** What AI 排版 does in the shots: the local tidy, instantly and deterministically. */
     private object TidyAi : com.assetboard.data.AiGateway {
-        override suspend fun complete(system: String, user: String): String = com.assetboard.domain.DiaryFormat.tidy(user)
+        override suspend fun complete(system: String, user: String): String = com.assetboard.domain.DiaryFormat.tidy(com.assetboard.domain.AiEdit.targetOf(user))
     }
 
     private fun set(c: AppContainer, hide: Boolean = false, content: @Composable () -> Unit) {

@@ -14,6 +14,7 @@ import com.assetboard.AppContainer
 import com.assetboard.CloseTestContainers
 import com.assetboard.TestContainers
 import com.assetboard.data.AiGateway
+import com.assetboard.data.ChatTurn
 import com.assetboard.data.ThemeMode
 import com.assetboard.domain.AiEdit
 import com.assetboard.ui.diary.DiaryScreen
@@ -53,6 +54,21 @@ class DiaryAiGenerateTest {
         }
     }
 
+    /** A gateway whose first reply asks for a tool, then writes once the result is fed back. */
+    private class ToolAi : AiGateway {
+        var toolResult = ""
+
+        override suspend fun complete(system: String, user: String): String =
+            if (user.contains("工具结果")) "　　今天过得不错。"
+            else """{"tool":"day_overview","args":{"date":"${java.time.LocalDate.now()}"}}"""
+
+        override suspend fun chat(system: String, history: List<ChatTurn>): String {
+            val last = history.last().content
+            if (last.contains("工具结果")) toolResult = last
+            return complete(system, last)
+        }
+    }
+
     private fun show(): Pair<AppContainer, EchoAi> {
         val ai = EchoAi()
         val c = TestContainers.open(ApplicationProvider.getApplicationContext(), ai)
@@ -71,6 +87,19 @@ class DiaryAiGenerateTest {
     private fun shown(text: String) = compose.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty()
     private fun undoShown() = shown("撤销")
 
+    /**
+     * The agent runs on the compose clock while the snackbar's 撤销 lives on it too: step time
+     * in slices so the reply lands but the undo notice is still on screen.
+     */
+    private fun awaitShown(text: String) {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (!shown(text) && System.currentTimeMillis() < deadline) {
+            compose.mainClock.advanceTimeBy(200)
+            compose.waitForIdle()
+        }
+        assertTrue("timed out waiting for $text", shown(text))
+    }
+
     @Test fun anEmptyDayIsFilledFromTheDaysRecords() {
         val (_, ai) = show()
         assertTrue(
@@ -78,20 +107,50 @@ class DiaryAiGenerateTest {
             compose.onAllNodes(hasContentDescription("AI生成日记")).fetchSemanticsNodes().isNotEmpty(),
         )
         compose.onNodeWithContentDescription("AI生成日记").performClick()
-        compose.mainClock.advanceTimeBy(300)
-        assertEquals(AiEdit.DIARY_SYSTEM, ai.lastSystem)
+        awaitShown("今天是个好日子。")
+        assertTrue("the agent's system carries the writing rules", ai.lastSystem.startsWith(AiEdit.DIARY_SYSTEM))
         assertTrue("the prompt carries the day", ai.lastUser.contains("日期："))
-        assertTrue(shown("今天是个好日子。"))
         assertTrue(undoShown())
+    }
+
+    @Test fun theModelCanPullDataWithAToolBeforeWriting() {
+        val ai = ToolAi()
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext(), ai)
+        c.settings.setBool(c.settings.networkEnabled, false)
+        compose.setContent {
+            CompositionLocalProvider(LocalContainer provides c) {
+                AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) { DiaryScreen(null, {}, {}, {}, {}) }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("今天过得怎么样？", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithContentDescription("AI生成日记").performClick()
+        awaitShown("今天过得不错。")
+        assertTrue("the tool's answer went back to the model", ai.toolResult.contains("工具结果"))
     }
 
     @Test fun undoEmptiesTheGeneratedPageAgain() {
         show()
         compose.onNodeWithContentDescription("AI生成日记").performClick()
-        compose.mainClock.advanceTimeBy(300)
+        awaitShown("今天是个好日子。")
         compose.onNodeWithText("撤销").performClick()
         compose.mainClock.advanceTimeBy(500)
         assertEquals(false, shown("今天是个好日子。"))
         assertTrue("the day is back to empty", shown("今天过得怎么样？"))
+    }
+
+    @Test fun thePromptSeesWhatWasUpdatedAfterThePageOpened() {
+        val (c, ai) = show()
+        // The day card's data moves after the page is open: a habit gets ticked and a todo done.
+        kotlinx.coroutines.runBlocking(c.gate.bound()) {
+            c.habits.toggle(com.assetboard.domain.Habit.DEFAULTS.first())
+            val id = c.todos.create(com.assetboard.data.TodoDraft("买牛奶", planDate = java.time.LocalDate.now()))
+            c.todos.complete(id, null)
+        }
+        compose.onNodeWithContentDescription("AI生成日记").performClick()
+        awaitShown("今天是个好日子。")
+        assertTrue("habits reach the prompt", ai.lastUser.contains("每日指标"))
+        assertTrue("the freshly done todo reaches the prompt", ai.lastUser.contains("买牛奶"))
     }
 }

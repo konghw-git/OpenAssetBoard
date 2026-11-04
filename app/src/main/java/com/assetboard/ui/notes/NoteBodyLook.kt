@@ -38,6 +38,8 @@ class NoteBodyLook(
     private val faintColor: Color,
     private val accent: Color,
     private val codeBackground: Color,
+    /** False on the diary, which has no implicit title: the first line is just the first line. */
+    private val promoteTitle: Boolean = true,
 ) : VisualTransformation {
     private data class Styled(val start: Int, val end: Int, val style: SpanStyle)
     private data class Para(val start: Int, val end: Int, val style: ParagraphStyle)
@@ -68,7 +70,7 @@ class NoteBodyLook(
         val body = SpanStyle(fontSize = bodySize, color = textColor)
         for (line in doc.lines) {
             val active = activeLines?.contains(line.index) == true
-            val isTitle = doc.titleLine?.index == line.index
+            val isTitle = promoteTitle && doc.titleLine?.index == line.index
             when (line.kind) {
                 Kind.BLANK -> Unit
                 Kind.HEADING -> {
@@ -226,7 +228,8 @@ class NoteBodyLook(
         if (other !is NoteBodyLook) return false
         return doc === other.doc && activeLines == other.activeLines && bodySize == other.bodySize &&
             titleSize == other.titleSize && textColor == other.textColor && mutedColor == other.mutedColor &&
-            faintColor == other.faintColor && accent == other.accent && codeBackground == other.codeBackground
+            faintColor == other.faintColor && accent == other.accent && codeBackground == other.codeBackground &&
+            promoteTitle == other.promoteTitle
     }
 
     override fun hashCode(): Int {
@@ -239,6 +242,7 @@ class NoteBodyLook(
         result = 31 * result + faintColor.hashCode()
         result = 31 * result + accent.hashCode()
         result = 31 * result + codeBackground.hashCode()
+        result = 31 * result + promoteTitle.hashCode()
         return result
     }
 
