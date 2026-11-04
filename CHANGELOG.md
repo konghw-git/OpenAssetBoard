@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-11-04
+
+### Added
+
+- **Long-press hints on the format bar.** Every button — undo, the headings, the lists, the AI
+  passes — says what it does when held: a small tooltip rises above the bar and fades after a
+  moment, with a light haptic tap. The AI buttons' hints also spell out that a selected stretch
+  is rewritten alone.
+- **生成日记 reads the day through tools.** The writer is no longer handed one frozen summary:
+  it pulls todos, habits, mood history, past diaries, health, food, bills, net worth,
+  countdowns, the week review and the goal as often as it likes before it writes — every domain
+  but the notes — each read taken fresh at the moment of asking.
+
+### Changed
+
+- **The diary's first line is just the first line.** The editor no longer promotes it to a big
+  title the way a note does; explicit `#` headings still work. Free editing, unlike the notes.
+- **The AI passes carry their weight now.** 排版 and 润色 run on separate rules per document
+  kind (the diary keeps its paragraph indent and voice), the text around a selection rides along
+  as context and the result lands on the selection alone, and a rewrite that changed words or
+  dropped numbers is sent back once before falling back to the floor — for a diary's 排版 the
+  floor is the local tidy itself, so a pass never leaves the text worse than it found it.
+
+### Fixed
+
+- **A selection dragged backwards was ignored.** The AI passes and the toolbar's own formats
+  read a reversed range as "nothing selected" and fell back to the whole body; both ends are
+  normalized now, so the selection is what gets worked on no matter which way it was dragged.
+- **生成日记 went blind to what happened after the page opened.** The prompt's daily metrics
+  were never collected (habits missing entirely) and completed todos froze at their first
+  reading; the day's records are gathered fresh when 生成 is pressed.
+
 ## [1.3.2] - 2026-11-04
 
 ### Added
