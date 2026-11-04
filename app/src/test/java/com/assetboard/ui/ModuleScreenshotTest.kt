@@ -1,5 +1,7 @@
 package com.assetboard.ui
 
+import com.assetboard.data.net.Release
+import com.assetboard.data.net.UpdateState
 import com.assetboard.domain.AppClock
 import com.assetboard.PinnedClock
 import android.app.Application
@@ -349,8 +351,8 @@ class ModuleScreenshotTest {
     @Test fun updateDialog() {
         val d = demo()
         d.c.updater.present(
-            com.assetboard.data.UpdateState.Available(
-                com.assetboard.data.Release("0.8.1", "## 新功能\n- **目标资产**：净资产卡片上的进度条\n- 待办可以长按拖动排序\n\n## 修复\n- 每日卡片的标题不再和格子重叠", "", 12_345_678, ""),
+            com.assetboard.data.net.UpdateState.Available(
+                com.assetboard.data.net.Release("0.8.1", "## 新功能\n- **目标资产**：净资产卡片上的进度条\n- 待办可以长按拖动排序\n\n## 修复\n- 每日卡片的标题不再和格子重叠", "", 12_345_678, ""),
             ),
         )
         shot("43-update-dialog", d.c) { com.assetboard.ui.settings.UpdatePrompt() }

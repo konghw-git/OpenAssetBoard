@@ -1,6 +1,11 @@
-package com.assetboard.data
+package com.assetboard.data.sync
 
 import android.content.Context
+import com.assetboard.data.Profile
+import com.assetboard.data.ProfileStore
+import com.assetboard.data.SessionStore
+import com.assetboard.data.SettingsStore
+import com.assetboard.data.backup.BackupManager
 import com.assetboard.domain.AppClock
 import com.assetboard.domain.LedgerException
 import java.util.concurrent.atomic.AtomicLong
@@ -49,6 +54,13 @@ data class AccountState(
 )
 
 enum class ConflictChoice { KEEP_LOCAL, USE_REMOTE }
+
+/**
+ * How a sync attempt ended. The quiet background worker comes back only for [RETRY] — a
+ * transient connectivity or server failure; everything else is either done or pointless to
+ * repeat (signed out, a conflict waiting for the user, an app upgrade needed).
+ */
+enum class SyncOutcome { DONE, SKIPPED, RETRY }
 
 /**
  * Login, logout and snapshot sync for the active profile. The local database is always the
@@ -342,25 +354,33 @@ class AccountManager(
         }
     }
 
-    suspend fun syncNow() {
-        if (!mutex.tryLock()) return
+    /**
+     * One sync attempt: read the remote metadata, then upload, download, or stop and ask.
+     * [fromUser] marks the manual buttons; only they report "already running" instead of
+     * silently stepping aside for the attempt that is holding the lock.
+     */
+    suspend fun syncNow(fromUser: Boolean = false): SyncOutcome {
+        if (!mutex.tryLock()) {
+            if (fromUser) _state.update { it.copy(message = "正在同步") }
+            return SyncOutcome.SKIPPED
+        }
         try {
             val p = currentProfile()
             if (p.accountId == null) {
                 _state.update { it.copy(signedIn = false, busy = false) }
-                return
+                return SyncOutcome.SKIPPED
             }
             if (session.load() == null) {
                 expire()
-                return
+                return SyncOutcome.SKIPPED
             }
             if (!settings.networkEnabled.value) {
                 _state.update { it.copy(error = "已关闭联网，无法同步") }
-                return
+                return SyncOutcome.SKIPPED
             }
             if (!backup.canSync()) {
                 _state.update { it.copy(error = "正在恢复数据，请稍后再同步") }
-                return
+                return SyncOutcome.SKIPPED
             }
             _state.update { it.copy(busy = true, error = null, message = null) }
             ensureAccess(p)
@@ -374,11 +394,18 @@ class AccountManager(
                 SyncAction.CONFLICT -> _state.update {
                     it.copy(busy = false, conflict = SyncConflict(remote, local.exportedAt))
                 }
+                // Both directions are wrong here: the snapshot cannot be read, and uploading
+                // would overwrite data from a newer app. The only way forward is an upgrade.
+                SyncAction.REMOTE_TOO_NEW -> _state.update {
+                    it.copy(busy = false, error = "云端数据来自更新版本的日盈，请先升级 App 再同步")
+                }
             }
+            return SyncOutcome.DONE
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             handle(e)
+            return if (transient(e)) SyncOutcome.RETRY else SyncOutcome.DONE
         } finally {
             _state.update { if (it.busy) it.copy(busy = false) else it }
             mutex.unlock()
@@ -408,7 +435,10 @@ class AccountManager(
 
     suspend fun resolveConflict(choice: ConflictChoice) {
         val conflict = _state.value.conflict ?: return
-        if (!mutex.tryLock()) return
+        if (!mutex.tryLock()) {
+            _state.update { it.copy(message = "正在同步") }
+            return
+        }
         try {
             _state.update { it.copy(busy = true, conflict = null, error = null) }
             val p = currentProfile()
@@ -480,6 +510,10 @@ class AccountManager(
             )
         }
     }
+
+    /** Connectivity and server-side failures pass; an auth problem or a bad request does not. */
+    private fun transient(e: Exception): Boolean =
+        e is ApiException && (e.code == "network" || e.status >= 500)
 
     /** The refresh token no longer works: sign out locally but keep the data. */
     private fun expire() {

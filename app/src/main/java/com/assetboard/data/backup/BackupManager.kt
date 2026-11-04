@@ -1,5 +1,44 @@
-package com.assetboard.data
+package com.assetboard.data.backup
 
+import com.assetboard.data.Account
+import com.assetboard.data.AccountGroup
+import com.assetboard.data.AppDatabase
+import com.assetboard.data.AppMeta
+import com.assetboard.data.BodyMeasurement
+import com.assetboard.data.ChecklistItem
+import com.assetboard.data.Countdown
+import com.assetboard.data.CountdownRepository
+import com.assetboard.data.DiaryDraft
+import com.assetboard.data.DiaryEntry
+import com.assetboard.data.DiaryRepository
+import com.assetboard.data.EditorRegistry
+import com.assetboard.data.FoodEntry
+import com.assetboard.data.FoodRepository
+import com.assetboard.data.GoalRepository
+import com.assetboard.data.HabitCheck
+import com.assetboard.data.HealthProfile
+import com.assetboard.data.HealthRepository
+import com.assetboard.data.MoneyFlow
+import com.assetboard.data.Note
+import com.assetboard.data.NoteDraft
+import com.assetboard.data.NoteRepository
+import com.assetboard.data.NoteSource
+import com.assetboard.data.NoteTopic
+import com.assetboard.data.PendingText
+import com.assetboard.data.Profile
+import com.assetboard.data.SettingsStore
+import com.assetboard.data.Snapshot
+import com.assetboard.data.SnapshotItem
+import com.assetboard.data.Todo
+import com.assetboard.data.TodoKind
+import com.assetboard.data.TodoList
+import com.assetboard.data.TodoSection
+import com.assetboard.data.Valuation
+import com.assetboard.data.WeeklyDraft
+import com.assetboard.data.WeeklyReview
+import com.assetboard.data.WeekRepository
+import com.assetboard.data.WriteGate
+import com.assetboard.data.newId
 import com.assetboard.domain.AppClock
 import android.content.Context
 import android.net.Uri
@@ -691,7 +730,7 @@ class BackupManager(
      */
     suspend fun flushEditorsForSwitch() = flushEditors()
 
-    /** (row id, new body_rev), or null when the version condition does not hold. */
+    /** (row id, new body_rev), or null when the version condition does not hold. A new text domain grows this switch; see PendingText for the checklist. */
     private suspend fun writeBody(p: PendingText): Pair<String, Long>? = when (p) {
         is PendingText.Diary -> writeDiaryBody(p)
         is PendingText.Note -> writeNoteBody(p)

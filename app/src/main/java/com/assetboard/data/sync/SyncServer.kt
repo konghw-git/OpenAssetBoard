@@ -1,4 +1,4 @@
-package com.assetboard.data
+package com.assetboard.data.sync
 
 /**
  * The self-hosted server before the October 2026 move from the US VPS to the Tokyo one. Profiles

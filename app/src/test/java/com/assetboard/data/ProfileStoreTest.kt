@@ -1,6 +1,7 @@
 package com.assetboard.data
 
 import android.app.Application
+import com.assetboard.data.sync.LEGACY_SYNC_SERVER_URL
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider

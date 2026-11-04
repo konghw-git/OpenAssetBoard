@@ -1,5 +1,7 @@
 package com.assetboard.data
 
+import com.assetboard.data.net.ReleasePage
+import com.assetboard.data.net.refusal
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

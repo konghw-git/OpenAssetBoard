@@ -3,6 +3,7 @@ package com.assetboard.data
 import android.content.Context
 import androidx.core.content.edit
 import com.assetboard.BuildConfig
+import com.assetboard.data.sync.LEGACY_SYNC_SERVER_URL
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -84,14 +85,38 @@ class SettingsStore(context: Context) {
 
     /**
      * The AI editor helpers' endpoint: an OpenAI-compatible chat API (Bailian by default). The key
-     * lives only on this device — settings are not backed up, not synced, not in the repository.
+     * lives only on this device — settings are not backed up, not synced, not in the repository —
+     * and on disk it is encrypted with the same Keystore cipher as the session tokens, never in
+     * the clear. A broken Keystore keeps it in memory only, like [SessionStore] does.
      */
-    private val _aiApiKey = MutableStateFlow(prefs.getString(KEY_AI_API_KEY, "") ?: "")
+    private val _aiApiKey = MutableStateFlow(loadAiApiKey())
     val aiApiKey: StateFlow<String> = _aiApiKey.asStateFlow()
 
     fun setAiApiKey(value: String) {
-        prefs.edit { putString(KEY_AI_API_KEY, value) }
         _aiApiKey.value = value
+        if (value.isEmpty()) {
+            prefs.edit { remove(KEY_AI_API_KEY) }
+            return
+        }
+        // A broken Keystore leaves the disk copy alone, like SessionStore does: deleting it
+        // would lose a key an earlier run managed to store.
+        encodeAiKey(value) { TokenCipher.encrypt(it) }?.let { stored ->
+            prefs.edit { putString(KEY_AI_API_KEY, stored) }
+        }
+    }
+
+    private fun loadAiApiKey(): String {
+        val stored = prefs.getString(KEY_AI_API_KEY, null)
+        val plain = decodeAiKey(stored) { TokenCipher.decrypt(it) }
+        // A value written before the Keystore migration: use it once and move it to the
+        // encrypted form. If the Keystore is broken the legacy value stays as it was —
+        // never written by this version, and deleting it would lose the key outright.
+        if (stored != null && plain.isNotEmpty() && !stored.startsWith(ENC_PREFIX)) {
+            encodeAiKey(plain) { TokenCipher.encrypt(it) }?.let { enc ->
+                prefs.edit { putString(KEY_AI_API_KEY, enc) }
+            }
+        }
+        return plain
     }
 
     private val _aiBaseUrl = MutableStateFlow(prefs.getString(KEY_AI_BASE_URL, null) ?: DEFAULT_AI_BASE_URL)
@@ -225,4 +250,21 @@ class SettingsStore(context: Context) {
         private const val KEY_AI_BASE_URL = "ai_base_url"
         private const val KEY_AI_MODEL = "ai_model"
     }
+}
+
+/** Values written since the Keystore migration carry this marker; anything else is legacy plaintext. */
+private const val ENC_PREFIX = "enc:"
+
+/**
+ * The on-disk shape of the AI key, pure so the migration rules are testable without a Keystore.
+ * [encrypt] returns null when the Keystore is unavailable, and then nothing is written at all:
+ * the key lives in memory for this process rather than in the clear on disk.
+ */
+internal fun encodeAiKey(value: String, encrypt: (String) -> String?): String? =
+    if (value.isEmpty()) null else encrypt(value)?.let { ENC_PREFIX + it }
+
+internal fun decodeAiKey(stored: String?, decrypt: (String) -> String?): String = when {
+    stored.isNullOrEmpty() -> ""
+    !stored.startsWith(ENC_PREFIX) -> stored // legacy plaintext from before the migration
+    else -> decrypt(stored.removePrefix(ENC_PREFIX)) ?: ""
 }

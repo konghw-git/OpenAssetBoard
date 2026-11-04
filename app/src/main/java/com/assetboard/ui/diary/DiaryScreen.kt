@@ -169,8 +169,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.assetboard.data.DiaryEntry
 import com.assetboard.data.DiarySession
-import com.assetboard.data.Place
-import com.assetboard.data.WeatherService
+import com.assetboard.data.net.Place
+import com.assetboard.data.net.WeatherService
 import com.assetboard.domain.Dates
 import com.assetboard.domain.Money
 import com.assetboard.domain.calendar.ChineseCalendar

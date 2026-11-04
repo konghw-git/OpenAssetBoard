@@ -1,8 +1,20 @@
-package com.assetboard.data
+package com.assetboard.data.ai
 
+import com.assetboard.data.CountdownRepository
+import com.assetboard.data.DiaryRepository
+import com.assetboard.data.FoodRepository
+import com.assetboard.data.GoalRepository
+import com.assetboard.data.HabitRepository
+import com.assetboard.data.HealthRepository
+import com.assetboard.data.LedgerRepository
+import com.assetboard.data.TodoRepository
+import com.assetboard.data.WeekRepository
+import com.assetboard.data.Weeks
+import com.assetboard.data.net.WeatherService
 import com.assetboard.domain.AiAgent
 import com.assetboard.domain.AiEdit
 import com.assetboard.domain.Bills
+import com.assetboard.domain.Countdowns
 import com.assetboard.domain.Dates
 import com.assetboard.domain.HabitDay
 import com.assetboard.domain.Money
@@ -152,11 +164,15 @@ class AiDayTools(
         ) {
             val series = ledger.loadOnce().netWorthSeries()
             if (series.isEmpty()) "（还没有盘点过）"
-            else series.takeLast(5).mapIndexed { i, p ->
-                val prev = series.getOrNull(series.size - 5 + i - 1)
-                val change = prev?.let { "（较上次 " + Money.format(p.netWorth - it.netWorth, signed = true) + "）" }.orEmpty()
-                "${Dates.localDate(p.snapshot.at)}：¥${Money.short(p.netWorth)}$change"
-            }.joinToString("\n")
+            else {
+                val window = series.takeLast(5)
+                val start = series.size - window.size
+                window.mapIndexed { i, p ->
+                    val prev = series.getOrNull(start + i - 1)
+                    val change = prev?.let { "（较上次 " + Money.format(p.netWorth - it.netWorth, signed = true) + "）" }.orEmpty()
+                    "${Dates.localDate(p.snapshot.at)}：¥${Money.short(p.netWorth)}$change"
+                }.joinToString("\n")
+            }
         },
         AiAgent.Tool(
             name = "countdowns",
@@ -167,7 +183,11 @@ class AiDayTools(
             val list = countdowns.all()
             if (list.isEmpty()) "（没有倒数日）"
             else list.joinToString("\n") { c ->
-                val left = ChronoUnit.DAYS.between(from, LocalDate.parse(c.date))
+                val day = LocalDate.parse(c.date)
+                // A yearly countdown repeats: one already passed counts to its next occurrence,
+                // like the countdown page does, not to a date years in the past.
+                val to = if (c.yearly) Countdowns.nextOccurrence(day, from) else day
+                val left = ChronoUnit.DAYS.between(from, to)
                 "${c.title}：${c.date}" + (if (c.yearly) "（每年）" else "") + "，" +
                     (if (left >= 0) "还有 $left 天" else "已过 ${-left} 天")
             }

@@ -1,5 +1,6 @@
 package com.assetboard.domain
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -45,7 +46,7 @@ object AiAgent {
     /**
      * Writes the diary: asks for data until the model answers with prose. The last reply is
      * unwrapped but otherwise untouched; a model that never calls a tool just gets the [seed]
-     * answered. [chat] is one turn of the conversation (see [com.assetboard.data.AiGateway]).
+     * answered. [chat] is one turn of the conversation (see [com.assetboard.data.ai.AiGateway]).
      */
     suspend fun run(
         chat: suspend (history: List<Turn>) -> String,
@@ -62,16 +63,32 @@ object AiAgent {
             val result = if (tool == null) {
                 "没有这个工具。可用工具：${tools.joinToString("、") { it.name }}"
             } else {
-                runCatching { tool.run(call.args) }.getOrElse { "工具出错：${it.message}" }
+                try {
+                    tool.run(call.args)
+                } catch (e: CancellationException) {
+                    throw e // a cancelled run must stop the loop, not read as a broken tool
+                } catch (e: Exception) {
+                    "工具出错：${e.message}"
+                }
             }
             history += Turn("user", "【工具结果 · ${call.name}】\n$result\n\n数据够了就写日记；还要查就继续调用工具。")
         }
         // The model may still answer with a call; handing that JSON back as the diary body is
         // worse than failing, so the forced write gets a couple of tries and then gives up.
         repeat(FORCED_ROUNDS) {
-            history += Turn("user", "不要再调用工具，根据已有信息直接输出日记正文。")
+            val instruction = "不要再调用工具，根据已有信息直接输出日记正文。"
+            val last = history.removeAt(history.lastIndex)
+            if (last.role == "user") {
+                // Strict endpoints reject two user turns in a row: fold the instruction into
+                // the pending tool-result message instead of stacking another one on top.
+                history += Turn("user", last.content + "\n\n" + instruction)
+            } else {
+                history += last
+                history += Turn("user", instruction)
+            }
             val reply = AiEdit.unwrap(chat(history))
             if (parseCall(reply) == null) return reply
+            history += Turn("assistant", reply)
         }
         throw IllegalStateException("模型一直在调用工具，没有写出日记")
     }

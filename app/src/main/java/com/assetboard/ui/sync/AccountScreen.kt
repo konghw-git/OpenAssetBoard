@@ -47,8 +47,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.assetboard.data.ConflictChoice
-import com.assetboard.data.ServerCheck
+import com.assetboard.data.sync.ConflictChoice
+import com.assetboard.data.sync.ServerCheck
 import com.assetboard.domain.Dates
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.ConfirmDialog
@@ -157,7 +157,7 @@ fun AccountScreen(onBack: () -> Unit) {
                             else -> "还没有同步过"
                         },
                         leading = { IconTile(Icons.Outlined.Sync, cs.primary) },
-                        onClick = { container.appScope.launch { account.syncNow() } },
+                        onClick = { container.appScope.launch { account.syncNow(fromUser = true) } },
                     )
                     RowDivider(startIndent = 64.dp)
                     ListRow(

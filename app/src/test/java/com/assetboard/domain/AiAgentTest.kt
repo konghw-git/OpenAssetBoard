@@ -1,7 +1,9 @@
 package com.assetboard.domain
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -78,7 +80,7 @@ class AiAgentTest {
             AiAgent.run(
                 chat = { history ->
                     turns++
-                    if (history.last().content.startsWith("不要再调用")) "最后只能这么写了。"
+                    if (history.last().content.contains("不要再调用")) "最后只能这么写了。"
                     else """{"tool":"goal","args":{}}"""
                 },
                 tools = listOf(AiAgent.Tool("goal", "目标", "") { "目标 ¥100" }),
@@ -108,5 +110,42 @@ class AiAgentTest {
             }
         }
         assertTrue("JSON must never come back as the diary body", result.isFailure)
+    }
+
+    @Test fun aCancelledToolRunStopsTheAgentInsteadOfTalkingOn() {
+        var turns = 0
+        val result = runCatching {
+            runBlocking {
+                AiAgent.run(
+                    chat = { turns++; """{"tool":"boom","args":{}}""" },
+                    tools = listOf(AiAgent.Tool("boom", "必炸", "") { throw CancellationException("cancelled") }),
+                    seed = "写日记",
+                )
+            }
+        }
+        assertTrue("the cancellation must propagate: ${result.exceptionOrNull()}", result.exceptionOrNull() is CancellationException)
+        assertEquals("the loop must not continue after a cancelled tool", 1, turns)
+    }
+
+    @Test fun theForcedWriteKeepsTheTurnsAlternating() {
+        val rolesSeen = mutableListOf<List<String>>()
+        val out = runBlocking {
+            AiAgent.run(
+                chat = { history ->
+                    rolesSeen += history.map { it.role }
+                    if (history.last().content.contains("不要再调用")) "只能这么写了。"
+                    else """{"tool":"goal","args":{}}"""
+                },
+                tools = listOf(AiAgent.Tool("goal", "目标", "") { "目标 ¥100" }),
+                seed = "写日记",
+            )
+        }
+        assertEquals("只能这么写了。", out)
+        // Strict OpenAI-compatible endpoints reject two user turns in a row.
+        for ((i, roles) in rolesSeen.withIndex()) {
+            for (j in 1 until roles.size) {
+                assertNotEquals("history $i has two ${roles[j]} turns in a row", roles[j - 1], roles[j])
+            }
+        }
     }
 }

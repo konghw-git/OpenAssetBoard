@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.core.content.edit
 import com.assetboard.BuildConfig
+import com.assetboard.data.sync.LEGACY_SYNC_SERVER_URL
 import com.assetboard.domain.AppClock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer

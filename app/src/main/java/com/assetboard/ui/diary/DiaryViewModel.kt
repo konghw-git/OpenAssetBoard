@@ -3,14 +3,14 @@ package com.assetboard.ui.diary
 import com.assetboard.domain.AppClock
 import androidx.lifecycle.viewModelScope
 import com.assetboard.AppContainer
-import com.assetboard.data.AiDayTools
+import com.assetboard.data.ai.AiDayTools
 import com.assetboard.data.AppendResult
-import com.assetboard.data.ChatTurn
+import com.assetboard.data.ai.ChatTurn
 import com.assetboard.data.DiaryDraft
 import com.assetboard.data.DiaryEntry
 import com.assetboard.data.DiarySession
 import com.assetboard.data.Note
-import com.assetboard.data.Place
+import com.assetboard.data.net.Place
 import com.assetboard.data.SourceRef
 import com.assetboard.data.Todo
 import com.assetboard.data.WeatherResult
@@ -302,6 +302,11 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
             try {
                 val out = if (kind == AiAction.GENERATE) generate() else {
                     AiEdit.editText(container.ai::complete, kind, DocKind.DIARY, before, range)
+                }
+                // Left the day while the model worked: the result must not land in a closed session.
+                if (_session.value !== s) {
+                    messages.tryEmit("已切换日期，AI 的结果没有应用")
+                    return@launchBound
                 }
                 // Typed on while the model worked: what was typed wins, the reply is dropped.
                 if (s.text.value != before) {

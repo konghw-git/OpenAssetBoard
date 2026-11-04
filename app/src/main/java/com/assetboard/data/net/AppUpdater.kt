@@ -1,5 +1,7 @@
-package com.assetboard.data
+package com.assetboard.data.net
 
+import com.assetboard.data.CrashLog
+import com.assetboard.data.SettingsStore
 import com.assetboard.domain.AppClock
 import android.content.Context
 import android.content.Intent

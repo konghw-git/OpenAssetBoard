@@ -1,5 +1,6 @@
 package com.assetboard.ui
 
+import com.assetboard.data.ai.AiGateway
 import com.assetboard.domain.AppClock
 import com.assetboard.PinnedClock
 import android.app.Application
@@ -75,7 +76,7 @@ class RoundTwoShotTest {
     private fun container(): AppContainer = TestContainers.open(ApplicationProvider.getApplicationContext())
 
     /** What AI 排版 does in the shots: the local tidy, instantly and deterministically. */
-    private object TidyAi : com.assetboard.data.AiGateway {
+    private object TidyAi : com.assetboard.data.ai.AiGateway {
         override suspend fun complete(system: String, user: String): String = com.assetboard.domain.DiaryFormat.tidy(com.assetboard.domain.AiEdit.targetOf(user))
     }
 

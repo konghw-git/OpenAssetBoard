@@ -1,4 +1,4 @@
-package com.assetboard.data
+package com.assetboard.data.sync
 
 import android.content.Context
 import androidx.work.CoroutineWorker
@@ -15,8 +15,11 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val container = (applicationContext as AssetBoardApp).container
         if (!container.account.isSignedIn()) return Result.success()
         return try {
-            container.account.syncNow()
-            Result.success()
+            when (container.account.syncNow()) {
+                // A dropped connection or a 5xx comes back later with WorkManager's backoff.
+                SyncOutcome.RETRY -> Result.retry()
+                else -> Result.success()
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

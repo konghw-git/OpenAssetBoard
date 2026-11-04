@@ -8,14 +8,14 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.assetboard.data.AccountManager
-import com.assetboard.data.AiGateway
-import com.assetboard.data.AiService
+import com.assetboard.data.sync.AccountManager
+import com.assetboard.data.ai.AiGateway
+import com.assetboard.data.ai.AiService
 import com.assetboard.data.AppDatabase
-import com.assetboard.data.AppUpdater
-import com.assetboard.data.BackupKind
-import com.assetboard.data.BackupManager
-import com.assetboard.data.BackupWorker
+import com.assetboard.data.net.AppUpdater
+import com.assetboard.data.backup.BackupKind
+import com.assetboard.data.backup.BackupManager
+import com.assetboard.data.backup.BackupWorker
 import com.assetboard.data.CalendarExporter
 import com.assetboard.data.CrashLog
 import com.assetboard.data.DiaryRepository
@@ -31,10 +31,10 @@ import com.assetboard.data.NoteRepository
 import com.assetboard.data.Profile
 import com.assetboard.data.ProfileStore
 import com.assetboard.data.SettingsStore
-import com.assetboard.data.SyncGateway
-import com.assetboard.data.SyncWorker
+import com.assetboard.data.sync.SyncGateway
+import com.assetboard.data.sync.SyncWorker
 import com.assetboard.data.TodoRepository
-import com.assetboard.data.WeatherService
+import com.assetboard.data.net.WeatherService
 import com.assetboard.data.WeekRepository
 import com.assetboard.data.WriteGate
 import com.assetboard.reminder.ReminderScheduler
@@ -152,7 +152,7 @@ class AppContainer(
     val account by lazy {
         AccountManager(
             context, settings, profiles, profile, backup, appScope, onSwitchProfile,
-            syncApi ?: com.assetboard.data.SyncApi { settings.networkEnabled.value },
+            syncApi ?: com.assetboard.data.sync.SyncApi { settings.networkEnabled.value },
         )
     }
 
@@ -177,6 +177,13 @@ class AppContainer(
         runCatching { db.close() }
     }
 }
+
+/**
+ * How long a switched-out profile's database stays open: the composition being torn down may
+ * still have reads in flight, and closing Room under them crashes. A grace period, not a proof —
+ * tracking live readers on the container is the principled fix if this ever misfires.
+ */
+private const val OLD_DB_CLOSE_GRACE_MS = 2_000L
 
 class AssetBoardApp : Application() {
     private lateinit var profiles: ProfileStore
@@ -233,7 +240,8 @@ class AssetBoardApp : Application() {
     /**
      * Switches to another local profile: flush, cancel the old profile's alarms, open the new
      * database, swap the container, rebuild the UI, schedule the new profile's alarms. The old
-     * database is closed a moment later so the composition being torn down can finish reading.
+     * database is closed a grace period later so the composition being torn down can finish
+     * reading ([OLD_DB_CLOSE_GRACE_MS]).
      */
     suspend fun switchProfile(target: Profile) = switchLock.withLock {
         val old = activeContainer ?: return@withLock
@@ -254,7 +262,7 @@ class AssetBoardApp : Application() {
             activeContainer = next
             _sessionGeneration.value += 1
             appScope.launch {
-                delay(2_000)
+                delay(OLD_DB_CLOSE_GRACE_MS)
                 old.close()
             }
             next.appScope.launch {

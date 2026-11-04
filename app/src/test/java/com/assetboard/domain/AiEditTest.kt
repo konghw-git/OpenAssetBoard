@@ -165,4 +165,13 @@ class AiEditTest {
         )
         assertEquals("还行", out)
     }
+
+    @Test fun formattingMustNotCollapseParagraphs() {
+        // Same words, but three paragraphs flattened into one line: never a valid FORMAT.
+        assertFalse(AiEdit.valid(AiAction.FORMAT, "段一。\n\n段二。\n\n段三。", "段一段二段三。"))
+        // Joining hard-wrapped lines inside a paragraph is formatting and stays allowed.
+        assertTrue(AiEdit.valid(AiAction.FORMAT, "第一行\n第二行", "第一行第二行。"))
+        // And a format may still split one paragraph into two.
+        assertTrue(AiEdit.valid(AiAction.FORMAT, "一句两句。", "一句。\n\n两句。"))
+    }
 }

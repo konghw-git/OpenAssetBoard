@@ -44,9 +44,9 @@ import androidx.compose.ui.unit.dp
 import com.assetboard.ui.theme.NumberStyle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.assetboard.BuildConfig
-import com.assetboard.data.AppUpdater
-import com.assetboard.data.Release
-import com.assetboard.data.UpdateState
+import com.assetboard.data.net.AppUpdater
+import com.assetboard.data.net.Release
+import com.assetboard.data.net.UpdateState
 import com.assetboard.ui.LocalContainer
 import com.assetboard.ui.components.verticalScrollWithIndicator
 

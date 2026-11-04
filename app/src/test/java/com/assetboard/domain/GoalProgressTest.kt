@@ -1,6 +1,6 @@
 package com.assetboard.domain
 
-import com.assetboard.data.Versions
+import com.assetboard.data.net.Versions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

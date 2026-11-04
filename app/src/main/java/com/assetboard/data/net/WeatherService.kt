@@ -1,5 +1,7 @@
-package com.assetboard.data
+package com.assetboard.data.net
 
+import com.assetboard.data.SettingsStore
+import com.assetboard.data.WeatherResult
 import com.assetboard.domain.AppClock
 import android.Manifest
 import android.annotation.SuppressLint
@@ -17,8 +19,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -123,15 +123,9 @@ class WeatherService(private val context: Context, private val settings: Setting
     }
 
     private fun get(url: String): String {
-        val c = URL(url).openConnection() as HttpURLConnection
-        c.connectTimeout = 10_000
-        c.readTimeout = 15_000
-        try {
-            check(c.responseCode == 200) { "HTTP ${c.responseCode}" }
-            return c.inputStream.use { it.readBytes().decodeToString() }
-        } finally {
-            c.disconnect()
-        }
+        val r = Http.call(url)
+        check(r.status == 200) { "HTTP ${r.status}" }
+        return r.body
     }
 
     companion object {

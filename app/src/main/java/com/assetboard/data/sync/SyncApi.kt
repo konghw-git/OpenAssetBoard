@@ -1,5 +1,6 @@
-package com.assetboard.data
+package com.assetboard.data.sync
 
+import com.assetboard.data.net.Http
 import com.assetboard.domain.LedgerException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -7,7 +8,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.IOException
 import java.net.ConnectException
-import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.UnknownHostException
@@ -80,7 +80,7 @@ interface SyncGateway {
 }
 
 /**
- * The self-hosted account and snapshot service. Plain [HttpURLConnection] and the app's existing
+ * The self-hosted account and snapshot service. The plain [Http] helper and the app's existing
  * JSON setup on purpose: the project avoids another HTTP stack for four endpoints.
  */
 class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGateway {
@@ -198,7 +198,7 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
         decode(raw) { json.decodeFromString(UploadResult.serializer(), raw.body).revision }
     }
 
-    private inline fun <T> decode(raw: Raw, block: () -> T): T =
+    private inline fun <T> decode(raw: Http.Response, block: () -> T): T =
         try {
             block()
         } catch (e: Exception) {
@@ -206,7 +206,7 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
             throw ApiException("服务器返回的数据无法识别（状态码 ${raw.status}）", raw.status)
         }
 
-    private fun fail(raw: Raw): Nothing {
+    private fun fail(raw: Http.Response): Nothing {
         val detail = runCatching { json.decodeFromString(ErrorBody.serializer(), raw.body).error }.getOrNull()
         val message = when {
             raw.status == 400 -> when (detail?.code) {
@@ -227,8 +227,6 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
         throw ApiException(message, raw.status, detail?.code)
     }
 
-    private data class Raw(val status: Int, val body: String)
-
     private fun request(
         serverUrl: String,
         method: String,
@@ -238,35 +236,21 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
         extra: Map<String, String> = emptyMap(),
         connectTimeout: Int = 10_000,
         readTimeout: Int = 120_000,
-    ): Raw {
+    ): Http.Response {
         if (!networkAllowed()) throw ApiException("已关闭联网，无法同步")
         val base = normalize(serverUrl)
-        val connection = try {
-            URL(base + path).openConnection() as HttpURLConnection
-        } catch (e: Exception) {
-            throw ApiException("服务器地址无效")
+        val headers = buildMap {
+            put("Accept", "application/json")
+            if (access != null) put("Authorization", "Bearer $access")
+            putAll(extra)
         }
-        try {
-            connection.requestMethod = method
-            connection.connectTimeout = connectTimeout
-            connection.readTimeout = readTimeout
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("Accept", "application/json")
-            if (access != null) connection.setRequestProperty("Authorization", "Bearer $access")
-            for ((name, value) in extra) connection.setRequestProperty(name, value)
-            if (body != null) {
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            }
-            val status = connection.responseCode
-            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.use { it.readBytes().decodeToString() }.orEmpty()
-            return Raw(status, text)
+        return try {
+            Http.call(
+                base + path, method, body, headers,
+                connectTimeout = connectTimeout, readTimeout = readTimeout, followRedirects = false,
+            )
         } catch (e: IOException) {
             throw networkFailure(e)
-        } finally {
-            connection.disconnect()
         }
     }
 

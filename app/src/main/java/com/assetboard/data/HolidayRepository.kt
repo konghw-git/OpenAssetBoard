@@ -1,5 +1,6 @@
 package com.assetboard.data
 
+import com.assetboard.data.net.Http
 import com.assetboard.domain.AppClock
 import android.content.Context
 import androidx.room.withTransaction
@@ -12,8 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.LocalDate
 
 /** One file of NateScarlet/holiday-cn. An empty [days] list means the year is not published yet. */
@@ -86,14 +85,8 @@ class HolidayRepository(private val context: Context, private val db: AppDatabas
     }
 
     private fun download(url: String): String {
-        val c = URL(url).openConnection() as HttpURLConnection
-        c.connectTimeout = 10_000
-        c.readTimeout = 15_000
-        try {
-            check(c.responseCode == 200) { "HTTP ${c.responseCode}" }
-            return c.inputStream.use { it.readBytes().decodeToString() }
-        } finally {
-            c.disconnect()
-        }
+        val r = Http.call(url)
+        check(r.status == 200) { "HTTP ${r.status}" }
+        return r.body
     }
 }

@@ -18,7 +18,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
 import com.assetboard.CloseTestContainers
 import com.assetboard.TestContainers
-import com.assetboard.data.AiGateway
+import com.assetboard.data.ai.AiGateway
 import com.assetboard.data.NoteText
 import com.assetboard.data.ThemeMode
 import com.assetboard.ui.theme.AssetBoardTheme

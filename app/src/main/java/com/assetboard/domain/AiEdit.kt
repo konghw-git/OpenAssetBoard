@@ -13,7 +13,7 @@ enum class DocKind { DIARY, NOTE }
  * The AI editor helpers, kept as pure text: the prompts (one per [AiAction] × [DocKind], each told
  * to do only its own job and shown one example), the context framing around a selection, the
  * reply cleanup and validation, and the splice of a reply back into the body. The network side is
- * [com.assetboard.data.AiService]; what a day contributes to the generated diary is [daySummary].
+ * [com.assetboard.data.ai.AiService]; what a day contributes to the generated diary is [daySummary].
  *
  * An edit never lands below its floor: FORMAT starts from the local [DiaryFormat.tidy] on a diary,
  * POLISH from the target itself, and a reply that changes the wrong things is retried once and
@@ -197,10 +197,18 @@ object AiEdit {
             after.contains("【前文】") || after.contains("【后文】")
         ) return false
         return when (kind) {
-            AiAction.FORMAT -> words(before) == words(after)
+            // Flattening paragraphs keeps every word but wrecks the page, so a format may split
+            // or join lines yet never merge two paragraphs into one.
+            AiAction.FORMAT -> words(before) == words(after) && paragraphs(after) >= paragraphs(before)
             AiAction.POLISH -> numbers(before) == numbers(after)
             AiAction.GENERATE -> true
         }
+    }
+
+    /** Blank-line-separated blocks. */
+    fun paragraphs(text: String): Int {
+        val t = text.trim()
+        return if (t.isEmpty()) 0 else t.split(Regex("\\n\\s*\\n")).size
     }
 
     /** Han and latin letters and digits, width-folded: everything a rewrite must not touch for FORMAT. */

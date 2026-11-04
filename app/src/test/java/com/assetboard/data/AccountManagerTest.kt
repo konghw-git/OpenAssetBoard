@@ -1,6 +1,14 @@
 package com.assetboard.data
 
 import android.app.Application
+import com.assetboard.data.backup.BackupManager
+import com.assetboard.data.sync.ApiException
+import com.assetboard.data.sync.ConflictChoice
+import com.assetboard.data.sync.RemoteMeta
+import com.assetboard.data.sync.RemoteUser
+import com.assetboard.data.sync.ServerSession
+import com.assetboard.data.sync.SyncGateway
+import com.assetboard.data.sync.SyncOutcome
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
@@ -14,6 +22,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -78,7 +87,14 @@ class AccountManagerTest {
             return changePasswordSession
         }
 
-        override suspend fun meta(serverUrl: String, access: String) = meta
+        var metaError: Exception? = null
+        var metaGate: CompletableDeferred<Unit>? = null
+
+        override suspend fun meta(serverUrl: String, access: String): RemoteMeta {
+            metaGate?.await()
+            metaError?.let { throw it }
+            return meta
+        }
 
         override suspend fun download(serverUrl: String, access: String) = downloadText
 
@@ -375,6 +391,95 @@ class AccountManagerTest {
             assertEquals(3L, saved.lastRevision)
             assertEquals(container.backup.exportForSync().contentHash, saved.lastSyncedHash)
             assertNull(container.account.state.value.conflict)
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun aSnapshotFromANewerAppAsksForAnUpgradeInsteadOfTouchingIt() = runBlocking {
+        val store = ProfileStore(context)
+        val profile = store.save(accountProfile().copy(lastRevision = 1, lastSyncedHash = "old"))
+        store.setActive(profile.id)
+        val fake = FakeGateway().apply {
+            meta = RemoteMeta(
+                revision = 9, contentHash = "newer",
+                formatVersion = BackupManager.FORMAT_VERSION + 1, schemaVersion = 13, size = 100,
+            )
+            downloadText = snapshotBody()
+        }
+        val container = AppContainer(context, profile, profile.dbFile, store, {}, fake)
+        try {
+            runBlocking(container.gate.bound()) { container.repository.seedDemo() }
+            container.account.login("https://example.com", "alice", "password")
+
+            val state = container.account.state.value
+            assertNull("an unreadable remote must not open the conflict picker", state.conflict)
+            assertTrue("the message must say to upgrade the app: ${state.error}", state.error!!.contains("升级"))
+            assertTrue("nothing may be uploaded over a snapshot this app cannot read", fake.uploads.isEmpty())
+            assertEquals("the local watermark must stay put", 1L, store.byId(profile.id)!!.lastRevision)
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun aTransientSyncFailureIsWorthRetrying() = runBlocking {
+        val store = ProfileStore(context)
+        val profile = store.save(accountProfile())
+        store.setActive(profile.id)
+        val fake = FakeGateway()
+        val container = AppContainer(context, profile, profile.dbFile, store, {}, fake)
+        try {
+            container.account.login("https://example.com", "alice", "password")
+
+            fake.metaError = ApiException("无法连接服务器，请更换网络（Wi‑Fi 或移动数据）后重试", code = "network")
+            assertEquals(SyncOutcome.RETRY, container.account.syncNow())
+            assertNotNull(container.account.state.value.error)
+
+            fake.metaError = ApiException("服务器出错，请稍后再试", status = 503)
+            assertEquals(SyncOutcome.RETRY, container.account.syncNow())
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun anExpiredSessionIsNotWorthRetrying() = runBlocking {
+        val store = ProfileStore(context)
+        val profile = store.save(accountProfile())
+        store.setActive(profile.id)
+        val fake = FakeGateway()
+        val container = AppContainer(context, profile, profile.dbFile, store, {}, fake)
+        try {
+            container.account.login("https://example.com", "alice", "password")
+
+            fake.metaError = ApiException("unauthorized", status = 401, code = "unauthorized")
+            assertNotEquals(SyncOutcome.RETRY, container.account.syncNow())
+            assertFalse("a dead session must sign out locally", container.account.state.value.signedIn)
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun aSecondManualSyncWhileOneIsRunningSaysSo() = runBlocking {
+        val store = ProfileStore(context)
+        val profile = store.save(accountProfile())
+        store.setActive(profile.id)
+        val fake = FakeGateway()
+        val container = AppContainer(context, profile, profile.dbFile, store, {}, fake)
+        try {
+            container.account.login("https://example.com", "alice", "password")
+
+            fake.metaGate = CompletableDeferred()
+            val first = launch { container.account.syncNow() }
+            withTimeout(5_000) { while (!container.account.state.value.busy) delay(10) }
+            container.account.syncNow(fromUser = true)
+            assertEquals("正在同步", container.account.state.value.message)
+
+            fake.metaGate!!.complete(Unit)
+            first.join()
         } finally {
             container.close()
         }

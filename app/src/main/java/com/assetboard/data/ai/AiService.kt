@@ -1,11 +1,11 @@
-package com.assetboard.data
+package com.assetboard.data.ai
 
+import com.assetboard.data.SettingsStore
+import com.assetboard.data.net.Http
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.net.HttpURLConnection
-import java.net.URL
 
 /** The chat endpoint behind the AI editor helpers; [AiService] talks to Bailian, tests to a fake. */
 interface AiGateway {
@@ -84,36 +84,26 @@ class AiService(private val settings: SettingsStore) : AiGateway {
 
     /** Reads the error body too: the service says why (bad key, unknown model) in its own words. */
     private fun post(url: String, key: String, body: String): String {
-        val c = URL(url).openConnection() as HttpURLConnection
-        c.connectTimeout = 10_000
-        // A long note can take a while to rewrite.
-        c.readTimeout = 90_000
-        c.requestMethod = "POST"
-        c.doOutput = true
-        c.setRequestProperty("Content-Type", "application/json")
-        c.setRequestProperty("Authorization", "Bearer $key")
-        try {
-            c.outputStream.use { it.write(body.encodeToByteArray()) }
-            val status = c.responseCode
-            val text = (if (status in 200..299) c.inputStream else c.errorStream)?.use { it.readBytes().decodeToString() }.orEmpty()
-            if (status in 200..299) return text
-            val detail = runCatching {
-                json.decodeFromString(ApiErrorBody.serializer(), text).error?.message
-            }.getOrNull()?.takeIf { it.isNotBlank() }
-            val message = when (status) {
-                401, 403 -> "API Key 无效或已过期"
-                404 -> "接口地址或模型不存在，请检查设置"
-                429 -> "请求太频繁或额度不足，请稍后再试"
-                else -> detail ?: "AI 服务出错（HTTP $status）"
-            }
-            throw AiException(message)
-        } catch (e: AiException) {
-            throw e
+        val r = try {
+            // A long note can take a while to rewrite.
+            Http.call(
+                url, "POST", body, mapOf("Authorization" to "Bearer $key"),
+                connectTimeout = 10_000, readTimeout = 90_000,
+            )
         } catch (e: Exception) {
             throw AiException("网络连接失败，请检查网络", e)
-        } finally {
-            c.disconnect()
         }
+        if (r.status in 200..299) return r.body
+        val detail = runCatching {
+            json.decodeFromString(ApiErrorBody.serializer(), r.body).error?.message
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+        val message = when (r.status) {
+            401, 403 -> "API Key 无效或已过期"
+            404 -> "接口地址或模型不存在，请检查设置"
+            429 -> "请求太频繁或额度不足，请稍后再试"
+            else -> detail ?: "AI 服务出错（HTTP ${r.status}）"
+        }
+        throw AiException(message)
     }
 }
 

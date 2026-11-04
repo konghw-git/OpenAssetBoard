@@ -15,7 +15,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.CopyOnWriteArraySet
 
-/** Unsaved editor text handed to the restore coordinator; the editor does not write it itself. */
+/**
+ * Unsaved editor text handed to the restore coordinator; the editor does not write it itself.
+ *
+ * Adding a new text domain (another kind of editable document) touches four places: a
+ * [PendingText] subclass and its `TextSession` wiring (here), the [EditorRegistry] the editor
+ * registers with, the `writeBody` / `writeDraft` / export branches in `BackupManager`, and the
+ * `DocKind` prompts in `domain/AiEdit.kt` when the AI helpers should cover it.
+ */
 sealed interface PendingText {
     val text: String
 

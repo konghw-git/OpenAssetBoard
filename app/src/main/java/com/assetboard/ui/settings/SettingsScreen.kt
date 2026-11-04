@@ -83,8 +83,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.assetboard.AppContainer
 import com.assetboard.BuildConfigInfo
-import com.assetboard.data.AppUpdater
-import com.assetboard.data.BackupKind
+import com.assetboard.data.net.AppUpdater
+import com.assetboard.data.backup.BackupKind
 import com.assetboard.data.ThemeMode
 import com.assetboard.data.SettingsStore
 import androidx.compose.material.icons.outlined.BlurOn
@@ -337,7 +337,7 @@ fun SettingsScreen(
                             else -> "上传本机改动，或下载云端的新版本"
                         },
                         leading = { IconTile(Icons.Outlined.Sync, palette.group(1)) },
-                        onClick = { if (networkOn) container.appScope.launch { container.account.syncNow() } },
+                        onClick = { if (networkOn) container.appScope.launch { container.account.syncNow(fromUser = true) } },
                     )
                 } else {
                     ListRow(

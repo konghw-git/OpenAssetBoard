@@ -1,7 +1,7 @@
 package com.assetboard
 
 import android.content.Context
-import com.assetboard.data.AiGateway
+import com.assetboard.data.ai.AiGateway
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin

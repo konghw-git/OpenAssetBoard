@@ -285,6 +285,9 @@ fun buildOverview(l: LedgerData, now: Long = AppClock.millis()): OverviewState {
 }
 
 class OverviewViewModel(private val container: AppContainer) : ActionViewModel(container) {
+    /** The page's single data channel: screens collect this, never the repository directly. */
+    val ledger = container.repository.ledger
+
     val state: StateFlow<OverviewState?> = container.repository.ledger
         .map { it?.let { l -> buildOverview(l) } }
         .flowOn(Dispatchers.Default)
@@ -355,7 +358,7 @@ fun OverviewScreen(
     val container = LocalContainer.current
     val vm: OverviewViewModel = viewModel { OverviewViewModel(container) }
     val billVm = billViewModel("overview")
-    val ledger by container.repository.ledger.collectAsStateWithLifecycle()
+    val ledger by vm.ledger.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val health by vm.health.collectAsStateWithLifecycle()
     val food by vm.food.collectAsStateWithLifecycle()

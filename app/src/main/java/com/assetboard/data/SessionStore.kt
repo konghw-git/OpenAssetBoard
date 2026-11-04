@@ -50,7 +50,7 @@ class SessionStore(context: Context, private val profileId: String) {
     }
 }
 
-private object TokenCipher {
+internal object TokenCipher {
     private const val ALIAS = "assetboard.session.v1"
     private const val TRANSFORM = "AES/GCM/NoPadding"
     private const val IV_BYTES = 12
