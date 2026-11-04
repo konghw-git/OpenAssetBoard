@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-04
+
+### Added
+
+- **Sync refuses a snapshot from a newer app.** The backup format and schema versions are
+  negotiated before anything moves: a cloud snapshot written by a newer release stops the sync
+  with a clear "请先升级 App" instead of failing halfway through a restore — and this version
+  never overwrites such a snapshot with an older one. The quiet background sync also retries
+  dropped connections and server errors with backoff, instead of waiting for the next launch.
+- **The AI key is encrypted at rest.** It sits behind the same Android Keystore cipher as the
+  session tokens — never in the clear on disk — and an existing key migrates itself on the first
+  launch. Tapping 同步 while one is already running now says so instead of doing nothing.
+
+### Fixed
+
+- **生成日记 quotes the numbers right.** The net-worth tool compared a stocktake against the wrong
+  predecessor whenever there were fewer than five — the change was missing or wrong — and a
+  yearly countdown whose date had passed said "long ago" instead of counting to its next
+  occurrence the way the countdown page does.
+- **An AI pass finishing after the user left the day no longer writes into it.** The result is
+  dropped with a notice instead of landing in the day that was left behind.
+- **生成日记 survives strict AI endpoints and cancellations.** The forced "write now" round no
+  longer stacks two user messages in a row (some services reject that outright), and cancelling a
+  generation now actually stops the tool loop instead of letting it finish on.
+- **AI 排版 cannot flatten a page.** A pass that merged paragraphs is rejected and the floor takes
+  over; the words alone were never enough to prove the page survived.
+
+### Changed
+
+- **Under the hood**, the data layer is split into `ai`, `sync`, `backup` and `net` packages
+  around one shared HTTP helper, and pages read their state through their ViewModels alone.
+
 ## [1.3.3] - 2026-11-04
 
 ### Added

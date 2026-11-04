@@ -24,8 +24,8 @@ android {
         applicationId = "com.assetboard"
         minSdk = 29
         targetSdk = 36
-        versionCode = 37
-        versionName = "1.3.3"
+        versionCode = 38
+        versionName = "1.4.0"
         // Where the in-app updater looks for releases; a fork points this at its own repository.
         buildConfigField("String", "UPDATE_REPO", "\"konghw-git/OpenAssetBoard\"")
         // The self-hosted account and sync service; the login page lets the user change it.
