@@ -24,6 +24,8 @@ data class HealthProfile(
     /** Null means the target is the BMI 22 weight for this height. */
     @ColumnInfo(name = "target_weight_g") val targetWeightG: Long? = null,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 /**
@@ -47,4 +49,6 @@ data class BodyMeasurement(
     val note: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )

@@ -3,9 +3,7 @@ package com.assetboard
 import android.app.Application
 import android.content.Context
 import android.os.StrictMode
-import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.assetboard.data.sync.AccountManager
@@ -32,7 +30,6 @@ import com.assetboard.data.Profile
 import com.assetboard.data.ProfileStore
 import com.assetboard.data.SettingsStore
 import com.assetboard.data.sync.SyncGateway
-import com.assetboard.data.sync.SyncWorker
 import com.assetboard.data.TodoRepository
 import com.assetboard.data.net.WeatherService
 import com.assetboard.data.WeekRepository
@@ -87,6 +84,9 @@ class AppContainer(
         // A database opened for a profile has no epoch of its own yet. Give it one no other
         // profile on this device has used, before any alarm or widget token is minted from it.
         gate.ensureEpochAtLeast(profiles.nextProfileEpoch())
+        // Every committed edit feeds the 10-second upload debounce; signing in is optional, so
+        // the account manager simply ignores it when there is no session.
+        gate.onCommitted = { account.noteLocalChange() }
     }
 
     private val refreshWidget: () -> Unit = { WidgetRefresh.request(context, appScope, ::NetWorthWidget) }
@@ -220,13 +220,7 @@ class AssetBoardApp : Application() {
             ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<MaintenanceWorker>(1, TimeUnit.DAYS).build(),
         )
-        work.enqueueUniquePeriodicWork(
-            "daily-sync",
-            ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS)
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .build(),
-        )
+        // The sync schedule follows the user's interval (account.scheduleBackground).
         // New modules start in the background; a failure there only affects that module.
         container.appScope.launch {
             runCatching { container.holidays.init() }

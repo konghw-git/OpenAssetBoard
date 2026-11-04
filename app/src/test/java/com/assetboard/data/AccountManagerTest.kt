@@ -3,12 +3,15 @@ package com.assetboard.data
 import android.app.Application
 import com.assetboard.data.backup.BackupManager
 import com.assetboard.data.sync.ApiException
-import com.assetboard.data.sync.ConflictChoice
+import com.assetboard.data.sync.CanonicalJson
 import com.assetboard.data.sync.RemoteMeta
+import com.assetboard.data.sync.RemoteSnapshot
 import com.assetboard.data.sync.RemoteUser
 import com.assetboard.data.sync.ServerSession
 import com.assetboard.data.sync.SyncGateway
 import com.assetboard.data.sync.SyncOutcome
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
@@ -40,7 +43,9 @@ class AccountManagerTest {
     private class FakeGateway : SyncGateway {
         var user = RemoteUser("a", "alice")
         var meta = RemoteMeta()
-        var downloadText: String? = null
+        var downloadSnapshot: RemoteSnapshot? = null
+        var revisionSnapshot: RemoteSnapshot? = null
+        var revisionsList: List<RemoteMeta> = emptyList()
         val uploads = mutableListOf<Pair<Long, String>>()
         var logouts = 0
         var probeError: Exception? = null
@@ -96,7 +101,11 @@ class AccountManagerTest {
             return meta
         }
 
-        override suspend fun download(serverUrl: String, access: String) = downloadText
+        override suspend fun download(serverUrl: String, access: String) = downloadSnapshot
+
+        override suspend fun revisions(serverUrl: String, access: String) = revisionsList
+
+        override suspend fun revision(serverUrl: String, access: String, revision: Long) = revisionSnapshot
 
         override suspend fun upload(
             serverUrl: String,
@@ -110,9 +119,12 @@ class AccountManagerTest {
         }
     }
 
+    /** A complete, valid format-16 snapshot, the same shape the Android side writes. */
     private fun snapshotBody(): String =
-        """{"formatVersion":14,"schemaVersion":13,"exportedAt":1,"groups":[{"id":"g1","name":"现金"}],""" +
-            """"accounts":[],"snapshots":[],"valuations":[],"snapshotItems":[],"flows":[]}"""
+        checkNotNull(javaClass.classLoader?.getResource("backups/format-16.json")).readText()
+
+    private fun snapshotHash(text: String): String =
+        CanonicalJson.contentHash(Json.parseToJsonElement(text) as JsonObject)
 
     @Before
     fun clear() {
@@ -206,19 +218,20 @@ class AccountManagerTest {
         val store = ProfileStore(context)
         val profile = store.save(accountProfile())
         store.setActive(profile.id)
+        val text = snapshotBody()
+        val hash = snapshotHash(text)
         val fake = FakeGateway().apply {
-            meta = RemoteMeta(revision = 1, contentHash = "cloud", formatVersion = 14, schemaVersion = 13, size = 100)
-            downloadText = snapshotBody()
+            meta = RemoteMeta(revision = 1, contentHash = hash, formatVersion = 16, schemaVersion = 15, size = text.length.toLong())
+            downloadSnapshot = RemoteSnapshot(text, revision = 1, contentHash = hash)
         }
         val container = AppContainer(context, profile, profile.dbFile, store, {}, fake)
         try {
             container.account.login("https://example.com", "alice", "password")
 
-            assertEquals(1, container.db.dao().groups().size)
-            assertEquals("现金", container.db.dao().groups().single().name)
             val saved = store.byId(profile.id)!!
             assertEquals(1L, saved.lastRevision)
-            assertEquals("cloud", saved.lastSyncedHash)
+            assertEquals(hash, saved.lastSyncedHash)
+            assertEquals("the downloaded snapshot is what the database holds", hash, container.backup.exportForSync().contentHash)
             assertTrue(fake.uploads.isEmpty())
         } finally {
             container.close()
@@ -369,28 +382,30 @@ class AccountManagerTest {
     }
 
     @Test
-    fun aConflictCanKeepTheLocalCopy() = runBlocking {
+    fun bothSidesChangedMergeAndUploadWithoutAQuestion() = runBlocking {
         val store = ProfileStore(context)
         val profile = store.save(
             accountProfile().copy(lastRevision = 1, lastSyncedHash = "old"),
         )
         store.setActive(profile.id)
+        val text = snapshotBody()
+        val hash = snapshotHash(text)
         val fake = FakeGateway().apply {
-            meta = RemoteMeta(revision = 2, contentHash = "new", formatVersion = 14, schemaVersion = 13, size = 100)
+            meta = RemoteMeta(revision = 1, contentHash = hash, formatVersion = 16, schemaVersion = 15, size = text.length.toLong())
+            downloadSnapshot = RemoteSnapshot(text, revision = 1, contentHash = hash)
         }
         val container = AppContainer(context, profile, profile.dbFile, store, {}, fake)
         try {
             runBlocking(container.gate.bound()) { container.repository.seedDemo() }
+            val localBefore = container.backup.exportForSync().contentHash
             container.account.login("https://example.com", "alice", "password")
-            assertNotNull("both sides changed, so the user must choose", container.account.state.value.conflict)
 
-            container.account.resolveConflict(ConflictChoice.KEEP_LOCAL)
-
-            assertEquals(2L, fake.uploads.last().first)
+            assertEquals("the merged result goes up once, over the downloaded base", 1L, fake.uploads.last().first)
             val saved = store.byId(profile.id)!!
-            assertEquals(3L, saved.lastRevision)
+            assertEquals(2L, saved.lastRevision)
             assertEquals(container.backup.exportForSync().contentHash, saved.lastSyncedHash)
-            assertNull(container.account.state.value.conflict)
+            assertNotEquals("the local rows survived the merge", localBefore, saved.lastSyncedHash)
+            assertNull(container.account.state.value.error)
         } finally {
             container.close()
         }
@@ -406,7 +421,7 @@ class AccountManagerTest {
                 revision = 9, contentHash = "newer",
                 formatVersion = BackupManager.FORMAT_VERSION + 1, schemaVersion = 13, size = 100,
             )
-            downloadText = snapshotBody()
+            downloadSnapshot = RemoteSnapshot(snapshotBody(), 9, "newer")
         }
         val container = AppContainer(context, profile, profile.dbFile, store, {}, fake)
         try {
@@ -414,7 +429,6 @@ class AccountManagerTest {
             container.account.login("https://example.com", "alice", "password")
 
             val state = container.account.state.value
-            assertNull("an unreadable remote must not open the conflict picker", state.conflict)
             assertTrue("the message must say to upgrade the app: ${state.error}", state.error!!.contains("升级"))
             assertTrue("nothing may be uploaded over a snapshot this app cannot read", fake.uploads.isEmpty())
             assertEquals("the local watermark must stay put", 1L, store.byId(profile.id)!!.lastRevision)

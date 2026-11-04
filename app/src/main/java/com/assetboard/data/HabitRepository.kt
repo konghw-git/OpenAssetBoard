@@ -32,6 +32,8 @@ data class HabitCheck(
     val habit: String,
     @ColumnInfo(name = "checked_at") val checkedAt: Long,
     @ColumnInfo(defaultValue = "0") val skipped: Boolean = false,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 @Dao
@@ -41,6 +43,7 @@ interface HabitDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putHabits(items: List<Habit>)
     @Query("DELETE FROM habits WHERE `key` = :key") suspend fun deleteHabit(key: String)
     @Query("SELECT COUNT(*) FROM habit_checks WHERE habit = :habit AND skipped = 0") suspend fun checksOf(habit: String): Int
+    @Query("SELECT * FROM habit_checks WHERE habit = :habit") suspend fun checksOfHabit(habit: String): List<HabitCheck>
     @Query("DELETE FROM habit_checks WHERE habit = :habit") suspend fun deleteChecksOf(habit: String)
     @Query("DELETE FROM habits") suspend fun clearHabits()
 
@@ -101,11 +104,15 @@ class HabitRepository(
         val date = today().toString()
         db.withTransaction {
             val row = dao.row(date, habit.key)
+            val now = clock()
             if (row != null) dao.delete(date, habit.key)
             if (row == null || row.skipped) {
-                dao.insert(HabitCheck(date, habit.key, clock()))
+                val stamp = ChangeStamps.stamp(now)
+                dao.insert(HabitCheck(date, habit.key, now, changedAt = stamp.at, changeId = stamp.id))
                 true
             } else {
+                // Unchecking is a physical delete: without a tombstone it could never sync out.
+                db.dao().putTombstone(deletedTombstone("habitChecks", RowKey.of("habitChecks", date, habit.key), now))
                 false
             }
         }
@@ -119,11 +126,14 @@ class HabitRepository(
         val date = today().toString()
         db.withTransaction {
             val row = dao.row(date, habit.key)
+            val now = clock()
             if (row != null) dao.delete(date, habit.key)
             if (row == null || !row.skipped) {
-                dao.insert(HabitCheck(date, habit.key, clock(), skipped = true))
+                val stamp = ChangeStamps.stamp(now)
+                dao.insert(HabitCheck(date, habit.key, now, skipped = true, changedAt = stamp.at, changeId = stamp.id))
                 true
             } else {
+                db.dao().putTombstone(deletedTombstone("habitChecks", RowKey.of("habitChecks", date, habit.key), now))
                 false
             }
         }
@@ -136,8 +146,14 @@ class HabitRepository(
         db.withTransaction {
             val all = current()
             if (all.count { it.active } >= Habit.MAX_ACTIVE) throw LedgerException("每日打卡最多 ${Habit.MAX_ACTIVE} 项")
+            val stamp = ChangeStamps.stamp(clock())
             val key = UUID.randomUUID().toString()
-            dao.putHabits(all + Habit(key, name, icon, color, (all.maxOfOrNull { it.position } ?: -1) + 1, addedOn = today().toString(), rubric = what))
+            val fresh = Habit(
+                key, name, icon, color, (all.maxOfOrNull { it.position } ?: -1) + 1,
+                addedOn = today().toString(), rubric = what, changedAt = stamp.at, changeId = stamp.id,
+            )
+            // The five built in become rows here for the first time; they take the same stamp.
+            dao.putHabits((all + fresh).map { if (it.changedAt == 0L) it.copy(changedAt = stamp.at, changeId = stamp.id) else it })
             key
         }
     }
@@ -149,7 +165,19 @@ class HabitRepository(
         db.withTransaction {
             val all = current()
             val h = all.firstOrNull { it.key == key && it.active } ?: throw LedgerException("这项打卡已经不在了")
-            dao.putHabits(all.map { if (it.key == key) h.copy(label = name, icon = icon, color = color, rubric = what ?: h.rubric) else it })
+            val stamp = ChangeStamps.stamp(clock())
+            dao.putHabits(
+                all.map {
+                    when {
+                        it.key == key -> h.copy(
+                            label = name, icon = icon, color = color, rubric = what ?: h.rubric,
+                            changedAt = stamp.at, changeId = stamp.id,
+                        )
+                        it.changedAt == 0L -> it.copy(changedAt = stamp.at, changeId = stamp.id)
+                        else -> it
+                    }
+                },
+            )
         }
     }
 
@@ -159,7 +187,13 @@ class HabitRepository(
             val all = current()
             val active = keys.mapNotNull { k -> all.firstOrNull { it.key == k && it.active } }
             val rest = all.filter { it !in active }
-            dao.putHabits((active + rest).mapIndexed { i, h -> h.copy(position = i) })
+            val stamp = ChangeStamps.stamp(clock())
+            val old = all.associate { it.key to it.position }
+            dao.putHabits((active + rest).mapIndexed { i, h ->
+                if (old.getValue(h.key) != i || h.changedAt == 0L) {
+                    h.copy(position = i, changedAt = stamp.at, changeId = stamp.id)
+                } else h.copy(position = i)
+            })
         }
     }
 
@@ -172,13 +206,19 @@ class HabitRepository(
             val all = current()
             if (all.count { it.active } <= 1) throw LedgerException("至少留一项每日打卡")
             val h = all.firstOrNull { it.key == key && it.active } ?: return@withTransaction
-            dao.putHabits(all)
+            val now = clock()
+            val stamp = ChangeStamps.stamp(now)
+            dao.putHabits(all.map { if (it.changedAt == 0L) it.copy(changedAt = stamp.at, changeId = stamp.id) else it })
             // Rest days alone do not keep a habit: it goes with them.
             if (dao.checksOf(key) == 0) {
+                for (c in dao.checksOfHabit(key)) {
+                    db.dao().putTombstone(deletedTombstone("habitChecks", RowKey.of("habitChecks", c.date, c.habit), now))
+                }
+                db.dao().putTombstone(deletedTombstone("habits", RowKey.of("habits", key), now))
                 dao.deleteChecksOf(key)
                 dao.deleteHabit(key)
             } else {
-                dao.putHabits(listOf(h.copy(removedOn = today().toString())))
+                dao.putHabits(listOf(h.copy(removedOn = today().toString(), changedAt = stamp.at, changeId = stamp.id)))
             }
         }
     }

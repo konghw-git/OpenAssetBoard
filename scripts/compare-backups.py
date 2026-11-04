@@ -11,6 +11,12 @@ LEDGER = ["groups", "accounts", "snapshots", "valuations", "snapshotItems", "flo
 # Reported but never failing: a backup from before format 4 has no health tables at all, and one
 # from before format 9 no food.
 HEALTH = ["bodyMeasurements", "foodEntries"]
+# Format 16's merge metadata: the upgrade stamps every row, so it never matches row for row.
+STAMPS = {"changedAt", "changeId", "stateAt", "stateId"}
+
+
+def content(row):
+    return None if row is None else {k: v for k, v in row.items() if k not in STAMPS}
 
 
 def key(table, row):
@@ -26,7 +32,7 @@ def main(a_path, b_path):
         ra = {key(t, r): r for r in a.get(t, [])}
         rb = {key(t, r): r for r in b.get(t, [])}
         for k in sorted(set(ra) | set(rb), key=str):
-            if ra.get(k) != rb.get(k):
+            if content(ra.get(k)) != content(rb.get(k)):
                 problems += 1
                 print(f"{t} {k}:\n  before {ra.get(k)}\n  after  {rb.get(k)}")
         print(f"{t}: {len(ra)} / {len(rb)} rows")
@@ -36,7 +42,7 @@ def main(a_path, b_path):
             continue
         ra = {r["id"]: r for r in a.get(t, [])}
         rb = {r["id"]: r for r in b.get(t, [])}
-        differ = sum(1 for k in set(ra) | set(rb) if ra.get(k) != rb.get(k))
+        differ = sum(1 for k in set(ra) | set(rb) if content(ra.get(k)) != content(rb.get(k)))
         print(f"{t}: {len(ra)} / {len(rb)} rows, {differ} differing (informational)")
     print("OK: ledger identical" if problems == 0 else f"FAIL: {problems} differing rows")
     return 0 if problems == 0 else 1

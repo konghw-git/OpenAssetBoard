@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -125,6 +126,14 @@ interface LedgerDao {
     @Delete suspend fun deleteFlow(flow: MoneyFlow)
     @Delete suspend fun deleteSnapshot(snapshot: Snapshot)
 
+    // ------------------------------------------------------------ merge tombstones
+
+    @Query("SELECT * FROM tombstones") suspend fun tombstones(): List<Tombstone>
+    @Query("SELECT * FROM tombstones WHERE tbl = :table AND row_key = :rowKey") suspend fun tombstone(table: String, rowKey: String): Tombstone?
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putTombstones(items: List<Tombstone>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putTombstone(tombstone: Tombstone)
+    @Query("DELETE FROM tombstones") suspend fun clearTombstones()
+
     // Children first, so RESTRICT never fires while wiping for a restore.
     @Query("DELETE FROM snapshot_items") suspend fun clearSnapshotItems()
     @Query("DELETE FROM flows") suspend fun clearFlows()
@@ -142,6 +151,7 @@ interface LedgerDao {
         HealthProfile::class, BodyMeasurement::class, FoodEntry::class,
         NoteTopic::class, Note::class, NoteSource::class, NoteDraft::class,
         WeeklyReview::class, WeeklyDraft::class, Countdown::class,
+        Tombstone::class,
     ],
     version = AppDatabase.SCHEMA_VERSION,
     exportSchema = true,
@@ -159,7 +169,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun countdownDao(): CountdownDao
 
     companion object {
-        const val SCHEMA_VERSION = 14
+        const val SCHEMA_VERSION = 15
 
         /** [name] is null only in tests and for a pre-profile install; the app names every profile's file. */
         fun build(context: Context, name: String? = null): AppDatabase =

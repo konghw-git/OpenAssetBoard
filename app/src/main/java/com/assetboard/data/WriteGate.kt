@@ -45,6 +45,12 @@ class WriteGate(
 
     @Volatile private var cachedEpoch: Long? = null
 
+    /**
+     * Called after a repository transaction commits (the account manager debounces an upload).
+     * Never allowed to fail the write that already landed.
+     */
+    @Volatile var onCommitted: (() -> Unit)? = null
+
     private val _frozen = MutableStateFlow(false)
     /** True from the moment a restore starts until it has finished, successfully or not. */
     val frozen: StateFlow<Boolean> = _frozen.asStateFlow()
@@ -91,7 +97,9 @@ class WriteGate(
         }
         try {
             if (epoch.value != epochNow()) throw WriteRejected(MSG_STALE)
-            return db.withTransaction { block() }
+            val result = db.withTransaction { block() }
+            runCatching { onCommitted?.invoke() }
+            return result
         } finally {
             synchronized(lock) {
                 readers--

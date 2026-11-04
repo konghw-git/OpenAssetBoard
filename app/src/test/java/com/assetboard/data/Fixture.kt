@@ -22,6 +22,10 @@ import java.time.ZoneId
 
 /** An in-memory database with every repository, a settable clock and a fixed time zone. */
 class Fixture {
+    init {
+        ChangeStamps.resetForTests()
+    }
+
     val zone: ZoneId = ZoneId.of("Asia/Shanghai")
     val context: Context = ApplicationProvider.getApplicationContext()
     val db: AppDatabase = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()

@@ -1,0 +1,119 @@
+{
+  "generatedBy": "web/scripts/gen-sync-fixtures.mjs",
+  "cases": [
+    {
+      "name": "object keys sort by UTF-16 code unit",
+      "inputText": "{\"b\":1,\"a\":2,\"exportedAt\":999}",
+      "canonical": "{\"a\":2,\"b\":1,\"exportedAt\":0}",
+      "sha256": "7702b359cab84377be583b15e5e0f63bf6de7c8c90d29f22f0ceca7630e5da99"
+    },
+    {
+      "name": "integral doubles collapse",
+      "inputText": "{\"n\":1.0}",
+      "canonical": "{\"n\":1}",
+      "sha256": "2bfd14f43d17fc7cea24e0917a8879b4b2f880b8baeec1b9d90fbaad655e71bd"
+    },
+    {
+      "name": "exponent literals normalize",
+      "inputText": "{\"n\":1e2}",
+      "canonical": "{\"n\":100}",
+      "sha256": "b39022c4ed96525c42cd0e7ce55308533962a655f1c19d5dac2f03e9dd995b2c"
+    },
+    {
+      "name": "negative zero",
+      "inputText": "{\"n\":-0.0}",
+      "canonical": "{\"n\":0}",
+      "sha256": "f3013f933b9fb80ab6d995e7ad9da36f683837ba1d81e950c943d40111eac2f0"
+    },
+    {
+      "name": "large exponent",
+      "inputText": "{\"n\":1e21}",
+      "canonical": "{\"n\":1e+21}",
+      "sha256": "f1ee2b60ee95a3170fdc07a577e5f3514ced26867443d69da265acadead81007"
+    },
+    {
+      "name": "small exponent",
+      "inputText": "{\"n\":2.5e-7}",
+      "canonical": "{\"n\":2.5e-7}",
+      "sha256": "6b48bf4570a79ec3f9d7d7facb6b644427d8a907239599e50467ad97d920da36"
+    },
+    {
+      "name": "decimal notation",
+      "inputText": "{\"n\":0.0001}",
+      "canonical": "{\"n\":0.0001}",
+      "sha256": "eb596b9a807e0fbf971473088cea777fe589a090d1b5b9cc930861de6b95e2aa"
+    },
+    {
+      "name": "trailing zero literal",
+      "inputText": "{\"n\":31.20}",
+      "canonical": "{\"n\":31.2}",
+      "sha256": "1d08e89e3c58d66b68946643e4d09772b8524dac17b8c05693132765c419a685"
+    },
+    {
+      "name": "shortest double",
+      "inputText": "{\"n\":0.30000000000000004}",
+      "canonical": "{\"n\":0.30000000000000004}",
+      "sha256": "1d8a8e16d9ee625f1fb5ef505413efa212cc020b272ed0f9b3d3d81acf593fde"
+    },
+    {
+      "name": "unsafe integer literal",
+      "inputText": "{\"n\":9007199254740993}",
+      "canonical": "{\"n\":9007199254740992}",
+      "sha256": "66c87d9cb3014e05a11baa97df62282d89d425f22ee15816577c84534e2ef1bb"
+    },
+    {
+      "name": "huge integer literal",
+      "inputText": "{\"n\":123456789012345678901234567890}",
+      "canonical": "{\"n\":1.2345678901234568e+29}",
+      "sha256": "cf06dd17e5dab029d1ab4c04f5941d7d69ac37a3421b0fc460c48e032b2a94e7"
+    },
+    {
+      "name": "int64 timestamp",
+      "inputText": "{\"n\":1792468800000}",
+      "canonical": "{\"n\":1792468800000}",
+      "sha256": "f41f971964f6abef2f146659f63f9114bae035e2dfb77cf2191fc7e16413b4d7"
+    },
+    {
+      "name": "strings escape a fixed table",
+      "inputText": "{\"s\":\"a\\\"b\\\\c\\n\\t\\b\\f\\r\\u0001中 🎯\"}",
+      "canonical": "{\"s\":\"a\\\"b\\\\c\\n\\t\\b\\f\\r\\u0001中 🎯\"}",
+      "sha256": "e32c5d9774bb51060f47c044c082f03620d0c663b98fa2e36e47737d9de5f463"
+    },
+    {
+      "name": "unpaired surrogates become U+FFFD",
+      "inputText": "{\"s\":\"\\ud800x\\udc00\"}",
+      "canonical": "{\"s\":\"�x�\"}",
+      "sha256": "7959eefbb7a2ef9cf20f12450e3d8a9233c70650d9f6fb2f6d5782eaf3e45583"
+    },
+    {
+      "name": "nested objects and plain arrays",
+      "inputText": "{\"z\":{\"b\":[3,1,2],\"a\":true},\"a\":[{\"y\":1,\"x\":2}]}",
+      "canonical": "{\"a\":[{\"x\":2,\"y\":1}],\"z\":{\"a\":true,\"b\":[1,2,3]}}",
+      "sha256": "6f2708eb02026ddaea4dae4013f3e32634acf2a36ee0b5f4bf5af821edf46429"
+    },
+    {
+      "name": "rows sort by row key",
+      "inputText": "{\"todos\":[{\"id\":\"b\",\"changedAt\":1,\"changeId\":\"x\"},{\"id\":\"a\",\"changedAt\":1,\"changeId\":\"y\"}]}",
+      "canonical": "{\"todos\":[{\"changeId\":\"y\",\"changedAt\":1,\"id\":\"a\"},{\"changeId\":\"x\",\"changedAt\":1,\"id\":\"b\"}]}",
+      "sha256": "43cfec71c11fe130e1e74e39189366331dbf02984bf6e921eb1af95380afc0bb"
+    },
+    {
+      "name": "row keys escape % | #",
+      "inputText": "{\"noteSources\":[{\"noteId\":\"a|b#c%d\",\"kind\":\"DAY\",\"ref\":\"2026-01-01\",\"changedAt\":1,\"changeId\":\"a\"}]}",
+      "canonical": "{\"noteSources\":[{\"changeId\":\"a\",\"changedAt\":1,\"kind\":\"DAY\",\"noteId\":\"a|b#c%d\",\"ref\":\"2026-01-01\"}]}",
+      "sha256": "e4e9ae3f3c4c048a9e542e3b8ac9b5132dd46b4330381574d8d95eb70a640c7c"
+    },
+    {
+      "name": "tombstones sort by row key and exportedAt is zeroed",
+      "inputText": "{\"exportedAt\":5,\"tombstones\":[{\"table\":\"flows\",\"rowKey\":\"flows#b\",\"deletedAt\":1,\"changeId\":\"T:2\"},{\"table\":\"flows\",\"rowKey\":\"flows#a\",\"deletedAt\":2,\"changeId\":\"T:1\"}]}",
+      "canonical": "{\"exportedAt\":0,\"tombstones\":[{\"changeId\":\"T:1\",\"deletedAt\":2,\"rowKey\":\"flows#a\",\"table\":\"flows\"},{\"changeId\":\"T:2\",\"deletedAt\":1,\"rowKey\":\"flows#b\",\"table\":\"flows\"}]}",
+      "sha256": "4554305ba988f7c563da7b314557a0e06fbd8bf0ed5ed07164b939df3d3caa0e"
+    },
+    {
+      "name": "empty file shape",
+      "inputText": "{}",
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ]
+}

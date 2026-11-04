@@ -26,6 +26,11 @@ data class Countdown(
     val pinned: Boolean = false,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
+    /** Merge state stamp: only pinned moves it (docs/sync-merge-semantics.md §1.2). */
+    @ColumnInfo(name = "state_at", defaultValue = "0") val stateAt: Long = 0,
+    @ColumnInfo(name = "state_id", defaultValue = "''") val stateId: String = "",
 )
 
 @Dao
@@ -36,7 +41,8 @@ interface CountdownDao {
     @Insert suspend fun insert(c: Countdown)
     @Insert suspend fun insertAll(items: List<Countdown>)
     @Update suspend fun update(c: Countdown)
-    @Query("UPDATE countdowns SET pinned = 0 WHERE id != :id") suspend fun unpinOthers(id: String)
+    @Query("UPDATE countdowns SET pinned = 0, state_at = :stampAt, state_id = :stampId WHERE id != :id")
+    suspend fun unpinOthers(id: String, stampAt: Long, stampId: String)
     @Query("DELETE FROM countdowns WHERE id = :id") suspend fun delete(id: String)
     @Query("DELETE FROM countdowns") suspend fun clear()
 }

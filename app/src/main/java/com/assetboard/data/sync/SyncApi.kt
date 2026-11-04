@@ -34,6 +34,12 @@ data class RemoteMeta(
     val updatedAt: Long = 0,
 )
 
+/** A downloaded body with the revision and hash that belong to exactly this text (response headers). */
+data class RemoteSnapshot(val text: String, val revision: Long, val contentHash: String)
+
+@Serializable
+private data class RevisionsBody(val revisions: List<RemoteMeta> = emptyList())
+
 @Serializable
 private data class LoginBody(val username: String, val password: String)
 
@@ -75,8 +81,16 @@ interface SyncGateway {
     suspend fun logout(serverUrl: String, refreshToken: String)
     suspend fun changePassword(serverUrl: String, access: String, oldPassword: String, newPassword: String): ServerSession
     suspend fun meta(serverUrl: String, access: String): RemoteMeta
-    suspend fun download(serverUrl: String, access: String): String?
+    suspend fun download(serverUrl: String, access: String): RemoteSnapshot?
+
+    /** The server's retained versions, newest first (the service keeps 30 by default). */
+    suspend fun revisions(serverUrl: String, access: String): List<RemoteMeta> = emptyList()
+    suspend fun revision(serverUrl: String, access: String, revision: Long): RemoteSnapshot? = null
+
     suspend fun upload(serverUrl: String, access: String, baseRevision: Long, snapshotJson: String, contentHash: String): Long
+
+    /** Server minus device clock, in milliseconds, as learned from the last response's Date header. */
+    fun serverOffsetMs(): Long? = null
 }
 
 /**
@@ -163,15 +177,33 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
         decode(raw) { json.decodeFromString(RemoteMeta.serializer(), raw.body) }
     }
 
-    /** The snapshot, or null when the account has none yet. */
-    override suspend fun download(serverUrl: String, access: String): String? = withContext(Dispatchers.IO) {
+    /** The snapshot, or null when the account has none yet. The headers describe this body. */
+    override suspend fun download(serverUrl: String, access: String): RemoteSnapshot? = withContext(Dispatchers.IO) {
         val raw = request(serverUrl, "GET", "/v1/sync", null, access, connectTimeout = 10_000, readTimeout = 120_000)
         when (raw.status) {
-            200 -> raw.body
+            200 -> raw.snapshot()
             404 -> null
             else -> fail(raw)
         }
     }
+
+    override suspend fun revisions(serverUrl: String, access: String): List<RemoteMeta> = withContext(Dispatchers.IO) {
+        val raw = request(serverUrl, "GET", "/v1/sync/revisions", null, access, connectTimeout = 8_000, readTimeout = 15_000)
+        if (raw.status == 404) return@withContext emptyList()
+        if (raw.status != 200) fail(raw)
+        decode(raw) { json.decodeFromString(RevisionsBody.serializer(), raw.body).revisions }
+    }
+
+    override suspend fun revision(serverUrl: String, access: String, revision: Long): RemoteSnapshot? = withContext(Dispatchers.IO) {
+        val raw = request(serverUrl, "GET", "/v1/sync/revisions/$revision", null, access, connectTimeout = 10_000, readTimeout = 120_000)
+        when (raw.status) {
+            200 -> raw.snapshot()
+            404 -> null
+            else -> fail(raw)
+        }
+    }
+
+    override fun serverOffsetMs(): Long? = ServerClock.offsetMs
 
     override suspend fun upload(
         serverUrl: String,
@@ -197,6 +229,12 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
         if (raw.status != 200) fail(raw)
         decode(raw) { json.decodeFromString(UploadResult.serializer(), raw.body).revision }
     }
+
+    private fun Http.Response.snapshot() = RemoteSnapshot(
+        text = body,
+        revision = header("X-Revision")?.toLongOrNull() ?: 0,
+        contentHash = header("X-Content-Hash").orEmpty(),
+    )
 
     private inline fun <T> decode(raw: Http.Response, block: () -> T): T =
         try {
@@ -248,7 +286,7 @@ class SyncApi(private val networkAllowed: () -> Boolean = { true }) : SyncGatewa
             Http.call(
                 base + path, method, body, headers,
                 connectTimeout = connectTimeout, readTimeout = readTimeout, followRedirects = false,
-            )
+            ).also { ServerClock.learn(it.header("Date")) }
         } catch (e: IOException) {
             throw networkFailure(e)
         }

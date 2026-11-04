@@ -81,6 +81,21 @@ class SettingsStore(context: Context) {
         _syncServerUrl.value = value
     }
 
+    /**
+     * Minutes between automatic syncs while signed in: 0 = off, 5 = only in the foreground
+     * (WorkManager's floor is 15), 15/30/60 = also in the background. Default 15.
+     */
+    private val _syncIntervalMinutes = MutableStateFlow(
+        prefs.getInt(KEY_SYNC_INTERVAL, 15).takeIf { it in SYNC_INTERVALS } ?: 15,
+    )
+    val syncIntervalMinutes: StateFlow<Int> = _syncIntervalMinutes.asStateFlow()
+
+    fun setSyncInterval(minutes: Int) {
+        val value = if (minutes in SYNC_INTERVALS) minutes else 15
+        prefs.edit { putInt(KEY_SYNC_INTERVAL, value) }
+        _syncIntervalMinutes.value = value
+    }
+
     // ------------------------------------------------------------ AI assistant
 
     /**
@@ -226,6 +241,7 @@ class SettingsStore(context: Context) {
         const val GLASS_CLEAR = "clear"
         const val GLASS_DEEP = "deep"
         /** Aliyun Bailian's OpenAI-compatible endpoint, and a DeepSeek model on it. */
+        val SYNC_INTERVALS = setOf(0, 5, 15, 30, 60)
         const val DEFAULT_AI_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
         const val DEFAULT_AI_MODEL = "deepseek-v4.1-flash-1017"
         private const val KEY_GLASS = "glass"
@@ -244,6 +260,7 @@ class SettingsStore(context: Context) {
         private const val KEY_RESCHEDULE = "reschedule_needed"
         private const val KEY_HIDE_AMOUNTS = "hide_amounts"
         private const val KEY_SYNC_SERVER = "sync_server_url"
+        private const val KEY_SYNC_INTERVAL = "sync_interval_minutes"
         private const val KEY_BACKUP_ERROR = "backup_error"
         private const val KEY_BACKUP_ERROR_AT = "backup_error_at"
         private const val KEY_AI_API_KEY = "ai_api_key"

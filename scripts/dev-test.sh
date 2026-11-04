@@ -153,6 +153,16 @@ if [ "$mode" = all ]; then
 elif [[ " ${args[*]} " == *" -Proborazzi.test.compare=true "* ]]; then
   python3 -I scripts/shots.py report || failed=1
 fi
+if [ "$mode" = all ]; then
+  # The web client is part of the same release and speaks the same merge protocol.
+  if (cd "$PROJECT/web" && npm test --silent) > /tmp/asset-board-web-test.log 2>&1; then
+    grep -E '^ℹ (tests|pass|fail)' /tmp/asset-board-web-test.log || true
+  else
+    tail -30 /tmp/asset-board-web-test.log
+    echo "web tests failed (full log: /tmp/asset-board-web-test.log)"
+    failed=1
+  fi
+fi
 [ "$status" != 0 ] && failed=1
 
 echo "took $(( $(date +%s) - start ))s (full log: /tmp/asset-board-test.log)"

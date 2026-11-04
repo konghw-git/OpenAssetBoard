@@ -68,20 +68,24 @@ class DiaryRepository(
     override suspend fun saveBody(date: LocalDate, entryId: String?, expectedRev: Long?, text: String): BodySave = serial {
         if (failBodyWrites) throw LedgerException("模拟写盘失败")
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         if (entryId == null) {
             val existing = dao.liveByDate(date.toString())
             when {
                 existing == null -> {
-                    val e = DiaryEntry(newId(), date.toString(), text, bodyRev = 1, createdAt = now, updatedAt = now)
+                    val e = DiaryEntry(
+                        newId(), date.toString(), text, bodyRev = 1, createdAt = now, updatedAt = now,
+                        changedAt = stamp.at, changeId = stamp.id,
+                    )
                     dao.insert(e)
                     BodySave.Saved(e.id, 1, created = true)
                 }
-                existing.body.isEmpty() && dao.updateBody(existing.id, text, existing.bodyRev, now) == 1 ->
+                existing.body.isEmpty() && dao.updateBody(existing.id, text, existing.bodyRev, now, stamp.at, stamp.id) == 1 ->
                     BodySave.Saved(existing.id, existing.bodyRev + 1, created = false)
                 else -> BodySave.Conflict("这一天已有另一篇日记")
             }
         } else {
-            if (dao.updateBody(entryId, text, expectedRev ?: -1, now) == 1) {
+            if (dao.updateBody(entryId, text, expectedRev ?: -1, now, stamp.at, stamp.id) == 1) {
                 BodySave.Saved(entryId, (expectedRev ?: -1) + 1, created = false)
             } else {
                 val e = dao.entry(entryId)
@@ -98,12 +102,23 @@ class DiaryRepository(
 
     override suspend fun saveDraft(date: LocalDate, entryId: String?, text: String, reason: String): String = serial {
         if (failDraftWrites) throw LedgerException("模拟写盘失败")
+        val stamp = ChangeStamps.stamp(clock())
         val id = newId()
-        dao.insertDraft(DiaryDraft(id, date.toString(), entryId?.takeIf { dao.entry(it) != null }, text, reason, clock()))
+        dao.insertDraft(
+            DiaryDraft(
+                id, date.toString(), entryId?.takeIf { dao.entry(it) != null }, text, reason, stamp.at,
+                changedAt = stamp.at, changeId = stamp.id,
+            ),
+        )
         id
     }
 
-    suspend fun discardDraft(id: String) = serial { dao.deleteDraft(id) }
+    suspend fun discardDraft(id: String) = serial {
+        dao.draft(id)?.let { draft ->
+            db.dao().putTombstone(deletedTombstone("diaryDrafts", RowKey.of("diaryDrafts", draft.id), clock()))
+        }
+        dao.deleteDraft(id)
+    }
 
     /** The days of [from]..[to] with a mood, as date to [com.assetboard.domain.Mood] value. */
     fun observeMoods(from: LocalDate, to: LocalDate): Flow<Map<String, Int>> =
@@ -116,10 +131,16 @@ class DiaryRepository(
     suspend fun setMood(date: LocalDate, mood: Int?) = serial {
         ensure(mood == null || com.assetboard.domain.Mood.of(mood) != null) { "无效的心情" }
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         val e = dao.liveByDate(date.toString())
         when {
-            e != null -> dao.setMood(e.id, mood, now)
-            mood != null -> dao.insert(DiaryEntry(newId(), date.toString(), "", createdAt = now, updatedAt = now, mood = mood))
+            e != null -> dao.setMood(e.id, mood, now, stamp.at, stamp.id)
+            mood != null -> dao.insert(
+                DiaryEntry(
+                    newId(), date.toString(), "", createdAt = now, updatedAt = now, mood = mood,
+                    changedAt = stamp.at, changeId = stamp.id,
+                ),
+            )
         }
     }
 
@@ -127,7 +148,8 @@ class DiaryRepository(
     suspend fun delete(entryId: String): String = serial {
         val e = dao.entry(entryId)?.takeIf { it.deletedAt == null } ?: throw LedgerException("日记不存在")
         val batch = newId()
-        dao.update(e.copy(deletedAt = clock(), deleteBatch = batch, bodyRev = e.bodyRev + 1))
+        val stamp = ChangeStamps.stamp(clock())
+        dao.update(e.copy(deletedAt = stamp.at, deleteBatch = batch, bodyRev = e.bodyRev + 1, changedAt = stamp.at, changeId = stamp.id))
         batch
     }
 
@@ -143,12 +165,15 @@ class DiaryRepository(
      */
     suspend fun restore(batch: String, replace: Boolean): Boolean = serial {
         val e = dao.inBatch(batch).firstOrNull { it.deletedAt != null } ?: return@serial false
+        // Restoring is a new change, not the old row coming back: its stamp must be new (§5.4).
+        val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         val current = dao.liveByDate(e.date)
         if (current != null) {
             if (!replace) return@serial false
-            dao.update(current.copy(deletedAt = clock(), deleteBatch = newId(), bodyRev = current.bodyRev + 1))
+            dao.update(current.copy(deletedAt = now, deleteBatch = newId(), bodyRev = current.bodyRev + 1, changedAt = stamp.at, changeId = stamp.id))
         }
-        dao.update(e.copy(deletedAt = null, deleteBatch = null, bodyRev = e.bodyRev + 1))
+        dao.update(e.copy(deletedAt = null, deleteBatch = null, bodyRev = e.bodyRev + 1, changedAt = stamp.at, changeId = stamp.id))
         ensure(dao.liveByDate(e.date)?.id == e.id) { "${e.date} 有多篇日记" }
         true
     }
@@ -160,7 +185,9 @@ class DiaryRepository(
     }
 
     suspend fun writeWeather(entryId: String, rev: Long, w: WeatherResult): Boolean = serial {
-        dao.writeWeather(entryId, rev, w.code, w.tempMin, w.tempMax, w.city, w.lat, w.lon, clock()) == 1
+        val now = clock()
+        val stamp = ChangeStamps.stamp(now)
+        dao.writeWeather(entryId, rev, w.code, w.tempMin, w.tempMax, w.city, w.lat, w.lon, now, stamp.at, stamp.id) == 1
     }
 }
 

@@ -319,12 +319,8 @@ fun SettingsScreen(
                 if (account.signedIn) {
                     ListRow(
                         title = account.username ?: "已登录",
-                        subtitle = if (account.conflict != null) {
-                            "有冲突需要处理"
-                        } else {
-                            "云端版本 ${account.revision}" +
-                                (account.lastSyncAt?.let { " · 上次同步 " + Dates.relative(it) } ?: " · 还没有同步过")
-                        },
+                        subtitle = "云端版本 ${account.revision}" +
+                            (account.lastSyncAt?.let { " · 上次同步 " + Dates.relative(it) } ?: " · 还没有同步过"),
                         leading = { IconTile(Icons.Outlined.Person, palette.group(4)) },
                         onClick = onSyncAccount,
                     )

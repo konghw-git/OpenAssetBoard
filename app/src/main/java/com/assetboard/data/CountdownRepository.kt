@@ -13,7 +13,7 @@ import java.time.LocalDate
  * [onChanged] fires after every write (it refreshes the home-screen widget).
  */
 class CountdownRepository(
-    db: AppDatabase,
+    private val db: AppDatabase,
     private val gate: WriteGate,
     private val clock: () -> Long = AppClock::millis,
     private val onChanged: () -> Unit = {},
@@ -34,32 +34,59 @@ class CountdownRepository(
     suspend fun save(id: String?, title: String, date: LocalDate, yearly: Boolean, pinned: Boolean): String = write {
         val clean = checkTitle(title)
         val now = clock()
-        val c = if (id == null) {
-            Countdown(newId(), clean, date.toString(), yearly, pinned, createdAt = now, updatedAt = now).also { dao.insert(it) }
+        val stamp = ChangeStamps.stamp(now)
+        val old = if (id == null) null else dao.get(id) ?: throw LedgerException("这个倒数日已被删除")
+        val pinnedChanged = old == null || old.pinned != pinned
+        val c = if (old == null) {
+            Countdown(
+                newId(), clean, date.toString(), yearly, pinned, createdAt = now, updatedAt = now,
+                changedAt = stamp.at, changeId = stamp.id,
+                stateAt = if (pinnedChanged) stamp.at else 0, stateId = if (pinnedChanged) stamp.id else "",
+            ).also { dao.insert(it) }
         } else {
-            val old = dao.get(id) ?: throw LedgerException("这个倒数日已被删除")
-            old.copy(title = clean, date = date.toString(), yearly = yearly, pinned = pinned, updatedAt = now).also { dao.update(it) }
+            old.copy(
+                title = clean, date = date.toString(), yearly = yearly, pinned = pinned, updatedAt = now,
+                changedAt = stamp.at, changeId = stamp.id,
+                stateAt = if (pinnedChanged) stamp.at else old.stateAt,
+                stateId = if (pinnedChanged) stamp.id else old.stateId,
+            ).also { dao.update(it) }
         }
-        if (c.pinned) dao.unpinOthers(c.id)
+        if (c.pinned) dao.unpinOthers(c.id, stamp.at, stamp.id)
         c.id
     }
 
     suspend fun setPinned(id: String, pinned: Boolean) = write {
         val old = dao.get(id) ?: throw LedgerException("这个倒数日已被删除")
-        dao.update(old.copy(pinned = pinned, updatedAt = clock()))
-        if (pinned) dao.unpinOthers(id)
+        val now = clock()
+        val stamp = ChangeStamps.stamp(now)
+        // Pinned is a state field: it moves the state stamp only (§1.2).
+        dao.update(old.copy(pinned = pinned, updatedAt = now, stateAt = stamp.at, stateId = stamp.id))
+        if (pinned) dao.unpinOthers(id, stamp.at, stamp.id)
     }
 
     /** Removes it and returns the row, for [restore]; null when it was already gone. */
     suspend fun delete(id: String): Countdown? = write {
-        dao.get(id)?.also { dao.delete(id) }
+        val now = clock()
+        dao.get(id)?.also {
+            db.dao().putTombstone(deletedTombstone("countdowns", RowKey.of("countdowns", it.id), now))
+            dao.delete(id)
+        }
     }
 
-    /** Puts a deleted countdown back as it was; it loses the pin if another took it meanwhile. */
+    /** Puts a deleted countdown back as it was, as a new change (§5.4); it loses the pin if another took it meanwhile. */
     suspend fun restore(c: Countdown) = write {
         if (dao.get(c.id) != null) return@write
+        val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         val pinTaken = c.pinned && dao.all().any { it.pinned }
-        dao.insert(if (pinTaken) c.copy(pinned = false) else c)
+        val restored = if (pinTaken) c.copy(pinned = false) else c
+        dao.insert(
+            restored.copy(
+                changedAt = stamp.at, changeId = stamp.id,
+                stateAt = if (pinTaken != c.pinned || c.stateAt == 0L) stamp.at else c.stateAt,
+                stateId = if (pinTaken != c.pinned || c.stateAt == 0L) stamp.id else c.stateId,
+            ),
+        )
     }
 
     companion object {

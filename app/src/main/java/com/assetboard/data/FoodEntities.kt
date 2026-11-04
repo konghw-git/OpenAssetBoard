@@ -58,4 +58,6 @@ data class FoodEntry(
     @ColumnInfo(name = "sodium_mg") val sodiumMg: Long? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )

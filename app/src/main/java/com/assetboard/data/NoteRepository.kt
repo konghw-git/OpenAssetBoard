@@ -60,13 +60,18 @@ class NoteRepository(
     override suspend fun saveBody(noteId: String?, expectedRev: Long?, text: String, sources: List<SourceRef>, topicId: String?): BodySave = serial {
         if (failBodyWrites) throw LedgerException("模拟写盘失败")
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         if (noteId == null) {
-            val n = Note(newId(), topicId?.takeIf { dao.topic(it) != null }, text, bodyRev = 1, position = dao.minPosition() - 1, createdAt = now, updatedAt = now)
+            val n = Note(
+                newId(), topicId?.takeIf { dao.topic(it) != null }, text, bodyRev = 1,
+                position = dao.minPosition() - 1, createdAt = now, updatedAt = now,
+                changedAt = stamp.at, changeId = stamp.id,
+            )
             dao.insert(n)
-            addSources(n.id, sources, now)
+            addSources(n.id, sources, now, stamp)
             BodySave.Saved(n.id, 1, created = true)
-        } else if (dao.updateBody(noteId, text, expectedRev ?: -1, now) == 1) {
-            addSources(noteId, sources, now)
+        } else if (dao.updateBody(noteId, text, expectedRev ?: -1, now, stamp.at, stamp.id) == 1) {
+            addSources(noteId, sources, now, stamp)
             BodySave.Saved(noteId, (expectedRev ?: -1) + 1, created = false)
         } else {
             BodySave.Conflict(conflictReason(dao.note(noteId)))
@@ -75,13 +80,21 @@ class NoteRepository(
 
     override suspend fun saveDraft(noteId: String?, text: String, reason: String): String = serial {
         if (failDraftWrites) throw LedgerException("模拟写盘失败")
+        val stamp = ChangeStamps.stamp(clock())
         val id = newId()
-        dao.insertDraft(NoteDraft(id, noteId?.takeIf { dao.note(it) != null }, text, reason, clock()))
+        dao.insertDraft(
+            NoteDraft(
+                id, noteId?.takeIf { dao.note(it) != null }, text, reason, stamp.at,
+                changedAt = stamp.at, changeId = stamp.id,
+            ),
+        )
         id
     }
 
-    private suspend fun addSources(noteId: String, sources: List<SourceRef>, now: Long) {
-        for (s in sources) dao.insertSource(NoteSource(noteId, s.kind, s.ref, now))
+    private suspend fun addSources(noteId: String, sources: List<SourceRef>, now: Long, stamp: ChangeStamp) {
+        for (s in sources) {
+            dao.insertSource(NoteSource(noteId, s.kind, s.ref, now, changedAt = stamp.at, changeId = stamp.id))
+        }
     }
 
     /**
@@ -96,8 +109,9 @@ class NoteRepository(
             serial {
                 val n = dao.note(noteId)?.takeIf { it.deletedAt == null } ?: throw LedgerException("这篇笔记已被删除")
                 val now = clock()
-                ensure(dao.updateBody(noteId, NoteText.join(n.body, tail), n.bodyRev, now) == 1) { "这篇笔记已在别处修改" }
-                addSources(noteId, listOf(source), now)
+                val stamp = ChangeStamps.stamp(now)
+                ensure(dao.updateBody(noteId, NoteText.join(n.body, tail), n.bodyRev, now, stamp.at, stamp.id) == 1) { "这篇笔记已在别处修改" }
+                addSources(noteId, listOf(source), now, stamp)
             }
             AppendResult.Appended
         } catch (e: CancellationException) {
@@ -110,9 +124,14 @@ class NoteRepository(
     /** A new note with [text], taken from [source]; returns its id. */
     suspend fun create(text: String, source: SourceRef?, topicId: String? = null): String = serial {
         val now = clock()
-        val n = Note(newId(), topicId?.takeIf { dao.topic(it) != null }, text, bodyRev = 1, position = dao.minPosition() - 1, createdAt = now, updatedAt = now)
+        val stamp = ChangeStamps.stamp(now)
+        val n = Note(
+            newId(), topicId?.takeIf { dao.topic(it) != null }, text, bodyRev = 1,
+            position = dao.minPosition() - 1, createdAt = now, updatedAt = now,
+            changedAt = stamp.at, changeId = stamp.id,
+        )
         dao.insert(n)
-        if (source != null) addSources(n.id, listOf(source), now)
+        if (source != null) addSources(n.id, listOf(source), now, stamp)
         n.id
     }
 
@@ -122,22 +141,36 @@ class NoteRepository(
     suspend fun draftToNote(draftId: String): String = serial {
         val d = dao.draft(draftId) ?: throw LedgerException("这份草稿已经处理过了")
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         val topic = d.noteId?.let { dao.note(it) }?.topicId
-        val n = Note(newId(), topic, d.text, bodyRev = 1, position = dao.minPosition() - 1, createdAt = now, updatedAt = now)
+        val n = Note(
+            newId(), topic, d.text, bodyRev = 1, position = dao.minPosition() - 1,
+            createdAt = now, updatedAt = now, changedAt = stamp.at, changeId = stamp.id,
+        )
         dao.insert(n)
+        db.dao().putTombstone(deletedTombstone("noteDrafts", RowKey.of("noteDrafts", d.id), now))
         dao.deleteDraft(d.id)
         n.id
     }
 
-    suspend fun discardDraft(id: String) = serial { dao.deleteDraft(id) }
+    suspend fun discardDraft(id: String) = serial {
+        dao.draft(id)?.let { draft ->
+            db.dao().putTombstone(deletedTombstone("noteDrafts", RowKey.of("noteDrafts", draft.id), clock()))
+        }
+        dao.deleteDraft(id)
+    }
 
     // ------------------------------------------------------------ columns beside the body
 
-    suspend fun setPinned(id: String, pinned: Boolean) = serial { dao.setPinned(id, pinned) }
+    suspend fun setPinned(id: String, pinned: Boolean) = serial {
+        val stamp = ChangeStamps.stamp(clock())
+        dao.setPinned(id, pinned, stamp.at, stamp.id)
+    }
 
     suspend fun setTopic(id: String, topicId: String?) = serial {
         ensure(topicId == null || dao.topic(topicId) != null) { "这个主题已被删除" }
-        dao.setTopic(id, topicId)
+        val stamp = ChangeStamps.stamp(clock())
+        dao.setTopic(id, topicId, stamp.at, stamp.id)
     }
 
     /**
@@ -145,16 +178,17 @@ class NoteRepository(
      * in the list (another topic, the other section) keep theirs.
      */
     suspend fun reorder(ids: List<String>) = serial {
+        val stamp = ChangeStamps.stamp(clock())
         var all = dao.all().sortedWith(compareBy<Note> { it.position }.thenByDescending { it.updatedAt })
         // Ties (an old backup, say) are spread out first, in the order they show.
         if (all.map { it.position }.toSet().size < all.size) {
             all = all.mapIndexed { i, n -> n.copy(position = i.toLong()) }
-            for (n in all) dao.setPosition(n.id, n.position)
+            for (n in all) dao.setPosition(n.id, n.position, stamp.at, stamp.id)
         }
         val byId = all.associateBy { it.id }
         val moved = ids.mapNotNull { byId[it] }
         val slots = moved.map { it.position }.sorted()
-        moved.forEachIndexed { i, n -> if (n.position != slots[i]) dao.setPosition(n.id, slots[i]) }
+        moved.forEachIndexed { i, n -> if (n.position != slots[i]) dao.setPosition(n.id, slots[i], stamp.at, stamp.id) }
     }
 
     /**
@@ -177,11 +211,15 @@ class NoteRepository(
 
     /** Puts today's review away: the note counts as reviewed and the card stays hidden until tomorrow. */
     suspend fun dismissReview(today: LocalDate, noteId: String) = serial {
-        dao.setReviewed(noteId, clock())
+        val stamp = ChangeStamps.stamp(clock())
+        dao.setReviewed(noteId, stamp.at, stamp.at, stamp.id)
         db.metaDao().put(AppMeta(REVIEW_PICK, "$today|$noteId|$REVIEW_DONE"))
     }
 
-    suspend fun setReviewed(id: String, at: Long? = clock()) = serial { dao.setReviewed(id, at) }
+    suspend fun setReviewed(id: String, at: Long? = clock()) = serial {
+        val stamp = ChangeStamps.stamp(clock())
+        dao.setReviewed(id, at, stamp.at, stamp.id)
+    }
 
     // ------------------------------------------------------------ trash
 
@@ -189,7 +227,8 @@ class NoteRepository(
     suspend fun delete(id: String): String = serial {
         val n = dao.note(id)?.takeIf { it.deletedAt == null } ?: throw LedgerException("笔记不存在")
         val batch = newId()
-        dao.update(n.copy(deletedAt = clock(), deleteBatch = batch, bodyRev = n.bodyRev + 1))
+        val stamp = ChangeStamps.stamp(clock())
+        dao.update(n.copy(deletedAt = stamp.at, deleteBatch = batch, bodyRev = n.bodyRev + 1, changedAt = stamp.at, changeId = stamp.id))
         batch
     }
 
@@ -197,9 +236,10 @@ class NoteRepository(
     suspend fun deleteMany(ids: List<String>): String = serial {
         val batch = newId()
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         for (id in ids.distinct()) {
             val n = dao.note(id)?.takeIf { it.deletedAt == null } ?: continue
-            dao.update(n.copy(deletedAt = now, deleteBatch = batch, bodyRev = n.bodyRev + 1))
+            dao.update(n.copy(deletedAt = now, deleteBatch = batch, bodyRev = n.bodyRev + 1, changedAt = stamp.at, changeId = stamp.id))
         }
         batch
     }
@@ -207,7 +247,10 @@ class NoteRepository(
     /** Restores the notes of [batch]; notes never collide, so there is nothing to ask. */
     suspend fun restore(batch: String): Boolean = serial {
         val deleted = dao.inBatch(batch).filter { it.deletedAt != null }
-        for (n in deleted) dao.update(n.copy(deletedAt = null, deleteBatch = null, bodyRev = n.bodyRev + 1))
+        val stamp = ChangeStamps.stamp(clock())
+        for (n in deleted) {
+            dao.update(n.copy(deletedAt = null, deleteBatch = null, bodyRev = n.bodyRev + 1, changedAt = stamp.at, changeId = stamp.id))
+        }
         deleted.isNotEmpty()
     }
 
@@ -216,14 +259,19 @@ class NoteRepository(
     suspend fun createTopic(name: String): String = serial {
         val topics = dao.topics()
         val clean = checkTopicName(name, topics.map { it.name })
-        val t = NoteTopic(newId(), clean, sortOrder = (topics.maxOfOrNull { it.sortOrder } ?: -1) + 1, createdAt = clock())
+        val stamp = ChangeStamps.stamp(clock())
+        val t = NoteTopic(
+            newId(), clean, sortOrder = (topics.maxOfOrNull { it.sortOrder } ?: -1) + 1,
+            createdAt = stamp.at, changedAt = stamp.at, changeId = stamp.id,
+        )
         dao.insertTopic(t)
         t.id
     }
 
     suspend fun renameTopic(id: String, name: String) = serial {
         val clean = checkTopicName(name, dao.topics().filter { it.id != id }.map { it.name })
-        dao.renameTopic(id, clean)
+        val stamp = ChangeStamps.stamp(clock())
+        dao.renameTopic(id, clean, stamp.at, stamp.id)
     }
 
     suspend fun moveTopic(id: String, delta: Int) = serial {
@@ -232,7 +280,12 @@ class NoteRepository(
         val j = i + delta
         if (i < 0 || j !in topics.indices) return@serial
         topics.add(j, topics.removeAt(i))
-        dao.updateTopics(topics.mapIndexed { idx, t -> t.copy(sortOrder = idx) })
+        val stamp = ChangeStamps.stamp(clock())
+        val old = topics.associate { it.id to it.sortOrder }
+        dao.updateTopics(topics.mapIndexed { idx, t ->
+            if (old.getValue(t.id) != idx) t.copy(sortOrder = idx, changedAt = stamp.at, changeId = stamp.id)
+            else t.copy(sortOrder = idx)
+        })
     }
 
     /** Rewrites the order to [idsInOrder], dense from the top; topics left out land at the end. */
@@ -240,7 +293,10 @@ class NoteRepository(
         val topics = dao.topics()
         val byId = topics.associateBy { it.id }
         val ordered = idsInOrder.mapNotNull { byId[it] } + topics.filter { it.id !in idsInOrder }
-        dao.updateTopics(ordered.mapIndexed { idx, t -> t.copy(sortOrder = idx) })
+        val stamp = ChangeStamps.stamp(clock())
+        dao.updateTopics(ordered.mapIndexed { idx, t -> t.copy(sortOrder = idx) }.map { t ->
+            if (byId.getValue(t.id).sortOrder != t.sortOrder) t.copy(changedAt = stamp.at, changeId = stamp.id) else t
+        })
     }
 
     /** Live notes that would move to 未归类. Notes in the trash move too, but are not counted. */
@@ -254,6 +310,11 @@ class NoteRepository(
     suspend fun deleteTopic(id: String): TopicDeletion? = serial {
         val t = dao.topic(id) ?: return@serial null
         val noteIds = dao.noteIdsInTopic(id)
+        val stamp = ChangeStamps.stamp(clock())
+        // The foreign key would null the notes anyway; doing it here gives them a content stamp,
+        // so a device still holding the topic link can't out-vote the un-filing (§4.2).
+        for (noteId in noteIds) dao.setTopic(noteId, null, stamp.at, stamp.id)
+        db.dao().putTombstone(deletedTombstone("noteTopics", RowKey.of("noteTopics", id), stamp.at))
         dao.deleteTopic(id)
         TopicDeletion(t, noteIds)
     }
@@ -265,13 +326,14 @@ class NoteRepository(
      */
     suspend fun undoDeleteTopic(deletion: TopicDeletion) = serial {
         val t = deletion.topic
+        val stamp = ChangeStamps.stamp(clock())
         if (dao.topic(t.id) == null) {
             val name = dedupeTopicName(t.name, dao.topics().map { it.name })
-            dao.insertTopic(if (name == t.name) t else t.copy(name = name))
+            dao.insertTopic((if (name == t.name) t else t.copy(name = name)).copy(changedAt = stamp.at, changeId = stamp.id))
         }
         for (id in deletion.noteIds) {
             val n = dao.note(id) ?: continue
-            if (n.topicId == null) dao.setTopic(id, t.id)
+            if (n.topicId == null) dao.setTopic(id, t.id, stamp.at, stamp.id)
         }
     }
 

@@ -163,6 +163,15 @@ class TodoRepository(
         val now = clock()
         val today: LocalDate = TodoViews.localDate(now, zone())
 
+        /** One operation, one content stamp; the rows it writes win or lose together (§0.2). */
+        private val contentStamp: ChangeStamp by lazy { ChangeStamps.stamp(now) }
+
+        /** Reminder state is its own version, so delivery never steals a content version (§1.2). */
+        private val stateStamp: ChangeStamp by lazy { ChangeStamps.stamp(now) }
+
+        fun content(): ChangeStamp = contentStamp
+        fun state(): ChangeStamp = stateStamp
+
         suspend fun save(t: Todo) {
             TodoInvariants.checkTodo(t, calendar())
             TodoInvariants.checkTodoRefs(
@@ -171,14 +180,29 @@ class TodoRepository(
                 listOfNotNull(t.sectionId?.let { dao.section(it) }).associateBy { it.id },
                 listOfNotNull(t.repeatSourceId?.let { dao.todo(it) }).associateBy { it.id },
             )
-            dao.updateTodo(t)
+            val old = dao.todo(t.id)
+            var next = t.copy(changedAt = contentStamp.at, changeId = contentStamp.id)
+            if (old == null || old.snoozeAt != t.snoozeAt || old.remindedPeriod != t.remindedPeriod) {
+                next = next.copy(stateAt = stateStamp.at, stateId = stateStamp.id)
+            }
+            dao.updateTodo(next)
             changed += t.id
         }
 
         suspend fun insert(t: Todo) {
             TodoInvariants.checkTodo(t, calendar())
-            dao.insertTodo(t)
+            dao.insertTodo(
+                t.copy(
+                    changedAt = contentStamp.at, changeId = contentStamp.id,
+                    stateAt = stateStamp.at, stateId = stateStamp.id,
+                ),
+            )
             changed += t.id
+        }
+
+        /** A physical delete inside the operation: it needs a tombstone or the row comes back (§4.2). */
+        suspend fun tombstoned(table: String, rowKey: String, at: Long = now) {
+            db.dao().putTombstone(deletedTombstone(table, rowKey, at))
         }
     }
 
@@ -354,18 +378,23 @@ class TodoRepository(
     }
 
     /** [idsInOrder] trade the places they hold among themselves, so that they come in this order. */
-    private suspend fun reorderIn(idsInOrder: List<String>) {
+    private suspend fun Tx.reorderIn(idsInOrder: List<String>) {
         val ids = idsInOrder.distinct()
         var moved = ids.mapNotNull { dao.todo(it) }
+        val stamp = content()
         if (moved.map { it.sortOrder }.toSet().size < moved.size) {
             dao.allTodos().sortedWith(compareBy({ it.sortOrder }, { it.createdAt }, { it.id })).forEachIndexed { i, t ->
-                if (t.sortOrder != i) dao.updateTodo(t.copy(sortOrder = i, revision = t.revision + 1))
+                if (t.sortOrder != i) {
+                    dao.updateTodo(t.copy(sortOrder = i, revision = t.revision + 1, changedAt = stamp.at, changeId = stamp.id))
+                }
             }
             moved = ids.mapNotNull { dao.todo(it) }
         }
         val places = moved.map { it.sortOrder }.sorted()
         moved.forEachIndexed { i, t ->
-            if (t.sortOrder != places[i]) dao.updateTodo(t.copy(sortOrder = places[i], revision = t.revision + 1))
+            if (t.sortOrder != places[i]) {
+                dao.updateTodo(t.copy(sortOrder = places[i], revision = t.revision + 1, changedAt = stamp.at, changeId = stamp.id))
+            }
         }
     }
 
@@ -420,7 +449,10 @@ class TodoRepository(
                 // kept on the todo so that unchecking it puts the items back as they were.
                 val items = dao.checklistOf(t.id)
                 val open = items.filterNot { it.done }
-                if (open.isNotEmpty()) dao.updateChecklistItems(open.map { it.copy(done = true) })
+                if (open.isNotEmpty()) {
+                    val stamp = content()
+                    dao.updateChecklistItems(open.map { it.copy(done = true, changedAt = stamp.at, changeId = stamp.id) })
+                }
                 save(t.copy(completedAt = now, snoozeAt = null, undoBefore = if (open.isEmpty()) null else undoBefore(t, items).encode()).bump())
                 t.id
             }
@@ -450,7 +482,12 @@ class TodoRepository(
                 )
                 insert(record)
                 // The record keeps the period's checklist, all of it ticked: the period is done.
-                if (items.isNotEmpty()) dao.insertChecklistItems(items.map { it.copy(id = newId(), todoId = record.id, done = true) })
+                if (items.isNotEmpty()) {
+                    val stamp = content()
+                    dao.insertChecklistItems(
+                        items.map { it.copy(id = newId(), todoId = record.id, done = true, changedAt = stamp.at, changeId = stamp.id) },
+                    )
+                }
                 record.id
             }
             TodoKind.COMPLETION -> throw StaleAction()
@@ -486,7 +523,10 @@ class TodoRepository(
             base.copy(repeatEndedAt = now)
         } else {
             val shift = ChronoUnit.DAYS.between(plan, step.nextPlan)
-            if (items.any { it.done }) dao.updateChecklistItems(items.map { it.copy(done = false) })
+            if (items.any { it.done }) {
+                val stamp = content()
+                dao.updateChecklistItems(items.map { it.copy(done = false, changedAt = stamp.at, changeId = stamp.id) })
+            }
             base.copy(planDate = step.nextPlan.toString(), deadline = TodoViews.parse(t.deadline)?.plusDays(shift)?.toString())
         }
         save(next)
@@ -507,7 +547,10 @@ class TodoRepository(
                 t.undoBefore?.let { runCatching { UndoBefore.decode(it) }.getOrNull() }?.let { before ->
                     val items = dao.checklistOf(t.id)
                     val changed = items.filter { before.checklist[it.id] == false && it.done }
-                    if (changed.isNotEmpty()) dao.updateChecklistItems(changed.map { it.copy(done = false) })
+                    if (changed.isNotEmpty()) {
+                        val stamp = content()
+                        dao.updateChecklistItems(changed.map { it.copy(done = false, changedAt = stamp.at, changeId = stamp.id) })
+                    }
                 }
                 save(t.copy(completedAt = null, undoBefore = null).bump())
                 UndoOutcome.RESTORED
@@ -519,14 +562,12 @@ class TodoRepository(
                 when {
                     restorable -> {
                         restore(src!!, UndoBefore.decode(t.undoBefore!!))
-                        dao.deleteTodoRow(t.id)
-                        changed += t.id
+                        deleteCompletionRecord(t)
                         UndoOutcome.RESTORED
                     }
                     !deleteOnly -> UndoOutcome.NEEDS_CONFIRM
                     else -> {
-                        dao.deleteTodoRow(t.id)
-                        changed += t.id
+                        deleteCompletionRecord(t)
                         UndoOutcome.RECORD_DELETED
                     }
                 }
@@ -543,9 +584,20 @@ class TodoRepository(
         true
     }
 
+    /** Unchecking permanently deletes the completion record and its copied checklist; both need tombstones. */
+    private suspend fun Tx.deleteCompletionRecord(t: Todo) {
+        for (item in dao.checklistOf(t.id)) tombstoned("checklistItems", RowKey.of("checklistItems", item.id))
+        tombstoned("todos", RowKey.of("todos", t.id))
+        dao.deleteTodoRow(t.id)
+        changed += t.id
+    }
+
     private suspend fun Tx.restore(src: Todo, before: UndoBefore) {
         val items = dao.checklistOf(src.id)
-        dao.updateChecklistItems(items.map { it.copy(done = before.checklist[it.id] ?: it.done) })
+        val stamp = content()
+        dao.updateChecklistItems(
+            items.map { it.copy(done = before.checklist[it.id] ?: it.done, changedAt = stamp.at, changeId = stamp.id) },
+        )
         save(
             src.copy(
                 planDate = before.planDate,
@@ -581,7 +633,8 @@ class TodoRepository(
         val t = token(id, expectedSeq)
         val next = ReminderState.delivered(t)
         if (next != t) {
-            dao.updateTodo(next)
+            val stamp = state()
+            dao.updateTodo(next.copy(stateAt = stamp.at, stateId = stamp.id))
             changed += id
         }
     }
@@ -601,17 +654,21 @@ class TodoRepository(
         val existing = dao.checklistOf(id).associateBy { it.id }
         val kept = items.map { it.copy(text = it.text.trim()) }.filter { it.text.isNotEmpty() }
         var changed = false
+        val stamp = content()
         for (gone in existing.keys - kept.mapNotNull { it.id }.toSet()) {
+            tombstoned("checklistItems", RowKey.of("checklistItems", gone))
             dao.deleteChecklistItem(gone)
             changed = true
         }
         kept.forEachIndexed { i, item ->
             val old = item.id?.let(existing::get)
             if (old == null) {
-                dao.insertChecklistItem(ChecklistItem(newId(), id, item.text, sortOrder = i))
+                dao.insertChecklistItem(
+                    ChecklistItem(newId(), id, item.text, sortOrder = i, changedAt = stamp.at, changeId = stamp.id),
+                )
                 changed = true
             } else if (old.text != item.text || old.sortOrder != i) {
-                dao.updateChecklistItem(old.copy(text = item.text, sortOrder = i))
+                dao.updateChecklistItem(old.copy(text = item.text, sortOrder = i, changedAt = stamp.at, changeId = stamp.id))
                 changed = true
             }
         }
@@ -648,7 +705,10 @@ class TodoRepository(
             createdAt = now,
         )
         insert(ReminderState.afterManualEdit(t, now, zone()))
-        todos.forEachIndexed { i, x -> dao.insertChecklistItem(ChecklistItem(newId(), t.id, x.title, sortOrder = i)) }
+        val stamp = content()
+        todos.forEachIndexed { i, x ->
+            dao.insertChecklistItem(ChecklistItem(newId(), t.id, x.title, sortOrder = i, changedAt = stamp.at, changeId = stamp.id))
+        }
         val batch = newId()
         todos.forEach { trashTodo(it, batch) }
         t.id to batch
@@ -676,7 +736,12 @@ class TodoRepository(
         ensure(todos.isNotEmpty()) { "没有选中其他待办" }
         ensure(todos.none { it.kind != TodoKind.ORDINARY || it.completedAt != null }) { "重复待办和已完成的待办不能变成检查项" }
         var order = dao.maxChecklistOrder(targetId) + 1
-        val made = todos.map { x -> newId().also { dao.insertChecklistItem(ChecklistItem(it, targetId, x.title, sortOrder = order++)) } }
+        val stamp = content()
+        val made = todos.map { x ->
+            newId().also {
+                dao.insertChecklistItem(ChecklistItem(it, targetId, x.title, sortOrder = order++, changedAt = stamp.at, changeId = stamp.id))
+            }
+        }
         save(target.bump(seq = false))
         val batch = newId()
         todos.forEach { trashTodo(it, batch) }
@@ -685,7 +750,10 @@ class TodoRepository(
 
     /** Undoes [mergeInto]: the items made go and the todos of [batch] come back. */
     suspend fun unmerge(targetId: String, items: List<String>, batch: String) = tx {
-        for (id in items) dao.deleteChecklistItem(id)
+        for (id in items) {
+            tombstoned("checklistItems", RowKey.of("checklistItems", id))
+            dao.deleteChecklistItem(id)
+        }
         dao.todo(targetId)?.takeIf { it.deletedAt == null }?.let { save(it.bump(seq = false)) }
         for (t in dao.todosInBatch(batch)) if (t.deletedAt != null) reviveTodo(t)
     }
@@ -712,7 +780,12 @@ class TodoRepository(
             // The items take the todo's place in the order all views share; what came after moves down to make room.
             val room = items.size - 1
             if (room > 0) {
-                for (o in dao.allTodos()) if (o.sortOrder > base) dao.updateTodo(o.copy(sortOrder = o.sortOrder + room, revision = o.revision + 1))
+                val stamp = content()
+                for (o in dao.allTodos()) {
+                    if (o.sortOrder > base) {
+                        dao.updateTodo(o.copy(sortOrder = o.sortOrder + room, revision = o.revision + 1, changedAt = stamp.at, changeId = stamp.id))
+                    }
+                }
             }
             items.forEachIndexed { i, item ->
                 val n = Todo(
@@ -749,8 +822,11 @@ class TodoRepository(
         val t = live(todoId)
         ensure(t.kind != TodoKind.COMPLETION) { "完成记录不能修改" }
         val id = newId()
-        dao.insertChecklistItem(ChecklistItem(id, todoId, text.trim(), sortOrder = dao.maxChecklistOrder(todoId) + 1))
-        dao.updateTodo(t.bump(seq = false))
+        val stamp = content()
+        dao.insertChecklistItem(
+            ChecklistItem(id, todoId, text.trim(), sortOrder = dao.maxChecklistOrder(todoId) + 1, changedAt = stamp.at, changeId = stamp.id),
+        )
+        save(t.bump(seq = false))
         id
     }
 
@@ -758,16 +834,18 @@ class TodoRepository(
         val item = dao.checklistItem(itemId) ?: return@tx
         val t = live(item.todoId)
         if (item.text == text) return@tx
-        dao.updateChecklistItem(item.copy(text = text))
-        dao.updateTodo(t.bump(seq = false))
+        val stamp = content()
+        dao.updateChecklistItem(item.copy(text = text, changedAt = stamp.at, changeId = stamp.id))
+        save(t.bump(seq = false))
     }
 
     suspend fun toggleChecklist(itemId: String) = tx {
         val item = dao.checklistItem(itemId) ?: return@tx
         val t = live(item.todoId)
         ensure(t.kind != TodoKind.COMPLETION) { "完成记录不能修改" }
-        dao.updateChecklistItem(item.copy(done = !item.done))
-        dao.updateTodo(t.bump(seq = false))
+        val stamp = content()
+        dao.updateChecklistItem(item.copy(done = !item.done, changedAt = stamp.at, changeId = stamp.id))
+        save(t.bump(seq = false))
     }
 
     /** Move the existing item before [beforeId], or to the end, keeping its id, text and tick. */
@@ -789,7 +867,8 @@ class TodoRepository(
         val old = before.associateBy { it.id }
         val changed = next.filter { it != old[it.id] }
         if (changed.isEmpty()) return@tx null
-        dao.updateChecklistItems(changed)
+        val stamp = content()
+        dao.updateChecklistItems(changed.map { it.copy(changedAt = stamp.at, changeId = stamp.id) })
         val after = parents.map { it.bump(seq = false) }
         after.forEach { save(it) }
         ChecklistMoveUndo(before, after.associate { it.id to it.revision })
@@ -800,7 +879,8 @@ class TodoRepository(
         val parents = undo.revisionsAfter.map { (id, revision) ->
             live(id).also { ensure(it.revision == revision) { "检查项已经改过，无法撤销此次移动" } }
         }
-        dao.updateChecklistItems(undo.before)
+        val stamp = content()
+        dao.updateChecklistItems(undo.before.map { it.copy(changedAt = stamp.at, changeId = stamp.id) })
         parents.forEach { save(it.bump(seq = false)) }
     }
 
@@ -814,7 +894,12 @@ class TodoRepository(
         val t = live(item.todoId)
         ensure(TodoViews.isOpen(t)) { "只能从还没完成的待办里取出检查项" }
         // Room right after the parent in the one order every view shares, as a dissolve makes.
-        for (o in dao.allTodos()) if (o.sortOrder > t.sortOrder) dao.updateTodo(o.copy(sortOrder = o.sortOrder + 1, revision = o.revision + 1))
+        val shiftStamp = content()
+        for (o in dao.allTodos()) {
+            if (o.sortOrder > t.sortOrder) {
+                dao.updateTodo(o.copy(sortOrder = o.sortOrder + 1, revision = o.revision + 1, changedAt = shiftStamp.at, changeId = shiftStamp.id))
+            }
+        }
         val n = Todo(
             id = newId(),
             title = item.text.trim().ifEmpty { "检查项" },
@@ -829,6 +914,7 @@ class TodoRepository(
             completedAt = if (item.done) now else null,
         )
         insert(ReminderState.afterManualEdit(n, now, zone()))
+        tombstoned("checklistItems", RowKey.of("checklistItems", itemId))
         dao.deleteChecklistItem(itemId)
         save(t.bump(seq = false))
         ChecklistExtract(n.id, item)
@@ -840,7 +926,10 @@ class TodoRepository(
         dao.todo(extract.todoId)?.takeIf { it.deletedAt == null }?.let { trashTodo(it, gone) }
         purge(gone)
         val parent = dao.todo(extract.item.todoId)?.takeIf { it.deletedAt == null } ?: return@tx
-        if (dao.checklistItem(extract.item.id) == null) dao.insertChecklistItem(extract.item)
+        if (dao.checklistItem(extract.item.id) == null) {
+            val stamp = content()
+            dao.insertChecklistItem(extract.item.copy(changedAt = stamp.at, changeId = stamp.id))
+        }
         save(parent.bump(seq = false))
     }
 
@@ -848,17 +937,19 @@ class TodoRepository(
     suspend fun deleteChecklistItem(itemId: String): ChecklistItem? = tx {
         val item = dao.checklistItem(itemId) ?: return@tx null
         val t = live(item.todoId)
+        tombstoned("checklistItems", RowKey.of("checklistItems", itemId))
         dao.deleteChecklistItem(itemId)
-        dao.updateTodo(t.bump(seq = false))
+        save(t.bump(seq = false))
         item
     }
 
-    /** Undoes [deleteChecklistItem]: the item comes back in its place, if its todo is still there. */
+    /** Undoes [deleteChecklistItem]: the item comes back in its place, as a new change (§5.4). */
     suspend fun restoreChecklistItem(item: ChecklistItem) = tx {
         val t = live(item.todoId)
         if (dao.checklistItem(item.id) != null) return@tx
-        dao.insertChecklistItem(item)
-        dao.updateTodo(t.bump(seq = false))
+        val stamp = content()
+        dao.insertChecklistItem(item.copy(changedAt = stamp.at, changeId = stamp.id))
+        save(t.bump(seq = false))
     }
 
     // ------------------------------------------------------------ lists & sections
@@ -866,19 +957,24 @@ class TodoRepository(
     suspend fun createList(name: String): String = tx {
         ensure(name.isNotBlank()) { "清单名称不能为空" }
         val id = newId()
-        dao.insertList(TodoList(id, name.trim(), sortOrder = dao.maxListOrder() + 1, createdAt = now))
+        val stamp = content()
+        dao.insertList(
+            TodoList(id, name.trim(), sortOrder = dao.maxListOrder() + 1, createdAt = now, changedAt = stamp.at, changeId = stamp.id),
+        )
         id
     }
 
     suspend fun updateList(id: String, name: String, notes: String, deadline: LocalDate?) = tx {
         ensure(name.isNotBlank()) { "清单名称不能为空" }
         val l = dao.list(id)?.takeIf { it.deletedAt == null } ?: return@tx
-        dao.updateList(l.copy(name = name.trim(), notes = notes, deadline = deadline?.toString()))
+        val stamp = content()
+        dao.updateList(l.copy(name = name.trim(), notes = notes, deadline = deadline?.toString(), changedAt = stamp.at, changeId = stamp.id))
     }
 
     suspend fun setArchived(id: String, archived: Boolean) = tx {
         val l = dao.list(id)?.takeIf { it.deletedAt == null } ?: return@tx
-        dao.updateList(l.copy(archivedAt = if (archived) now else null))
+        val stamp = content()
+        dao.updateList(l.copy(archivedAt = if (archived) now else null, changedAt = stamp.at, changeId = stamp.id))
     }
 
     suspend fun moveList(id: String, delta: Int) = tx {
@@ -887,7 +983,11 @@ class TodoRepository(
         val j = i + delta
         if (i < 0 || j !in lists.indices) return@tx
         lists.add(j, lists.removeAt(i))
-        dao.updateLists(lists.mapIndexed { idx, l -> l.copy(sortOrder = idx) })
+        val stamp = content()
+        val old = lists.associate { it.id to it.sortOrder }
+        dao.updateLists(lists.mapIndexed { idx, l ->
+            if (old.getValue(l.id) != idx) l.copy(sortOrder = idx, changedAt = stamp.at, changeId = stamp.id) else l
+        })
     }
 
     /** The lists on screen, [idsInOrder], in that order; the archived ones, not among them, after them as they were. */
@@ -897,21 +997,28 @@ class TodoRepository(
         val shown = idsInOrder.distinct().mapNotNull(byId::get)
         val next = (shown + lists.filter { it !in shown }).mapIndexed { i, l -> l.copy(sortOrder = i) }
         val changed = next.filter { n -> byId.getValue(n.id).sortOrder != n.sortOrder }
-        if (changed.isNotEmpty()) dao.updateLists(changed)
+        if (changed.isNotEmpty()) {
+            val stamp = content()
+            dao.updateLists(changed.map { it.copy(changedAt = stamp.at, changeId = stamp.id) })
+        }
     }
 
     suspend fun createSection(listId: String, name: String): String = tx {
         ensure(name.isNotBlank()) { "分区名称不能为空" }
         ensure(dao.list(listId)?.deletedAt == null) { "清单不存在" }
         val id = newId()
-        dao.insertSection(TodoSection(id, listId, name.trim(), dao.maxSectionOrder(listId) + 1))
+        val stamp = content()
+        dao.insertSection(
+            TodoSection(id, listId, name.trim(), dao.maxSectionOrder(listId) + 1, changedAt = stamp.at, changeId = stamp.id),
+        )
         id
     }
 
     suspend fun renameSection(id: String, name: String) = tx {
         ensure(name.isNotBlank()) { "分区名称不能为空" }
         val s = dao.section(id)?.takeIf { it.deletedAt == null } ?: return@tx
-        dao.updateSection(s.copy(name = name.trim()))
+        val stamp = content()
+        dao.updateSection(s.copy(name = name.trim(), changedAt = stamp.at, changeId = stamp.id))
     }
 
     suspend fun moveSection(id: String, delta: Int) = tx {
@@ -921,13 +1028,20 @@ class TodoRepository(
         val j = i + delta
         if (i < 0 || j !in all.indices) return@tx
         all.add(j, all.removeAt(i))
-        dao.updateSections(all.mapIndexed { idx, x -> x.copy(sortOrder = idx) })
+        val stamp = content()
+        val old = all.associate { it.id to it.sortOrder }
+        dao.updateSections(all.mapIndexed { idx, x ->
+            if (old.getValue(x.id) != idx) x.copy(sortOrder = idx, changedAt = stamp.at, changeId = stamp.id) else x
+        })
     }
 
     // ------------------------------------------------------------ delete & trash
 
     private suspend fun Tx.trashTodo(t: Todo, batch: String) {
-        dao.updateTodo(t.copy(deletedAt = now, deleteBatch = batch, snoozeAt = null).bump())
+        val stamp = content()
+        dao.updateTodo(
+            t.copy(deletedAt = now, deleteBatch = batch, snoozeAt = null, changedAt = stamp.at, changeId = stamp.id).bump(),
+        )
         changed += t.id
     }
 
@@ -949,7 +1063,8 @@ class TodoRepository(
     suspend fun deleteSection(id: String): String = tx {
         val s = dao.section(id)?.takeIf { it.deletedAt == null } ?: throw LedgerException("分区不存在")
         val batch = newId()
-        dao.updateSection(s.copy(deletedAt = now, deleteBatch = batch))
+        val stamp = content()
+        dao.updateSection(s.copy(deletedAt = now, deleteBatch = batch, changedAt = stamp.at, changeId = stamp.id))
         for (t in dao.liveTodosInSection(id)) trashTodo(t, batch)
         batch
     }
@@ -958,8 +1073,11 @@ class TodoRepository(
     suspend fun deleteList(id: String): String = tx {
         val l = dao.list(id)?.takeIf { it.deletedAt == null } ?: throw LedgerException("清单不存在")
         val batch = newId()
-        dao.updateList(l.copy(deletedAt = now, deleteBatch = batch))
-        for (s in dao.liveSectionsOf(id)) dao.updateSection(s.copy(deletedAt = now, deleteBatch = batch))
+        val stamp = content()
+        dao.updateList(l.copy(deletedAt = now, deleteBatch = batch, changedAt = stamp.at, changeId = stamp.id))
+        for (s in dao.liveSectionsOf(id)) {
+            dao.updateSection(s.copy(deletedAt = now, deleteBatch = batch, changedAt = stamp.at, changeId = stamp.id))
+        }
         for (t in dao.liveTodosInList(id)) trashTodo(t, batch)
         batch
     }
@@ -981,12 +1099,17 @@ class TodoRepository(
 
     /** Restores exactly the rows of [batch], in the state they were deleted in. */
     suspend fun restoreBatch(batch: String) = tx {
-        for (l in dao.listsInBatch(batch)) if (l.deletedAt != null) dao.updateList(l.copy(deletedAt = null, deleteBatch = null))
+        val stamp = content()
+        for (l in dao.listsInBatch(batch)) {
+            if (l.deletedAt != null) {
+                dao.updateList(l.copy(deletedAt = null, deleteBatch = null, changedAt = stamp.at, changeId = stamp.id))
+            }
+        }
         for (s in dao.sectionsInBatch(batch)) {
             if (s.deletedAt == null) continue
             val list = dao.list(s.listId)
             ensure(list?.deletedAt == null) { "请先恢复清单「${list?.name}」" }
-            dao.updateSection(s.copy(deletedAt = null, deleteBatch = null))
+            dao.updateSection(s.copy(deletedAt = null, deleteBatch = null, changedAt = stamp.at, changeId = stamp.id))
         }
         for (t in dao.todosInBatch(batch)) if (t.deletedAt != null) reviveTodo(t)
     }
@@ -1000,7 +1123,8 @@ class TodoRepository(
         val s = dao.section(id)?.takeIf { it.deletedAt != null } ?: return@tx
         val list = dao.list(s.listId)
         ensure(list?.deletedAt == null) { "所属清单「${list?.name}」在回收站里，请先恢复清单" }
-        dao.updateSection(s.copy(deletedAt = null, deleteBatch = null))
+        val stamp = content()
+        dao.updateSection(s.copy(deletedAt = null, deleteBatch = null, changedAt = stamp.at, changeId = stamp.id))
     }
 
     /** Sections of the batch's lists that sit in other batches; purging the list takes them too. */
@@ -1010,8 +1134,52 @@ class TodoRepository(
     /** Permanently deletes the rows still deleted under [batch]. */
     suspend fun purgeBatch(batch: String) = tx { purge(batch) }
 
+    /**
+     * Purging is a physical delete, so every row gets a tombstone first. Its version is the row's
+     * own deletion (not the purge instant), so a device offline across the 30 days still loses to
+     * a later restore or edit (§4.2). Cascades are read before the delete: a purged list takes
+     * sections of other batches with it (the one cross-batch purge), and todos take checklists.
+     */
     private suspend fun Tx.purge(batch: String) {
-        for (t in dao.todosInBatch(batch)) if (t.deletedAt != null) changed += t.id
+        val todos = dao.todosInBatch(batch).filter { it.deletedAt != null }
+        val sections = dao.sectionsInBatch(batch).filter { it.deletedAt != null }
+        val lists = dao.listsInBatch(batch).filter { it.deletedAt != null }
+        val diary = db.diaryDao().inBatch(batch).filter { it.deletedAt != null }
+        val notes = db.noteDao().inBatch(batch).filter { it.deletedAt != null }
+        val weeks = db.weekDao().inBatch(batch).filter { it.deletedAt != null }
+        val cascadedSections = lists.flatMap { dao.allSectionsOf(it.id) }.filter { it.deleteBatch != batch }
+        val checklists = todos.flatMap { todo -> dao.checklistOf(todo.id).map { todo to it } }
+        val sources = notes.flatMap { note -> db.noteDao().sourcesOf(note.id).map { note to it } }
+
+        for (t in todos) {
+            changed += t.id
+            db.dao().putTombstone(derivedTombstone("todos", RowKey.of("todos", t.id), t.deletedAt ?: now, t.changeId))
+        }
+        for ((todo, item) in checklists) {
+            db.dao().putTombstone(
+                derivedTombstone("checklistItems", RowKey.of("checklistItems", item.id), todo.deletedAt ?: now, todo.changeId),
+            )
+        }
+        for (s in sections + cascadedSections) {
+            db.dao().putTombstone(derivedTombstone("todoSections", RowKey.of("todoSections", s.id), s.deletedAt ?: now, s.changeId))
+        }
+        for (l in lists) {
+            db.dao().putTombstone(derivedTombstone("todoLists", RowKey.of("todoLists", l.id), l.deletedAt ?: now, l.changeId))
+        }
+        for (e in diary) {
+            db.dao().putTombstone(derivedTombstone("diaryEntries", RowKey.of("diaryEntries", e.id), e.deletedAt ?: now, e.changeId))
+        }
+        for (n in notes) {
+            db.dao().putTombstone(derivedTombstone("notes", RowKey.of("notes", n.id), n.deletedAt ?: now, n.changeId))
+        }
+        for ((note, source) in sources) {
+            db.dao().putTombstone(
+                derivedTombstone("noteSources", RowKey.of("noteSources", source.noteId, source.kind, source.ref), note.deletedAt ?: now, note.changeId),
+            )
+        }
+        for (w in weeks) {
+            db.dao().putTombstone(derivedTombstone("weeklyReviews", RowKey.of("weeklyReviews", w.id), w.deletedAt ?: now, w.changeId))
+        }
         dao.purgeTodosInBatch(batch)
         dao.purgeSectionsInBatch(batch)
         dao.purgeListsInBatch(batch)

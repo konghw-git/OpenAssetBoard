@@ -78,7 +78,13 @@ class LedgerRepository(
     suspend fun createGroup(name: String, isLiability: Boolean, colorIndex: Int): String = write {
         ensure(name.isNotBlank()) { "分组名称不能为空" }
         val id = newId()
-        dao.insertGroup(AccountGroup(id, name.trim(), isLiability, colorIndex, dao.maxGroupOrder() + 1))
+        val stamp = ChangeStamps.stamp(clock())
+        dao.insertGroup(
+            AccountGroup(
+                id, name.trim(), isLiability, colorIndex, dao.maxGroupOrder() + 1,
+                changedAt = stamp.at, changeId = stamp.id,
+            ),
+        )
         id
     }
 
@@ -88,12 +94,14 @@ class LedgerRepository(
         if (old.isLiability != isLiability) {
             ensure(dao.accountCountInGroup(id) == 0) { "分组里已有账户，不能切换资产 / 负债属性" }
         }
-        dao.updateGroup(old.copy(name = name.trim(), isLiability = isLiability, colorIndex = colorIndex))
+        val stamp = ChangeStamps.stamp(clock())
+        dao.updateGroup(old.copy(name = name.trim(), isLiability = isLiability, colorIndex = colorIndex, changedAt = stamp.at, changeId = stamp.id))
     }
 
     suspend fun deleteGroup(id: String) = write {
         val g = dao.group(id) ?: return@write
         ensure(dao.accountCountInGroup(id) == 0) { "分组里还有账户，不能删除" }
+        db.dao().putTombstone(deletedTombstone("groups", RowKey.of("groups", g.id), clock()))
         dao.deleteGroup(g)
     }
 
@@ -103,7 +111,11 @@ class LedgerRepository(
         val j = i + delta
         if (i < 0 || j !in groups.indices) return@write
         groups.add(j, groups.removeAt(i))
-        dao.updateGroups(groups.mapIndexed { idx, g -> g.copy(sortOrder = idx) })
+        val stamp = ChangeStamps.stamp(clock())
+        val old = groups.associate { it.id to it.sortOrder }
+        dao.updateGroups(groups.mapIndexed { idx, g ->
+            if (old.getValue(g.id) != idx) g.copy(sortOrder = idx, changedAt = stamp.at, changeId = stamp.id) else g
+        })
     }
 
     // ---------------------------------------------------------------- accounts
@@ -119,6 +131,7 @@ class LedgerRepository(
         val sign = signOfGroup(draft.groupId)
         val value = sign * baselineDisplay
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         val account = Account(
             id = newId(),
             groupId = draft.groupId,
@@ -136,9 +149,13 @@ class LedgerRepository(
             note = draft.note?.trim()?.ifEmpty { null },
             sortOrder = dao.maxAccountOrder() + 1,
             createdAt = now,
+            changedAt = stamp.at,
+            changeId = stamp.id,
         )
         dao.insertAccount(account)
-        dao.insertValuation(Valuation(newId(), account.id, baselineAt, value, createdAt = now, note = "期初"))
+        dao.insertValuation(
+            Valuation(newId(), account.id, baselineAt, value, createdAt = now, note = "期初", changedAt = stamp.at, changeId = stamp.id),
+        )
         account.id
     }
 
@@ -154,6 +171,7 @@ class LedgerRepository(
         if (draft.kind == AccountKind.INVESTMENT && cost == null) {
             cost = dao.valuationAt(id, old.baselineAt)?.value ?: 0L
         }
+        val stamp = ChangeStamps.stamp(clock())
         dao.updateAccount(
             old.copy(
                 groupId = draft.groupId,
@@ -168,6 +186,8 @@ class LedgerRepository(
                 includeInTotal = draft.includeInTotal,
                 icon = draft.icon?.trim()?.ifEmpty { null },
                 note = draft.note?.trim()?.ifEmpty { null },
+                changedAt = stamp.at,
+                changeId = stamp.id,
             ),
         )
     }
@@ -175,7 +195,8 @@ class LedgerRepository(
     /** Disabling never writes a valuation; money that really left should be recorded as a flow. */
     suspend fun setDisabled(id: String, disabled: Boolean) = write {
         val a = requireAccount(id)
-        dao.updateAccount(a.copy(isDisabled = disabled))
+        val stamp = ChangeStamps.stamp(clock())
+        dao.updateAccount(a.copy(isDisabled = disabled, changedAt = stamp.at, changeId = stamp.id))
     }
 
     /** Only an account holding nothing but its baseline may be deleted; anything else is disabled instead. */
@@ -187,17 +208,23 @@ class LedgerRepository(
         val a = requireAccount(id)
         ensure(canDelete(id)) { "账户已有记录，只能停用" }
         val baseline = dao.valuationAt(id, a.baselineAt)
-        baseline?.let { dao.deleteValuation(it) }
+        val now = clock()
+        baseline?.let {
+            db.dao().putTombstone(deletedTombstone("valuations", RowKey.of("valuations", it.id), now))
+            dao.deleteValuation(it)
+        }
+        db.dao().putTombstone(deletedTombstone("accounts", RowKey.of("accounts", a.id), now))
         dao.deleteAccount(a)
         DeletedAccount(a, baseline)
     }
 
-    /** Undoes [deleteAccount]: the account and its baseline come back as they were. */
+    /** Undoes [deleteAccount]: the account and its baseline come back as new changes (§5.4). */
     suspend fun restoreAccount(d: DeletedAccount) = write {
         if (dao.account(d.account.id) != null) return@write
         ensure(dao.group(d.account.groupId) != null) { "原来的分组已删除，无法恢复" }
-        dao.insertAccount(d.account)
-        d.baseline?.let { dao.insertValuation(it) }
+        val stamp = ChangeStamps.stamp(clock())
+        dao.insertAccount(d.account.copy(changedAt = stamp.at, changeId = stamp.id))
+        d.baseline?.let { dao.insertValuation(it.copy(changedAt = stamp.at, changeId = stamp.id)) }
     }
 
     /**
@@ -210,15 +237,17 @@ class LedgerRepository(
         val sign = signOf(a)
         val value = sign * valueDisplay
         val cost = if (a.isInvestment) (costDisplay?.let { sign * it } ?: value) else null
+        val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         if (newAt == a.baselineAt) {
             val v = dao.valuationAt(id, a.baselineAt)
-            if (v != null) dao.updateValuation(v.copy(value = value))
-            else dao.insertValuation(Valuation(newId(), id, newAt, value, createdAt = clock(), note = "期初"))
+            if (v != null) dao.updateValuation(v.copy(value = value, changedAt = stamp.at, changeId = stamp.id))
+            else dao.insertValuation(Valuation(newId(), id, newAt, value, createdAt = now, note = "期初", changedAt = stamp.at, changeId = stamp.id))
         } else {
             ensure(dao.valuationAt(id, newAt) == null) { "该时刻已有记录" }
-            dao.insertValuation(Valuation(newId(), id, newAt, value, createdAt = clock(), note = "期初"))
+            dao.insertValuation(Valuation(newId(), id, newAt, value, createdAt = now, note = "期初", changedAt = stamp.at, changeId = stamp.id))
         }
-        dao.updateAccount(a.copy(baselineAt = newAt, baselineCost = cost))
+        dao.updateAccount(a.copy(baselineAt = newAt, baselineCost = cost, changedAt = stamp.at, changeId = stamp.id))
     }
 
     // ---------------------------------------------------------------- valuations
@@ -228,7 +257,14 @@ class LedgerRepository(
         Rules.checkValuationTime(a, at)
         ensure(dao.valuationAt(accountId, at) == null) { "该时刻已有一条记录" }
         val id = newId()
-        dao.insertValuation(Valuation(id, accountId, at, signOf(a) * valueDisplay, note = note?.ifBlank { null }, createdAt = clock()))
+        val now = clock()
+        val stamp = ChangeStamps.stamp(now)
+        dao.insertValuation(
+            Valuation(
+                id, accountId, at, signOf(a) * valueDisplay, note = note?.ifBlank { null }, createdAt = now,
+                changedAt = stamp.at, changeId = stamp.id,
+            ),
+        )
         id
     }
 
@@ -241,7 +277,10 @@ class LedgerRepository(
             Rules.checkValuationTime(a, at)
             ensure(dao.valuationAt(a.id, at) == null) { "该时刻已有一条记录" }
         }
-        dao.updateValuation(v.copy(at = at, value = signOf(a) * valueDisplay, note = note?.ifBlank { null }))
+        val stamp = ChangeStamps.stamp(clock())
+        dao.updateValuation(
+            v.copy(at = at, value = signOf(a) * valueDisplay, note = note?.ifBlank { null }, changedAt = stamp.at, changeId = stamp.id),
+        )
     }
 
     suspend fun deleteValuation(id: String) = write {
@@ -249,6 +288,7 @@ class LedgerRepository(
         val a = requireAccount(v.accountId)
         ensure(v.at != a.baselineAt) { "期初记录不能删除" }
         ensure(v.snapshotId == null && dao.itemCountForValuation(id) == 0) { "这条记录属于一次盘点，请在那次盘点中修改，或删除整次盘点" }
+        db.dao().putTombstone(deletedTombstone("valuations", RowKey.of("valuations", v.id), clock()))
         dao.deleteValuation(v)
     }
 
@@ -266,11 +306,16 @@ class LedgerRepository(
                 "「${a.name}」在这一刻有一条估值，已包含当天流水；这笔流水不会改变余额，请改流水时间或先改那条估值"
             }
         }
-        if (dao.flow(flow.id) == null) dao.insertFlow(flow) else dao.updateFlow(flow)
+        val stamp = ChangeStamps.stamp(clock())
+        val stamped = flow.copy(changedAt = stamp.at, changeId = stamp.id)
+        if (dao.flow(flow.id) == null) dao.insertFlow(stamped) else dao.updateFlow(stamped)
     }
 
     suspend fun deleteFlow(id: String) = write {
-        dao.flow(id)?.let { dao.deleteFlow(it) }
+        dao.flow(id)?.let {
+            db.dao().putTombstone(deletedTombstone("flows", RowKey.of("flows", it.id), clock()))
+            dao.deleteFlow(it)
+        }
     }
 
     // ---------------------------------------------------------------- stocktakes
@@ -284,20 +329,30 @@ class LedgerRepository(
         ensure(entries.isNotEmpty()) { "没有可盘点的账户" }
         ensure(dao.snapshotAt(at) == null) { "这个时刻已有一次盘点，请直接编辑那一次" }
         val sid = newId()
-        dao.insertSnapshot(Snapshot(sid, at, note))
         val now = clock()
+        // One operation, one stamp: the snapshot, its valuations and its items win or lose together.
+        val stamp = ChangeStamps.stamp(now)
+        dao.insertSnapshot(Snapshot(sid, at, note, changedAt = stamp.at, changeId = stamp.id))
         for (e in entries) {
             val a = requireAccount(e.accountId)
             Rules.checkValuationTime(a, at)
             val stored = signOf(a) * e.displayValue
             val existing = dao.valuationAt(a.id, at)
             val vid = if (existing != null) {
-                if (existing.value != stored) dao.updateValuation(existing.copy(value = stored))
+                if (existing.value != stored) {
+                    dao.updateValuation(existing.copy(value = stored, changedAt = stamp.at, changeId = stamp.id))
+                }
                 existing.id
             } else {
-                newId().also { dao.insertValuation(Valuation(it, a.id, at, stored, snapshotId = sid, createdAt = now)) }
+                newId().also {
+                    dao.insertValuation(
+                        Valuation(it, a.id, at, stored, snapshotId = sid, createdAt = now, changedAt = stamp.at, changeId = stamp.id),
+                    )
+                }
             }
-            dao.insertSnapshotItem(SnapshotItem(sid, a.id, vid, included = a.includeInTotal && !a.isDisabled))
+            dao.insertSnapshotItem(
+                SnapshotItem(sid, a.id, vid, included = a.includeInTotal && !a.isDisabled, changedAt = stamp.at, changeId = stamp.id),
+            )
         }
         sid
     }
@@ -317,18 +372,31 @@ class LedgerRepository(
                 ensure(dao.valuationAt(a.id, at) == null) { "「${a.name}」在新时刻已有记录" }
             }
         }
+        val stamp = ChangeStamps.stamp(clock())
         for (item in items) {
             val v = dao.valuation(item.valuationId) ?: continue
             val a = requireAccount(item.accountId)
             val stored = byAccount[item.accountId]?.let { signOf(a) * it.displayValue } ?: v.value
             val newAt = if (item.valuationId in owned) at else v.at
-            if (stored != v.value || newAt != v.at) dao.updateValuation(v.copy(value = stored, at = newAt))
+            if (stored != v.value || newAt != v.at) {
+                dao.updateValuation(v.copy(value = stored, at = newAt, changedAt = stamp.at, changeId = stamp.id))
+            }
         }
-        if (at != snap.at) dao.updateSnapshot(snap.copy(at = at))
+        if (at != snap.at) dao.updateSnapshot(snap.copy(at = at, changedAt = stamp.at, changeId = stamp.id))
     }
 
     suspend fun deleteSnapshot(id: String) = write {
-        dao.snapshot(id)?.let { dao.deleteSnapshot(it) }
+        val snap = dao.snapshot(id) ?: return@write
+        val now = clock()
+        // The foreign key cascades the rows away; the tombstones have to be written first.
+        for (item in dao.itemsOfSnapshot(id)) {
+            db.dao().putTombstone(deletedTombstone("snapshotItems", RowKey.of("snapshotItems", item.snapshotId, item.accountId), now))
+        }
+        for (v in dao.valuationsOfSnapshot(id)) {
+            db.dao().putTombstone(deletedTombstone("valuations", RowKey.of("valuations", v.id), now))
+        }
+        db.dao().putTombstone(deletedTombstone("snapshots", RowKey.of("snapshots", snap.id), now))
+        dao.deleteSnapshot(snap)
     }
 
     // ---------------------------------------------------------------- seed
@@ -336,9 +404,12 @@ class LedgerRepository(
     /** Groups only, for someone starting from scratch. */
     suspend fun seedDefaultGroups() = write {
         if (dao.groups().isNotEmpty()) return@write
+        val stamp = ChangeStamps.stamp(clock())
         listOf("现金账户" to false, "储蓄账户" to false, "虚拟账户" to false, "负债账户" to true, "投资账户" to false)
             .forEachIndexed { i, (name, liability) ->
-                dao.insertGroup(AccountGroup(newId(), name, liability, colorIndex = i, sortOrder = i))
+                dao.insertGroup(
+                    AccountGroup(newId(), name, liability, colorIndex = i, sortOrder = i, changedAt = stamp.at, changeId = stamp.id),
+                )
             }
     }
 }

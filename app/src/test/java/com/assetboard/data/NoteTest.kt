@@ -154,7 +154,7 @@ class NoteTest {
         val n = note("旧会话")
         val s = session(n)
         // Written elsewhere: the session's next save conflicts and ends it.
-        dao.updateBody(n.id, "别处改过", n.bodyRev, f.now)
+        dao.updateBody(n.id, "别处改过", n.bodyRev, f.now, f.now, "elsewhere-${n.id}")
         s.onInput("旧会话的字")
         assertFalse(s.saveNow())
         assertEquals(NoteSession.Status.ENDED, s.status.value)
@@ -186,7 +186,7 @@ class NoteTest {
     @Test fun appendThroughASessionWhoseSaveConflictsBecomesADraft() = f.run {
         val n = note("会冲突")
         val s = session(n)
-        dao.updateBody(n.id, "别处改过", n.bodyRev, f.now)
+        dao.updateBody(n.id, "别处改过", n.bodyRev, f.now, f.now, "elsewhere-${n.id}")
         val r = repo.append(n.id, NoteText.block("2026-10-12", "追加块"), day)
         assertEquals(AppendResult.SavedAsDraft, r)
         assertTrue(dao.allDrafts().single().text.endsWith("追加块"))
@@ -460,7 +460,7 @@ class NoteTest {
         val n = note("会过期")
         val uri = file("r-stale.json", f.backup.exportJson())
         val s = NoteSession(repo, this + f.gate.bound(), clock = { f.now }).apply { open(n) }
-        dao.updateBody(n.id, "别处改过", n.bodyRev, f.now)
+        dao.updateBody(n.id, "别处改过", n.bodyRev, f.now, f.now, "elsewhere-${n.id}")
         s.onInput("过期会话的字")
         withTimeout(10_000) { f.backup.restore(uri) }
         val copy = File(f.context.filesDir, "prerestore").listFiles()!!.single().readText()
@@ -526,8 +526,8 @@ class NoteTest {
         val a = note("甲")
         f.now += 10
         val b = note("乙")
-        dao.setPosition(a.id, 0)
-        dao.setPosition(b.id, 0)
+        dao.setPosition(a.id, 0, f.now, "tie-a")
+        dao.setPosition(b.id, 0, f.now, "tie-b")
         repo.reorder(listOf(a.id, b.id))
         assertEquals(listOf("甲", "乙"), order())
         assertEquals(2, dao.all().map { it.position }.toSet().size)

@@ -29,6 +29,8 @@ data class Habit(
     @ColumnInfo(name = "added_on") val addedOn: String? = null,
     @ColumnInfo(name = "removed_on") val removedOn: String? = null,
     @ColumnInfo(defaultValue = "''") val rubric: String = "",
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 ) {
     val active: Boolean get() = removedOn == null
 

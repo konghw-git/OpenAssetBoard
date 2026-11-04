@@ -9,6 +9,10 @@ import kotlinx.serialization.Serializable
 
 // All money fields are Long cents. Liability balances are stored negative; the UI shows them positive.
 
+// Every synced row carries the merge stamps (docs/sync-merge-semantics.md §1.2): changedAt/changeId
+// are the last content change; stateAt/stateId (only diaryEntries, notes, todos, countdowns) the
+// last change to display/system fields, which must not steal the content version.
+
 @Serializable
 @Entity(tableName = "account_groups")
 data class AccountGroup(
@@ -17,6 +21,20 @@ data class AccountGroup(
     @ColumnInfo(name = "is_liability") val isLiability: Boolean = false,
     @ColumnInfo(name = "color_index") val colorIndex: Int = 0,
     @ColumnInfo(name = "sort_order") val sortOrder: Int = 0,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
+)
+
+/** A row a physical delete removed, so a device that still holds it cannot bring it back. */
+@Serializable
+@Entity(tableName = "tombstones", primaryKeys = ["tbl", "row_key"])
+data class Tombstone(
+    /** The BackupFile field name, e.g. habitChecks. */
+    @ColumnInfo(name = "tbl") val table: String,
+    /** [RowKey] of the row. */
+    @ColumnInfo(name = "row_key") val rowKey: String,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long,
+    @ColumnInfo(name = "change_id") val changeId: String,
 )
 
 enum class AccountKind { NORMAL, INVESTMENT }
@@ -54,6 +72,8 @@ data class Account(
     val note: String? = null,
     @ColumnInfo(name = "sort_order") val sortOrder: Int = 0,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 ) {
     val isInvestment: Boolean get() = kind == AccountKind.INVESTMENT
 }
@@ -64,6 +84,8 @@ data class Snapshot(
     @PrimaryKey val id: String,
     val at: Long,
     val note: String? = null,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 /** Absolute balance of an account at [at]; already includes every flow with `flow.at <= at`. */
@@ -96,6 +118,8 @@ data class Valuation(
     @ColumnInfo(name = "snapshot_id") val snapshotId: String? = null,
     val note: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 @Serializable
@@ -129,6 +153,8 @@ data class SnapshotItem(
     @ColumnInfo(name = "account_id") val accountId: String,
     @ColumnInfo(name = "valuation_id") val valuationId: String,
     val included: Boolean,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 enum class FeeOn { FROM, TO }
@@ -189,6 +215,8 @@ data class MoneyFlow(
     @ColumnInfo(name = "created_at") val createdAt: Long,
     /** A bill's category key; null for the other kinds, and read as 其他 when unknown. */
     val category: String? = null,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 ) {
     fun involves(accountId: String) = fromAccountId == accountId || toAccountId == accountId
 }

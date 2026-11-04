@@ -1,0 +1,705 @@
+{
+  "formatVersion": 15,
+  "schemaVersion": 14,
+  "exportedAt": 1792429200000,
+  "groups": [
+    {
+      "id": "641542a6-24be-4af7-99c1-0e43e5e8f3a8",
+      "name": "储蓄",
+      "isLiability": false,
+      "colorIndex": 0,
+      "sortOrder": 0
+    },
+    {
+      "id": "d4828a9e-7620-407a-b208-91a1b0260678",
+      "name": "投资",
+      "isLiability": false,
+      "colorIndex": 1,
+      "sortOrder": 1
+    },
+    {
+      "id": "web-group",
+      "name": "网页账户",
+      "isLiability": false,
+      "colorIndex": 0,
+      "sortOrder": 0
+    }
+  ],
+  "accounts": [
+    {
+      "id": "de0307e0-e5c5-4ac5-b2ae-1b3759e193ec",
+      "groupId": "641542a6-24be-4af7-99c1-0e43e5e8f3a8",
+      "name": "银行",
+      "purpose": null,
+      "kind": "NORMAL",
+      "institution": null,
+      "cardTail": null,
+      "code": null,
+      "lockedUntil": null,
+      "baselineAt": 0,
+      "baselineCost": null,
+      "includeInTotal": true,
+      "isDisabled": false,
+      "icon": null,
+      "note": null,
+      "sortOrder": 0,
+      "createdAt": 1792468800000
+    },
+    {
+      "id": "2d4ebc68-1874-4f5f-95e1-fba1e9418fbc",
+      "groupId": "d4828a9e-7620-407a-b208-91a1b0260678",
+      "name": "基金",
+      "purpose": null,
+      "kind": "NORMAL",
+      "institution": null,
+      "cardTail": null,
+      "code": null,
+      "lockedUntil": null,
+      "baselineAt": 0,
+      "baselineCost": null,
+      "includeInTotal": true,
+      "isDisabled": false,
+      "icon": "invest",
+      "note": null,
+      "sortOrder": 1,
+      "createdAt": 1792468800000
+    },
+    {
+      "id": "web-account",
+      "createdAt": 1792425600000,
+      "groupId": "web-group",
+      "name": "网页银行卡",
+      "purpose": null,
+      "kind": "NORMAL",
+      "institution": null,
+      "cardTail": null,
+      "code": null,
+      "lockedUntil": null,
+      "baselineAt": 1792425600000,
+      "baselineCost": null,
+      "includeInTotal": true,
+      "isDisabled": false,
+      "icon": null,
+      "note": null,
+      "sortOrder": 0
+    }
+  ],
+  "snapshots": [
+    {
+      "id": "4e177b91-3e30-4902-bfac-5c3db5823d88",
+      "at": 1792429260000,
+      "note": ""
+    }
+  ],
+  "valuations": [
+    {
+      "id": "6a3d5517-166d-4cb4-9f5c-0abe12bb69ec",
+      "accountId": "de0307e0-e5c5-4ac5-b2ae-1b3759e193ec",
+      "at": 0,
+      "value": 10000,
+      "shares": null,
+      "snapshotId": null,
+      "note": "期初",
+      "createdAt": 1792468800000
+    },
+    {
+      "id": "a85c502e-8e59-4d42-b8b6-9e585af8ae67",
+      "accountId": "2d4ebc68-1874-4f5f-95e1-fba1e9418fbc",
+      "at": 0,
+      "value": 500000,
+      "shares": null,
+      "snapshotId": null,
+      "note": "期初",
+      "createdAt": 1792468800000
+    },
+    {
+      "id": "ec14bbe5-1582-4402-9d88-a56ae630b0d6",
+      "createdAt": 1792425600000,
+      "accountId": "web-account",
+      "at": 1792425600000,
+      "value": 100000,
+      "shares": null,
+      "snapshotId": null,
+      "note": null
+    },
+    {
+      "id": "1e02f67e-f41b-45c3-8bc7-2907edf8b0c2",
+      "createdAt": 1793801047846,
+      "accountId": "de0307e0-e5c5-4ac5-b2ae-1b3759e193ec",
+      "at": 1792429260000,
+      "value": 10000,
+      "shares": null,
+      "snapshotId": "4e177b91-3e30-4902-bfac-5c3db5823d88",
+      "note": null
+    },
+    {
+      "id": "3381eac1-53fe-4e5f-b2d1-8f0602fce769",
+      "createdAt": 1793801047846,
+      "accountId": "2d4ebc68-1874-4f5f-95e1-fba1e9418fbc",
+      "at": 1792429260000,
+      "value": 500000,
+      "shares": null,
+      "snapshotId": "4e177b91-3e30-4902-bfac-5c3db5823d88",
+      "note": null
+    },
+    {
+      "id": "4eb58516-1815-4087-becf-64c44a8be939",
+      "createdAt": 1793801047846,
+      "accountId": "web-account",
+      "at": 1792429260000,
+      "value": 97150,
+      "shares": null,
+      "snapshotId": "4e177b91-3e30-4902-bfac-5c3db5823d88",
+      "note": null
+    }
+  ],
+  "snapshotItems": [
+    {
+      "snapshotId": "4e177b91-3e30-4902-bfac-5c3db5823d88",
+      "accountId": "de0307e0-e5c5-4ac5-b2ae-1b3759e193ec",
+      "valuationId": "1e02f67e-f41b-45c3-8bc7-2907edf8b0c2",
+      "included": true
+    },
+    {
+      "snapshotId": "4e177b91-3e30-4902-bfac-5c3db5823d88",
+      "accountId": "2d4ebc68-1874-4f5f-95e1-fba1e9418fbc",
+      "valuationId": "3381eac1-53fe-4e5f-b2d1-8f0602fce769",
+      "included": true
+    },
+    {
+      "snapshotId": "4e177b91-3e30-4902-bfac-5c3db5823d88",
+      "accountId": "web-account",
+      "valuationId": "4eb58516-1815-4087-becf-64c44a8be939",
+      "included": true
+    }
+  ],
+  "flows": [
+    {
+      "id": "ea23be76-f6e5-44c5-bdde-b16bb4533468",
+      "kind": "EXPENSE",
+      "fromAccountId": "de0307e0-e5c5-4ac5-b2ae-1b3759e193ec",
+      "toAccountId": null,
+      "amount": 3550,
+      "fee": 0,
+      "feeOn": "FROM",
+      "at": 1792465200000,
+      "note": "午饭",
+      "createdAt": 1792468800000,
+      "category": "food"
+    },
+    {
+      "id": "8817346f-2d40-46ea-82d1-f623dbfc1f53",
+      "kind": "INCOME",
+      "fromAccountId": null,
+      "toAccountId": "de0307e0-e5c5-4ac5-b2ae-1b3759e193ec",
+      "amount": 800000,
+      "fee": 0,
+      "feeOn": "TO",
+      "at": 1792461600000,
+      "note": null,
+      "createdAt": 1792468800000,
+      "category": "salary"
+    },
+    {
+      "id": "070266c8-6b1b-4f1f-9073-3bc8622cb57a",
+      "createdAt": 1792429200000,
+      "kind": "EXPENSE",
+      "fromAccountId": "web-account",
+      "toAccountId": null,
+      "amount": 2850,
+      "fee": 0,
+      "feeOn": "FROM",
+      "at": 1792429200000,
+      "note": null,
+      "category": "food"
+    }
+  ],
+  "todoLists": [
+    {
+      "id": "4b63a964-8aa5-4f43-aaa4-4dcdd2befb8f",
+      "name": "论文",
+      "notes": "",
+      "deadline": null,
+      "sortOrder": 0,
+      "archivedAt": null,
+      "createdAt": 1792468800000,
+      "deletedAt": null,
+      "deleteBatch": null
+    }
+  ],
+  "todoSections": [],
+  "todos": [
+    {
+      "id": "af1e922f-b502-47f9-8bd3-e68d643f5748",
+      "kind": "ORDINARY",
+      "title": "写引言",
+      "notes": "",
+      "listId": "4b63a964-8aa5-4f43-aaa4-4dcdd2befb8f",
+      "sectionId": null,
+      "planDate": "2026-10-21",
+      "remindTime": "09:30",
+      "strongRemind": false,
+      "remindBefore": 15,
+      "someday": false,
+      "deadline": null,
+      "important": false,
+      "snoozeAt": null,
+      "remindedPeriod": null,
+      "repeatRule": null,
+      "repeatEndedAt": null,
+      "occurrenceCount": 0,
+      "repeatSourceId": null,
+      "undoBefore": null,
+      "undoRevision": null,
+      "stateSeq": 1,
+      "revision": 2,
+      "sortOrder": 0,
+      "createdAt": 1792468800000,
+      "completedAt": null,
+      "deletedAt": null,
+      "deleteBatch": null
+    },
+    {
+      "id": "26046a1d-fb99-4e69-928d-65d63587956c",
+      "kind": "REPEAT_SOURCE",
+      "title": "跑步",
+      "notes": "",
+      "listId": null,
+      "sectionId": null,
+      "planDate": "2026-10-21",
+      "remindTime": null,
+      "strongRemind": false,
+      "remindBefore": 0,
+      "someday": false,
+      "deadline": null,
+      "important": false,
+      "snoozeAt": null,
+      "remindedPeriod": null,
+      "repeatRule": "{\"type\":\"DAILY\",\"interval\":1,\"unit\":\"DAY\",\"weekdays\":[],\"month\":1,\"day\":1,\"untilDate\":null,\"count\":null,\"countBase\":0}",
+      "repeatEndedAt": null,
+      "occurrenceCount": 1,
+      "repeatSourceId": null,
+      "undoBefore": null,
+      "undoRevision": null,
+      "stateSeq": 2,
+      "revision": 2,
+      "sortOrder": 1,
+      "createdAt": 1792468800000,
+      "completedAt": null,
+      "deletedAt": null,
+      "deleteBatch": null
+    },
+    {
+      "id": "bbfb355f-096d-47af-b142-596c09f0de45",
+      "kind": "COMPLETION",
+      "title": "跑步",
+      "notes": "",
+      "listId": null,
+      "sectionId": null,
+      "planDate": "2026-10-20",
+      "remindTime": null,
+      "strongRemind": false,
+      "remindBefore": 0,
+      "someday": false,
+      "deadline": null,
+      "important": false,
+      "snoozeAt": null,
+      "remindedPeriod": null,
+      "repeatRule": null,
+      "repeatEndedAt": null,
+      "occurrenceCount": 0,
+      "repeatSourceId": "26046a1d-fb99-4e69-928d-65d63587956c",
+      "undoBefore": "{\"planDate\":\"2026-10-20\",\"deadline\":null,\"checklist\":{},\"occurrenceCount\":0,\"remindedPeriod\":null,\"ended\":false}",
+      "undoRevision": 2,
+      "stateSeq": 0,
+      "revision": 0,
+      "sortOrder": 1,
+      "createdAt": 1792468800000,
+      "completedAt": 1792468800000,
+      "deletedAt": null,
+      "deleteBatch": null
+    },
+    {
+      "id": "51c38b80-0a0c-4c62-a30f-438d146d9d05",
+      "kind": "ORDINARY",
+      "title": "进回收站",
+      "notes": "",
+      "listId": null,
+      "sectionId": null,
+      "planDate": null,
+      "remindTime": null,
+      "strongRemind": false,
+      "remindBefore": 0,
+      "someday": false,
+      "deadline": null,
+      "important": false,
+      "snoozeAt": null,
+      "remindedPeriod": null,
+      "repeatRule": null,
+      "repeatEndedAt": null,
+      "occurrenceCount": 0,
+      "repeatSourceId": null,
+      "undoBefore": null,
+      "undoRevision": null,
+      "stateSeq": 1,
+      "revision": 1,
+      "sortOrder": 2,
+      "createdAt": 1792468800000,
+      "completedAt": null,
+      "deletedAt": 1792468800000,
+      "deleteBatch": "a77f0877-ff83-4400-ba00-c071d4d48943"
+    },
+    {
+      "id": "web-repeat",
+      "createdAt": 1792429200000,
+      "kind": "REPEAT_SOURCE",
+      "title": "网页重复待办",
+      "notes": "",
+      "listId": null,
+      "sectionId": null,
+      "planDate": "2026-10-21",
+      "remindTime": null,
+      "strongRemind": false,
+      "remindBefore": 0,
+      "someday": false,
+      "deadline": null,
+      "important": false,
+      "snoozeAt": null,
+      "remindedPeriod": null,
+      "repeatRule": "{\"type\":\"DAILY\",\"interval\":1,\"unit\":\"DAY\",\"weekdays\":[],\"month\":1,\"day\":1,\"untilDate\":null,\"count\":null,\"countBase\":0}",
+      "repeatEndedAt": null,
+      "occurrenceCount": 1,
+      "repeatSourceId": null,
+      "undoBefore": null,
+      "undoRevision": null,
+      "stateSeq": 1,
+      "revision": 1,
+      "sortOrder": 0,
+      "completedAt": null,
+      "deletedAt": null,
+      "deleteBatch": null
+    },
+    {
+      "id": "758e8cab-1ca5-410f-bb36-b08cc304bbbb",
+      "createdAt": 1792429200000,
+      "kind": "COMPLETION",
+      "title": "网页重复待办",
+      "notes": "",
+      "listId": null,
+      "sectionId": null,
+      "planDate": "2026-10-20",
+      "remindTime": null,
+      "strongRemind": false,
+      "remindBefore": 0,
+      "someday": false,
+      "deadline": null,
+      "important": false,
+      "snoozeAt": null,
+      "remindedPeriod": null,
+      "repeatRule": null,
+      "repeatEndedAt": null,
+      "occurrenceCount": 0,
+      "repeatSourceId": "web-repeat",
+      "undoBefore": "{\"planDate\":\"2026-10-20\",\"deadline\":null,\"checklist\":{\"6c733dac-a2c5-4acf-9d9d-d5ceaa9acb3f\":false},\"occurrenceCount\":0,\"remindedPeriod\":null,\"ended\":false}",
+      "undoRevision": 1,
+      "stateSeq": 0,
+      "revision": 0,
+      "sortOrder": 0,
+      "completedAt": 1792429200000,
+      "deletedAt": null,
+      "deleteBatch": null
+    }
+  ],
+  "checklistItems": [
+    {
+      "id": "44d99a7b-4786-4238-9d94-94ec79799a7e",
+      "todoId": "af1e922f-b502-47f9-8bd3-e68d643f5748",
+      "text": "查文献",
+      "done": false,
+      "sortOrder": 0
+    },
+    {
+      "id": "41e66d99-f777-421a-ad3b-85a4476f8f7f",
+      "todoId": "af1e922f-b502-47f9-8bd3-e68d643f5748",
+      "text": "列提纲",
+      "done": false,
+      "sortOrder": 1
+    },
+    {
+      "id": "6c733dac-a2c5-4acf-9d9d-d5ceaa9acb3f",
+      "todoId": "web-repeat",
+      "text": "检查一步",
+      "done": false,
+      "sortOrder": 0
+    },
+    {
+      "id": "3293db90-6b36-4f76-8412-1c9debaacf2a",
+      "todoId": "758e8cab-1ca5-410f-bb36-b08cc304bbbb",
+      "text": "检查一步",
+      "done": true,
+      "sortOrder": 0
+    }
+  ],
+  "diaryEntries": [
+    {
+      "id": "9be8f74e-1f97-4fc8-9f4d-229f42c12591",
+      "date": "2026-10-20",
+      "body": "今天写了日记",
+      "bodyRev": 1,
+      "weatherCode": null,
+      "tempMin": null,
+      "tempMax": null,
+      "city": null,
+      "lat": null,
+      "lon": null,
+      "weatherAt": null,
+      "weatherRev": 0,
+      "createdAt": 1792468800000,
+      "updatedAt": 1792468800000,
+      "deletedAt": null,
+      "deleteBatch": null,
+      "mood": 4
+    },
+    {
+      "id": "32a2ca54-71b8-4f15-9665-275a144f2c2d",
+      "date": "2026-10-19",
+      "body": "",
+      "bodyRev": 0,
+      "weatherCode": null,
+      "tempMin": null,
+      "tempMax": null,
+      "city": null,
+      "lat": null,
+      "lon": null,
+      "weatherAt": null,
+      "weatherRev": 0,
+      "createdAt": 1792468800000,
+      "updatedAt": 1792468800000,
+      "deletedAt": null,
+      "deleteBatch": null,
+      "mood": 2
+    }
+  ],
+  "diaryDrafts": [],
+  "habitChecks": [
+    {
+      "date": "2026-10-20",
+      "habit": "workout",
+      "checkedAt": 1792468800000,
+      "skipped": false
+    },
+    {
+      "date": "2026-10-20",
+      "habit": "water",
+      "checkedAt": 1792468800000,
+      "skipped": true
+    }
+  ],
+  "habits": [
+    {
+      "key": "supplements",
+      "label": "吃补剂",
+      "icon": "medication",
+      "color": 4292444715,
+      "position": 0,
+      "addedOn": null,
+      "removedOn": null,
+      "rubric": ""
+    },
+    {
+      "key": "workout",
+      "label": "健身",
+      "icon": "fitness",
+      "color": 4291842879,
+      "position": 1,
+      "addedOn": null,
+      "removedOn": null,
+      "rubric": "不少于 30 分钟\n出汗"
+    },
+    {
+      "key": "diet",
+      "label": "控制饮食",
+      "icon": "restaurant",
+      "color": 4284390202,
+      "position": 2,
+      "addedOn": null,
+      "removedOn": null,
+      "rubric": ""
+    },
+    {
+      "key": "water",
+      "label": "喝够水",
+      "icon": "water",
+      "color": 4282224593,
+      "position": 3,
+      "addedOn": null,
+      "removedOn": null,
+      "rubric": ""
+    },
+    {
+      "key": "sleep",
+      "label": "早睡早起",
+      "icon": "bedtime",
+      "color": 4286210754,
+      "position": 4,
+      "addedOn": null,
+      "removedOn": null,
+      "rubric": ""
+    }
+  ],
+  "bodyMeasurements": [
+    {
+      "id": "156f4341-da23-4cd9-bcbd-d0ee53ff69b9",
+      "date": "2026-10-17",
+      "measuredAt": 1792252799000,
+      "weightG": 92100,
+      "bodyFatBp": 2580,
+      "note": "体脂秤",
+      "createdAt": 1792468800000,
+      "updatedAt": 1792468800000
+    },
+    {
+      "id": "0ff355de-c960-4f5b-b3b6-b55b2fd309aa",
+      "date": "2026-10-20",
+      "measuredAt": 1792468800000,
+      "weightG": 91800,
+      "bodyFatBp": null,
+      "note": null,
+      "createdAt": 1792468800000,
+      "updatedAt": 1792468800000
+    }
+  ],
+  "foodEntries": [
+    {
+      "id": "93473c26-d467-4d0c-93a8-8feb9166a8f5",
+      "date": "2026-10-19",
+      "eatenAt": 1792425599000,
+      "name": null,
+      "per": null,
+      "amount": null,
+      "unit": null,
+      "energyCal": 650000,
+      "inKj": false,
+      "proteinMg": null,
+      "fatMg": null,
+      "carbMg": null,
+      "sodiumMg": null,
+      "createdAt": 1792468800000,
+      "updatedAt": 1792468800000
+    },
+    {
+      "id": "eca4d023-2f00-46a9-9e66-368accc7165a",
+      "date": "2026-10-20",
+      "eatenAt": 1792468800000,
+      "name": "燕麦奶",
+      "per": 100,
+      "amount": 500,
+      "unit": "ML",
+      "energyCal": 40870,
+      "inKj": true,
+      "proteinMg": 600,
+      "fatMg": 1600,
+      "carbMg": 6000,
+      "sodiumMg": 40,
+      "createdAt": 1792468800000,
+      "updatedAt": 1792468800000
+    },
+    {
+      "id": "29b841a7-cf25-4ef3-9c01-d551734bbc77",
+      "createdAt": 1792429200000,
+      "date": "2026-10-20",
+      "eatenAt": 1792429200000,
+      "name": "网页燕麦",
+      "per": 100,
+      "amount": 50,
+      "unit": "G",
+      "energyCal": 370000,
+      "inKj": false,
+      "proteinMg": 12000,
+      "fatMg": null,
+      "carbMg": null,
+      "sodiumMg": null,
+      "updatedAt": 1792429200000
+    }
+  ],
+  "noteTopics": [],
+  "notes": [
+    {
+      "id": "2f6b84a8-fcf9-44ac-baff-4663315ab45b",
+      "topicId": null,
+      "body": "读书笔记\n第一章讲了复利",
+      "bodyRev": 1,
+      "pinned": false,
+      "position": -1,
+      "createdAt": 1792468800000,
+      "updatedAt": 1792468800000,
+      "reviewedAt": null,
+      "deletedAt": null,
+      "deleteBatch": null
+    },
+    {
+      "id": "web-note",
+      "createdAt": 1792429200000,
+      "topicId": null,
+      "body": "网页笔记\n自动保存内容",
+      "bodyRev": 1,
+      "pinned": false,
+      "position": 0,
+      "updatedAt": 1793801047847,
+      "reviewedAt": null,
+      "deletedAt": null,
+      "deleteBatch": null
+    }
+  ],
+  "noteSources": [
+    {
+      "noteId": "2f6b84a8-fcf9-44ac-baff-4663315ab45b",
+      "kind": "DAY",
+      "ref": "2026-10-20",
+      "createdAt": 1792468800000
+    }
+  ],
+  "noteDrafts": [],
+  "weeklyReviews": [
+    {
+      "id": "9275ca37-6450-471b-906c-d83682db943b",
+      "weekStart": "2026-10-19",
+      "body": "这周按时跑步",
+      "bodyRev": 1,
+      "createdAt": 1792468800000,
+      "updatedAt": 1792468800000,
+      "deletedAt": null,
+      "deleteBatch": null
+    }
+  ],
+  "weeklyDrafts": [],
+  "countdowns": [
+    {
+      "id": "aea9c5f8-3860-4359-8d3f-2f5f21fb4fad",
+      "title": "生日",
+      "date": "2001-08-02",
+      "yearly": true,
+      "pinned": true,
+      "createdAt": 1792468800000,
+      "updatedAt": 1792468800000
+    },
+    {
+      "id": "3d644cd0-7d1c-4c9d-8ac2-8f7b1e4cadd8",
+      "title": "考研",
+      "date": "2026-12-26",
+      "yearly": false,
+      "pinned": false,
+      "createdAt": 1792468800000,
+      "updatedAt": 1792468800000
+    }
+  ],
+  "healthProfile": {
+    "id": "self",
+    "sex": "MALE",
+    "birthDate": "2001-08-02",
+    "heightMm": 1820,
+    "targetWeightG": null,
+    "updatedAt": 1792468800000
+  },
+  "netWorthGoal": 100000000
+}

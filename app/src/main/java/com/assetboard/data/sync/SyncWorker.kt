@@ -7,8 +7,9 @@ import com.assetboard.AssetBoardApp
 import kotlinx.coroutines.CancellationException
 
 /**
- * The quiet background sync. It only ever downloads what the user's own device uploaded, and a
- * conflict is left for the account page: a worker never chooses which copy to keep.
+ * The background sync for when the app is closed. It runs the same merge as the account page, so
+ * it may upload as well as download; WorkManager's shortest interval is 15 minutes, and the
+ * shorter settings are served by the in-app ticker while a screen is open.
  */
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {

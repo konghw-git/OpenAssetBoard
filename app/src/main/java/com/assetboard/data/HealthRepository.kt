@@ -71,7 +71,13 @@ class HealthRepository(
 
     suspend fun saveProfile(sex: Sex, birthDate: LocalDate, heightMm: Int, targetWeightG: Long?) = gate.write {
         checkProfile(birthDate.toString(), heightMm, targetWeightG, today())
-        dao.putProfile(HealthProfile(sex = sex, birthDate = birthDate.toString(), heightMm = heightMm, targetWeightG = targetWeightG, updatedAt = clock()))
+        val stamp = ChangeStamps.stamp(clock())
+        dao.putProfile(
+            HealthProfile(
+                sex = sex, birthDate = birthDate.toString(), heightMm = heightMm, targetWeightG = targetWeightG,
+                updatedAt = stamp.at, changedAt = stamp.at, changeId = stamp.id,
+            ),
+        )
     }
 
     /**
@@ -83,6 +89,7 @@ class HealthRepository(
         checkMeasurement(draft.weightG, draft.bodyFatBp)
         ensure(!draft.date.isAfter(today())) { "不能记录未来的日期" }
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         val date = draft.date.toString()
         val note = draft.note?.trim()?.takeIf { it.isNotEmpty() }
         // A day's own record keeps its time; a back-filled day sits at the end of that day.
@@ -93,25 +100,48 @@ class HealthRepository(
             if (occupant != null && !overwrite) throw SameDayExists(draft.date)
             when {
                 occupant != null -> {
-                    if (editing != null) dao.delete(editing.id)
-                    dao.update(occupant.copy(measuredAt = measuredAt, weightG = draft.weightG, bodyFatBp = draft.bodyFatBp, note = note, updatedAt = now))
+                    // Merging two rows of the same day into one is a real delete of the edited row.
+                    if (editing != null) {
+                        db.dao().putTombstone(deletedTombstone("bodyMeasurements", RowKey.of("bodyMeasurements", editing.id), now))
+                        dao.delete(editing.id)
+                    }
+                    dao.update(
+                        occupant.copy(
+                            measuredAt = measuredAt, weightG = draft.weightG, bodyFatBp = draft.bodyFatBp,
+                            note = note, updatedAt = now, changedAt = stamp.at, changeId = stamp.id,
+                        ),
+                    )
                     occupant.id
                 }
                 editing != null -> {
                     val keepTime = if (editing.date == date) editing.measuredAt else measuredAt
-                    dao.update(editing.copy(date = date, measuredAt = keepTime, weightG = draft.weightG, bodyFatBp = draft.bodyFatBp, note = note, updatedAt = now))
+                    dao.update(
+                        editing.copy(
+                            date = date, measuredAt = keepTime, weightG = draft.weightG, bodyFatBp = draft.bodyFatBp,
+                            note = note, updatedAt = now, changedAt = stamp.at, changeId = stamp.id,
+                        ),
+                    )
                     editing.id
                 }
                 else -> {
                     val id = newId()
-                    dao.insert(BodyMeasurement(id, date, measuredAt, draft.weightG, draft.bodyFatBp, note, createdAt = now, updatedAt = now))
+                    dao.insert(
+                        BodyMeasurement(
+                            id, date, measuredAt, draft.weightG, draft.bodyFatBp, note, createdAt = now, updatedAt = now,
+                            changedAt = stamp.at, changeId = stamp.id,
+                        ),
+                    )
                     id
                 }
             }
         }
     }
 
-    suspend fun delete(id: String) = gate.write { dao.delete(id) }
+    suspend fun delete(id: String) = gate.write {
+        val now = clock()
+        db.dao().putTombstone(deletedTombstone("bodyMeasurements", RowKey.of("bodyMeasurements", id), now))
+        dao.delete(id)
+    }
 
     companion object {
         fun checkMeasurement(weightG: Long, bodyFatBp: Int?) {

@@ -17,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import org.junit.After
@@ -216,7 +217,8 @@ class RestoreTest {
         f.backup.restore(file("r6.json", exported))
         val again = normalized(f.backup.exportJson())
         val original = normalized(exported)
-        assertEquals(original, again)
+        // A restore is a replace: content is identical, the stamps are the operation's fresh ones.
+        assertEquals(content(original), content(again))
         assertTrue(again.todos.any { it.deletedAt != null })
         assertTrue(again.todos.any { it.kind == TodoKind.COMPLETION })
         assertEquals(listOf("workout"), again.habitChecks.map { it.habit })
@@ -226,6 +228,22 @@ class RestoreTest {
         assertEquals(listOf(40_870L, 650_000L), again.foodEntries.map { it.energyCal }.sorted())
         assertEquals(epoch + 1, f.gate.epochNow())
         assertFalse(exported.contains(WriteGate.KEY_EPOCH))
+    }
+
+    /** The file without the merge stamps, as canonical text; a replace may only change those. */
+    private fun content(file: BackupFile): String {
+        val stamps = setOf("changedAt", "changeId", "stateAt", "stateId")
+        val root = codec.encodeToJsonElement(BackupFile.serializer(), file) as JsonObject
+        val stripped = JsonObject(root.mapValues { (key, value) ->
+            when {
+                key in com.assetboard.data.sync.CanonicalJson.rowKeyFields -> JsonArray((value as JsonArray).map { row ->
+                    JsonObject((row as JsonObject).filterKeys { it !in stamps })
+                })
+                key == "healthProfile" -> (value as? JsonObject)?.let { JsonObject(it.filterKeys { k -> k !in stamps }) } ?: value
+                else -> value
+            }
+        })
+        return com.assetboard.data.sync.CanonicalJson.canonicalJson(stripped)
     }
 
     /** Row order is not part of the data. */

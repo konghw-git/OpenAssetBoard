@@ -32,6 +32,8 @@ data class WeeklyReview(
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
     @ColumnInfo(name = "delete_batch") val deleteBatch: String? = null,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 /** Review text that could not be saved into its row; offered back on that week's page. */
@@ -48,6 +50,8 @@ data class WeeklyDraft(
     val text: String,
     val reason: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 /** Weeks start on Monday, in local time; titles use the ISO week-based year. */
@@ -85,8 +89,11 @@ interface WeekDao {
     @Insert suspend fun insert(review: WeeklyReview)
     @Update suspend fun update(review: WeeklyReview)
 
-    @Query("UPDATE weekly_reviews SET body = :body, body_rev = body_rev + 1, updated_at = :now WHERE id = :id AND deleted_at IS NULL AND body_rev = :expectedRev")
-    suspend fun updateBody(id: String, body: String, expectedRev: Long, now: Long): Int
+    @Query(
+        "UPDATE weekly_reviews SET body = :body, body_rev = body_rev + 1, updated_at = :now, " +
+            "changed_at = :stampAt, change_id = :stampId WHERE id = :id AND deleted_at IS NULL AND body_rev = :expectedRev",
+    )
+    suspend fun updateBody(id: String, body: String, expectedRev: Long, now: Long, stampAt: Long, stampId: String): Int
 
     @Insert suspend fun insertDraft(draft: WeeklyDraft)
     @Query("DELETE FROM weekly_drafts WHERE id = :id") suspend fun deleteDraft(id: String)

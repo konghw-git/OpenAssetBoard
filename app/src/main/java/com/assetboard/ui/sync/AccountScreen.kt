@@ -47,7 +47,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.assetboard.data.sync.ConflictChoice
+import com.assetboard.data.sync.RemoteMeta
 import com.assetboard.data.sync.ServerCheck
 import com.assetboard.domain.Dates
 import com.assetboard.ui.LocalContainer
@@ -67,8 +67,9 @@ import com.assetboard.ui.components.verticalScrollWithIndicator
 import kotlinx.coroutines.launch
 
 /**
- * Sign in to the self-hosted account, sync by hand, sign out, and settle a conflict. Sync is
- * optional: not being signed in is a normal state, and this page says so.
+ * Sign in to the self-hosted account, sync by hand or on a schedule, sign out, and restore one of
+ * the server's retained versions. Sync is optional: not being signed in is a normal state, and
+ * this page says so.
  */
 @Composable
 fun AccountScreen(onBack: () -> Unit) {
@@ -82,6 +83,10 @@ fun AccountScreen(onBack: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var confirmLogout by remember { mutableStateOf(false) }
     var changePasswordOpen by remember { mutableStateOf(false) }
+    var intervalOpen by remember { mutableStateOf(false) }
+    var historyOpen by remember { mutableStateOf(false) }
+    var pickedRevision by remember { mutableStateOf<RemoteMeta?>(null) }
+    val interval by container.settings.syncIntervalMinutes.collectAsStateWithLifecycle()
     val screenScope = rememberCoroutineScope()
 
     // Leaving the page abandons a sign-in that is still waiting, so coming back always shows
@@ -161,6 +166,23 @@ fun AccountScreen(onBack: () -> Unit) {
                     )
                     RowDivider(startIndent = 64.dp)
                     ListRow(
+                        title = "自动同步",
+                        subtitle = intervalText(interval),
+                        leading = { IconTile(Icons.Outlined.Sync, cs.primary) },
+                        onClick = { intervalOpen = true },
+                    )
+                    RowDivider(startIndent = 64.dp)
+                    ListRow(
+                        title = "云端历史版本",
+                        subtitle = "找回最近上传的旧版本；恢复后会同步到所有设备",
+                        leading = { IconTile(Icons.Outlined.Lock, cs.primary) },
+                        onClick = {
+                            historyOpen = true
+                            screenScope.launch { account.loadRevisions() }
+                        },
+                    )
+                    RowDivider(startIndent = 64.dp)
+                    ListRow(
                         title = "修改密码",
                         subtitle = "输入旧密码设置新密码；其他设备会退出登录",
                         leading = { IconTile(Icons.Outlined.Lock, cs.primary) },
@@ -174,7 +196,7 @@ fun AccountScreen(onBack: () -> Unit) {
                         onClick = { confirmLogout = true },
                     )
                 }
-                Note("同步是整份上传或下载。两边都改过时不会自动合并，会在这里让你选保留哪一边；覆盖前都会自动另存一份恢复前副本。")
+                Note("两边都改过时按记录自动合并：较新的改动胜出，文字冲突会存进草稿；合并前会另存一份副本。同步过程中以这里的「上次同步」时间为准。")
             } else {
                 SectionCard {
                     SectionHeader("登录")
@@ -268,36 +290,91 @@ fun AccountScreen(onBack: () -> Unit) {
         )
     }
 
-    state.conflict?.let { conflict ->
-        val remoteAt = (conflict.remote.updatedAt * 1000).takeIf { it > 0 }?.let(Dates::dateTime) ?: "未知时间"
+    if (intervalOpen) {
         AlertDialog(
-            onDismissRequest = { account.clearConflict() },
-            title = { Text("两边都有改动") },
+            onDismissRequest = { intervalOpen = false },
+            title = { Text("自动同步") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("本机在 ${Dates.dateTime(conflict.localExportedAt)} 改过；云端在 $remoteAt 也有新版本。")
-                    Text(
-                        "同步不会自动合并。保留本机会覆盖云端（云端历史里仍能找回上一版）；使用云端会覆盖本机，覆盖前会自动另存一份恢复前副本。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = cs.onSurfaceVariant,
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { container.appScope.launch { account.resolveConflict(ConflictChoice.KEEP_LOCAL) } }) {
-                    Text("保留本机并上传")
-                }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = { container.appScope.launch { account.resolveConflict(ConflictChoice.USE_REMOTE) } }) {
-                        Text("使用云端")
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("登录后按这个间隔自动同步；回到应用时也会尝试一次。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    for (minutes in listOf(0, 5, 15, 30, 60)) {
+                        TextButton(
+                            onClick = {
+                                container.settings.setSyncInterval(minutes)
+                                account.scheduleBackground()
+                                intervalOpen = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                intervalText(minutes) + if (minutes == interval) " ✓" else "",
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
-                    TextButton(onClick = { account.clearConflict() }) { Text("稍后") }
                 }
             },
+            confirmButton = { TextButton(onClick = { intervalOpen = false }) { Text("取消") } },
         )
     }
+
+    if (historyOpen) {
+        AlertDialog(
+            onDismissRequest = { historyOpen = false },
+            title = { Text("云端历史版本") },
+            text = {
+                when {
+                    state.historyBusy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text("正在读取…")
+                    }
+                    state.revisions.isEmpty() -> Text("服务器上还没有可恢复的历史版本。")
+                    else -> Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        for (meta in state.revisions) {
+                            TextButton(onClick = { pickedRevision = meta }, modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.fillMaxWidth()) {
+                                    Text("版本 ${meta.revision} · ${sizeText(meta.size)}")
+                                    Text(
+                                        (meta.updatedAt * 1000).takeIf { it > 0 }?.let(Dates::dateTime) ?: "时间未知",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = cs.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { historyOpen = false }) { Text("关闭") } },
+        )
+    }
+
+    pickedRevision?.let { meta ->
+        ConfirmDialog(
+            title = "恢复到云端版本 ${meta.revision}？",
+            text = "云端和本机都会被替换成这个版本；之后会自动同步到手机和网页。当前数据会先另存一份恢复前副本。",
+            confirmLabel = "恢复",
+            destructive = true,
+            onConfirm = {
+                pickedRevision = null
+                historyOpen = false
+                container.appScope.launch { account.restoreRevision(meta.revision) }
+            },
+            onDismiss = { pickedRevision = null },
+        )
+    }
+}
+
+private fun intervalText(minutes: Int): String = when (minutes) {
+    0 -> "关闭自动同步"
+    5 -> "每 5 分钟（仅应用打开时）"
+    else -> "每 $minutes 分钟（含后台）"
+}
+
+private fun sizeText(bytes: Long): String = when {
+    bytes >= 1024 * 1024 -> String.format(java.util.Locale.ROOT, "%.1f MB", bytes / 1048576.0)
+    bytes >= 1024 -> "${bytes / 1024} KB"
+    else -> "$bytes B"
 }
 
 /** The probe's result under the server field, and the button that asks again. */

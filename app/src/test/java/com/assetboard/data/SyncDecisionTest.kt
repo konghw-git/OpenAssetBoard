@@ -40,16 +40,16 @@ class SyncDecisionTest {
         assertEquals(SyncAction.DOWNLOAD, SyncDecision.decide(remote(7, "cloud"), profile(0, null), "empty", localEmpty = true))
     }
 
-    @Test fun firstLoginWithLocalDataConflicts() {
-        assertEquals(SyncAction.CONFLICT, SyncDecision.decide(remote(7, "cloud"), profile(0, null), "local", localEmpty = false))
+    @Test fun firstLoginWithLocalDataMerges() {
+        assertEquals(SyncAction.MERGE, SyncDecision.decide(remote(7, "cloud"), profile(0, null), "local", localEmpty = false))
     }
 
-    @Test fun bothSidesChangedConflicts() {
-        assertEquals(SyncAction.CONFLICT, SyncDecision.decide(remote(4, "new"), profile(3, "old"), "local", localEmpty = false))
+    @Test fun bothSidesChangedMerge() {
+        assertEquals(SyncAction.MERGE, SyncDecision.decide(remote(4, "new"), profile(3, "old"), "local", localEmpty = false))
     }
 
-    @Test fun serverGoingBackwardsConflicts() {
-        assertEquals(SyncAction.CONFLICT, SyncDecision.decide(remote(2, "old"), profile(4, "old"), "old", localEmpty = false))
+    @Test fun aServerGoingBackwardsIsMergedNotAppliedSilently() {
+        assertEquals(SyncAction.MERGE, SyncDecision.decide(remote(2, "old"), profile(4, "old"), "old", localEmpty = false))
     }
 
     @Test fun sameRevisionWithDifferentHashIsARemoteChange() {

@@ -68,6 +68,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        (application as AssetBoardApp).container.account.onForeground()
+    }
+
+    override fun onStop() {
+        (application as AssetBoardApp).container.account.onBackground()
+        super.onStop()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         requestOf(intent)?.let { open = it }

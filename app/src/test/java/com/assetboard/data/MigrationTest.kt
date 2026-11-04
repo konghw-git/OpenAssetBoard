@@ -38,6 +38,7 @@ class MigrationTest {
             is String -> cv.put(k, v)
             is Long -> cv.put(k, v)
             is Int -> cv.put(k, v)
+            is Double -> cv.put(k, v)
             is Boolean -> cv.put(k, if (v) 1 else 0)
             else -> error("unsupported $v")
         }
@@ -357,6 +358,63 @@ class MigrationTest {
             }
             db.execSQL("UPDATE accounts SET icon = 'wallet' WHERE id = 'a1'")
             assertEquals("wallet", db.dump("accounts").first { it.col("id") == "a1" }.col("icon"))
+        }
+    }
+
+    @Test fun migrationFourteenToFifteenStampsEveryRowAndAddsTombstones() {
+        helper.createDatabase(name, 14).use { db ->
+            db.put("account_groups", "id" to "g1", "name" to "现金", "is_liability" to false, "color_index" to 0, "sort_order" to 0)
+            db.put(
+                "accounts", "id" to "a1", "group_id" to "g1", "name" to "银行", "purpose" to null, "kind" to "NORMAL",
+                "institution" to null, "card_tail" to null, "code" to null, "locked_until" to null, "baseline_at" to 1_000L,
+                "baseline_cost" to null, "include_in_total" to true, "is_disabled" to false, "icon" to null, "note" to null,
+                "sort_order" to 0, "created_at" to 5_000L,
+            )
+            db.put("snapshots", "id" to "s1", "at" to 7_000L, "note" to null)
+            db.put(
+                "valuations", "id" to "v1", "account_id" to "a1", "at" to 7_000L, "value" to 100L, "shares" to null,
+                "snapshot_id" to "s1", "note" to null, "created_at" to 6_000L,
+            )
+            db.put("snapshot_items", "snapshot_id" to "s1", "account_id" to "a1", "valuation_id" to "v1", "included" to true)
+            db.put(
+                "diary_entries", "id" to "d1", "date" to "2026-10-20", "body" to "x", "body_rev" to 1, "weather_code" to 1,
+                "temp_min" to 1.5, "temp_max" to 2.5, "city" to "上海", "lat" to 31.0, "lon" to 121.0, "weather_at" to 8_000L,
+                "weather_rev" to 1, "created_at" to 4_000L, "updated_at" to 4_500L, "deleted_at" to null,
+                "delete_batch" to null, "mood" to 3,
+            )
+            db.put(
+                "habits", "key" to "supplements", "label" to "吃补剂", "icon" to "medication", "color" to 0xFFD9822BL,
+                "position" to 0, "added_on" to "2026-01-02", "removed_on" to null, "rubric" to "",
+            )
+            db.put("habit_checks", "date" to "2026-10-20", "habit" to "supplements", "checked_at" to 9_000L, "skipped" to false)
+            db.put("app_meta", "key" to "net_worth_goal", "value" to "12345")
+        }
+        helper.runMigrationsAndValidate(name, 15, true, Migrations.MIGRATION_14_15).use { db ->
+            fun List<Any?>.col(name: String) = this[indexOf(name) - size / 2]
+            fun SupportSQLiteDatabase.one(table: String) = dump(table).single()
+
+            val account = db.one("accounts")
+            assertEquals(5_000L, account.col("changed_at"))
+            assertTrue((account.col("change_id") as String).startsWith("legacy:"))
+
+            // No time of its own: the row takes its snapshot's instant.
+            assertEquals(7_000L, db.one("snapshot_items").col("changed_at"))
+            assertEquals(7_000L, db.one("valuations").col("changed_at"))
+
+            val diary = db.one("diary_entries")
+            assertEquals(4_500L, diary.col("changed_at"))
+            assertEquals(8_000L, diary.col("state_at"))
+            assertTrue((diary.col("state_id") as String).startsWith("legacy:"))
+
+            assertEquals(9_000L, db.one("habit_checks").col("changed_at"))
+            assertTrue((db.one("habits").col("change_id") as String).startsWith("legacy:"))
+
+            val goalAt = db.query("SELECT `value` FROM app_meta WHERE `key` = 'net_worth_goal_at'").use { c ->
+                if (c.moveToNext()) c.getString(0) else null
+            }
+            assertEquals("0", goalAt)
+            db.execSQL("INSERT INTO tombstones (tbl, row_key, deleted_at, change_id) VALUES ('flows', 'flows#x', 1, 'T:x')")
+            assertEquals(1, db.dump("tombstones").size)
         }
     }
 

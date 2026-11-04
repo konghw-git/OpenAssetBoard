@@ -11,7 +11,10 @@ import java.net.URL
  * own connections.
  */
 internal object Http {
-    data class Response(val status: Int, val body: String)
+    /** Header names are lower-cased; [header] is case-insensitive. */
+    data class Response(val status: Int, val body: String, val headers: Map<String, String> = emptyMap()) {
+        fun header(name: String): String? = headers[name.lowercase()]
+    }
 
     fun call(
         url: String,
@@ -38,7 +41,13 @@ internal object Http {
             // The error body is read too: APIs say what went wrong in it (bad key, unknown model).
             val text = (if (status in 200..299) c.inputStream else c.errorStream)
                 ?.use { it.readBytes().decodeToString() }.orEmpty()
-            return Response(status, text)
+            // The sync headers carry the revision and hash of exactly this body, and Date is the
+            // server's clock; losing them here is what made the old code trust a stale metadata
+            // read (AccountManager.kt's download used the meta revision).
+            val headers = c.headerFields.entries
+                .filter { it.key != null }
+                .associate { it.key.lowercase() to (it.value?.firstOrNull() ?: "") }
+            return Response(status, text, headers)
         } finally {
             c.disconnect()
         }

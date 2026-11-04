@@ -6,6 +6,49 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-05
+
+### Added
+
+- **Sync merges records instead of asking.** Both sides can edit offline: when the snapshots
+  meet, each row keeps the newer content, display state (weather, pins, read marks, reminder
+  delivery) moves on its own stamp, deletions travel as tombstones, and the losing text of a
+  diary entry, note or weekly review is kept as a draft. The "both sides changed — keep local or
+  use the cloud?" dialog is gone; the account page only reports how many repairs a merge made.
+- **A sync schedule, and cloud history on the phone.** The account page offers 5 / 15 / 30 / 60
+  minutes or off (5 minutes only while the app is open), a committed edit uploads after ten quiet
+  seconds, returning to the foreground syncs, and the server's retained versions can be listed
+  and restored from the same page.
+- **The web client stores nothing in the browser.** Data lives in page memory only: every edit
+  is stamped centrally, both sides merge on a 409, uploads carry the canonical
+  `X-Content-Hash`, a visible tab polls the revision every 20 seconds, and import is a replace
+  whose tombstones propagate to the phone. It reads backup formats 1–16 and writes 16.
+
+### Changed
+
+- **Backup format 16.** Every synced row carries `changedAt`/`changeId` (four tables also
+  `stateAt`/`stateId`), plus top-level `tombstones` and the net-worth goal's stamp. Older files
+  are backfilled from their newest timestamps. Older app versions refuse format 16 with the
+  existing upgrade prompt instead of corrupting it.
+- **Restore, import and reset are replace, expressed through merge.** Their rows take one fresh
+  stamp, rows the file no longer has become tombstones, and the intent reaches the cloud and
+  every device; restoring a file's own tombstones re-stamps them so a newer remote row cannot
+  resurrect what the restore left deleted.
+- **One canonical content hash on Android and the web** (sorted keys and row keys, zeroed
+  `exportedAt`, ECMAScript number text), fixing the old mismatched hash that could report a
+  phantom conflict on every sync.
+
+### Fixed
+
+- **A download no longer trusts a stale metadata revision.** The revision and hash now come from
+  the downloaded body's response headers, so a snapshot that changed between the two requests
+  cannot be overwritten with an older base.
+- **Clock skew between phone and server** no longer lets a device whose clock is an hour off
+  lose every merge: sync stamps are corrected with the server's `Date` header, while the times
+  the user sees stay local.
+- **A merge interrupted by validation or a transaction failure** leaves the local database
+  untouched and keeps a pre-sync copy; background sync retries with its existing backoff.
+
 ## [1.4.0] - 2026-11-04
 
 ### Added

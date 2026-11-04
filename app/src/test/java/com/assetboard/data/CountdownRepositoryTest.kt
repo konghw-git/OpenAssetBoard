@@ -55,7 +55,8 @@ class CountdownRepositoryTest {
         assertNull(repo.get(id))
         assertNull(repo.delete(id))
         repo.restore(removed)
-        assertEquals(removed, repo.get(id))
+        // Undo restores the content, not the old version stamp (§5.4).
+        assertEquals(removed.copy(changedAt = 0, changeId = "", stateAt = 0, stateId = ""), repo.get(id)!!.copy(changedAt = 0, changeId = "", stateAt = 0, stateId = ""))
     }
 
     @Test fun anUndoneDeleteLosesThePinAnotherTookMeanwhile() = f.run {

@@ -39,6 +39,11 @@ import com.assetboard.data.WeeklyReview
 import com.assetboard.data.WeekRepository
 import com.assetboard.data.WriteGate
 import com.assetboard.data.newId
+import com.assetboard.data.sync.CanonicalJson
+import com.assetboard.data.sync.Merge
+import com.assetboard.data.ChangeStamp
+import com.assetboard.data.ChangeStamps
+import com.assetboard.data.Tombstone
 import com.assetboard.domain.AppClock
 import android.content.Context
 import android.net.Uri
@@ -60,11 +65,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.File
 import java.security.MessageDigest
 
@@ -75,8 +84,10 @@ import java.security.MessageDigest
  * five built in), format 9 what was eaten, format 10 the diary's mood and the habits' rest days,
  * format 11 each habit's rubric, format 12 how far ahead a todo reminds, format 13 记账 (flows
  * of kind 支出 and 收入 with a category), format 14 the countdowns, format 15 an account's own
- * icon; older files read with the newer tables empty and the newer fields unset. Device-local
- * state (the data epoch, the holiday cache, settings) is never part of a backup.
+ * icon, format 16 the merge stamps (`changedAt`/`changeId`, plus `stateAt`/`stateId` on the four
+ * state tables), the tombstones and the net worth goal's stamp; older files read with the newer
+ * tables empty and the newer fields unset, and their rows take `legacy:` stamps derived from the
+ * content. Device-local state (the data epoch, the holiday cache, settings) is never part of a backup.
  */
 @Serializable
 data class BackupFile(
@@ -110,6 +121,11 @@ data class BackupFile(
     /** Cents; null for none. */
     val netWorthGoal: Long? = null,
     val countdowns: List<Countdown> = emptyList(),
+    /** Format 16: rows a physical delete removed, so an old copy cannot bring them back. */
+    val tombstones: List<Tombstone> = emptyList(),
+    /** Format 16: the goal's merge stamp; a null goal with a stamp means "cleared", not "never set". */
+    val netWorthGoalAt: Long = 0,
+    val netWorthGoalChangeId: String = "",
 )
 
 /**
@@ -210,15 +226,13 @@ class BackupManager(
         )
     }
 
-    private fun contentHash(file: BackupFile): String {
-        val element = json.encodeToJsonElement(BackupFile.serializer(), file.copy(exportedAt = 0))
-        val canonical = canonicalize(element).toString()
-        return MessageDigest.getInstance("SHA-256")
-            .digest(canonical.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
-    }
+    private fun contentHash(file: BackupFile): String =
+        CanonicalJson.contentHash(json.encodeToJsonElement(BackupFile.serializer(), file) as JsonObject)
 
-    /** Arrays are order-independent for hashing: a restored database may return the same rows in another order. */
+    /**
+     * The older, pre-merge canonicalization: legacy stamps were derived with it in format 16's
+     * migration and must stay byte-identical, so it remains for [backfillLegacy] only.
+     */
     private fun canonicalize(element: JsonElement): JsonElement = when (element) {
         is JsonObject -> JsonObject(element.entries.associate { (key, value) -> key to canonicalize(value) })
         is JsonArray -> JsonArray(element.map(::canonicalize).sortedBy { it.toString() })
@@ -234,7 +248,7 @@ class BackupManager(
             file.bodyMeasurements.isEmpty() && file.foodEntries.isEmpty() && file.noteTopics.isEmpty() &&
             file.notes.isEmpty() && file.noteSources.isEmpty() && file.noteDrafts.isEmpty() &&
             file.weeklyReviews.isEmpty() && file.weeklyDrafts.isEmpty() && file.netWorthGoal == null &&
-            file.countdowns.isEmpty()
+            file.countdowns.isEmpty() && file.tombstones.isEmpty() && !hasGoalStamp(file)
 
     /** Everything a backup holds, read in one transaction. */
     private suspend fun current(): BackupFile {
@@ -271,6 +285,9 @@ class BackupManager(
                 netWorthGoal = GoalRepository.parse(db.metaDao().get(GoalRepository.KEY)),
                 weeklyDrafts = db.weekDao().allDrafts(),
                 countdowns = db.countdownDao().all(),
+                tombstones = dao.tombstones(),
+                netWorthGoalAt = db.metaDao().get(GoalRepository.AT_KEY)?.toLongOrNull() ?: 0,
+                netWorthGoalChangeId = db.metaDao().get(GoalRepository.CHANGE_ID_KEY).orEmpty(),
             )
         }
     }
@@ -412,8 +429,99 @@ class BackupManager(
         }
         ensure(file.formatVersion in 1..FORMAT_VERSION) { "备份格式版本 ${file.formatVersion} 不受支持" }
         ensure(file.schemaVersion <= AppDatabase.SCHEMA_VERSION) { "备份来自更新版本的 app，请先升级" }
-        return file
+        return if (file.formatVersion >= 16) file else backfillLegacy(file)
     }
+
+    private fun hasGoalStamp(file: BackupFile): Boolean =
+        file.netWorthGoalAt != 0L || file.netWorthGoalChangeId.isNotEmpty()
+
+    /**
+     * A file from before format 16 has no stamps: each row takes a `legacy:` id hashed from its
+     * content and a time from the newest column it records (§1.3 of the semantics), so restoring
+     * the same old file twice lands on the same versions. The first merge after an upgrade still
+     * has the known limits of §6.4: deletes before the upgrade have no tombstone.
+     */
+    private fun backfillLegacy(file: BackupFile): BackupFile {
+        val snapshotAt = file.snapshots.associate { it.id to it.at }
+        val todoAt = file.todos.associate { it.id to todoLegacyAt(it) }
+        return file.copy(
+            groups = legacyRows(file.groups, AccountGroup.serializer()) { 0 },
+            accounts = legacyRows(file.accounts, Account.serializer()) { it.createdAt },
+            snapshots = legacyRows(file.snapshots, Snapshot.serializer()) { it.at },
+            valuations = legacyRows(file.valuations, Valuation.serializer()) { maxOf(it.at, it.createdAt) },
+            snapshotItems = legacyRows(file.snapshotItems, SnapshotItem.serializer()) { snapshotAt[it.snapshotId] ?: 0 },
+            flows = legacyRows(file.flows, MoneyFlow.serializer()) { maxOf(it.at, it.createdAt) },
+            todoLists = legacyRows(file.todoLists, TodoList.serializer()) { maxOf(it.archivedAt ?: 0, it.createdAt, it.deletedAt ?: 0) },
+            todoSections = legacyRows(file.todoSections, TodoSection.serializer()) { it.deletedAt ?: 0 },
+            todos = legacyRows(file.todos, Todo.serializer(), at = ::todoLegacyAt, stateAt = { it.snoozeAt ?: 0 }),
+            checklistItems = legacyRows(file.checklistItems, ChecklistItem.serializer()) { todoAt[it.todoId] ?: 0 },
+            diaryEntries = legacyRows(file.diaryEntries, DiaryEntry.serializer(), at = {
+                maxOf(it.createdAt, it.updatedAt, it.deletedAt ?: 0)
+            }, stateAt = { it.weatherAt ?: 0 }),
+            diaryDrafts = legacyRows(file.diaryDrafts, DiaryDraft.serializer()) { it.createdAt },
+            habitChecks = legacyRows(file.habitChecks, HabitCheck.serializer()) { it.checkedAt },
+            habits = legacyRows(file.habits, com.assetboard.domain.Habit.serializer(), ::habitLegacyAt),
+            healthProfile = file.healthProfile?.let { legacyRows(listOf(it), HealthProfile.serializer()) { p -> p.updatedAt }.single() },
+            bodyMeasurements = legacyRows(file.bodyMeasurements, BodyMeasurement.serializer()) {
+                maxOf(it.measuredAt, it.createdAt, it.updatedAt)
+            },
+            foodEntries = legacyRows(file.foodEntries, FoodEntry.serializer()) { maxOf(it.eatenAt, it.createdAt, it.updatedAt) },
+            noteTopics = legacyRows(file.noteTopics, NoteTopic.serializer()) { it.createdAt },
+            notes = legacyRows(file.notes, Note.serializer(), at = {
+                maxOf(it.createdAt, it.updatedAt, it.deletedAt ?: 0)
+            }, stateAt = { it.reviewedAt ?: 0 }),
+            noteSources = legacyRows(file.noteSources, NoteSource.serializer()) { it.createdAt },
+            noteDrafts = legacyRows(file.noteDrafts, NoteDraft.serializer()) { it.createdAt },
+            weeklyReviews = legacyRows(file.weeklyReviews, WeeklyReview.serializer()) {
+                maxOf(it.createdAt, it.updatedAt, it.deletedAt ?: 0)
+            },
+            weeklyDrafts = legacyRows(file.weeklyDrafts, WeeklyDraft.serializer()) { it.createdAt },
+            countdowns = legacyRows(file.countdowns, Countdown.serializer(), at = {
+                maxOf(it.createdAt, it.updatedAt)
+            }, stateAt = { it.updatedAt }),
+            netWorthGoalAt = 0,
+            netWorthGoalChangeId = file.netWorthGoal?.let { "legacy:" + sha256("netWorthGoal\u0000$it").take(32) }.orEmpty(),
+        )
+    }
+
+    private inline fun <reified T> legacyRows(rows: List<T>, serializer: KSerializer<T>, at: (T) -> Long): List<T> =
+        legacyRows(rows, serializer, at, null)
+
+    private inline fun <reified T> legacyRows(
+        rows: List<T>,
+        serializer: KSerializer<T>,
+        at: (T) -> Long,
+        noinline stateAt: ((T) -> Long)?,
+    ): List<T> = rows.map { row ->
+        val element = json.encodeToJsonElement(serializer, row) as JsonObject
+        val digest = sha256(canonicalize(element).toString())
+        var fields: Map<String, JsonElement> = element + mapOf(
+            "changedAt" to JsonPrimitive(at(row)),
+            "changeId" to JsonPrimitive("legacy:" + digest.take(32)),
+        )
+        if (stateAt != null) {
+            fields = fields + mapOf(
+                "stateAt" to JsonPrimitive(stateAt(row)),
+                "stateId" to JsonPrimitive("legacy:" + sha256(canonicalize(element).toString() + "|state").take(32)),
+            )
+        }
+        json.decodeFromJsonElement(serializer, JsonObject(fields))
+    }
+
+    private fun todoLegacyAt(t: Todo): Long =
+        maxOf(t.createdAt, t.completedAt ?: 0, t.deletedAt ?: 0, t.snoozeAt ?: 0, t.repeatEndedAt ?: 0)
+
+    /** Habits only know their local dates; the stamp is the start of that day (migration §6.1). */
+    private fun habitLegacyAt(h: com.assetboard.domain.Habit): Long {
+        val day = h.removedOn ?: h.addedOn ?: return 0
+        return runCatching {
+            java.time.LocalDate.parse(day).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        }.getOrDefault(0)
+    }
+
+    private fun sha256(text: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(text.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
     suspend fun inspect(uri: Uri): BackupPreview = withContext(Dispatchers.IO) {
         preview(parse(read(uri)))
@@ -549,9 +657,98 @@ class BackupManager(
         replaceAll { parse(text).also(::validate) }
     }
 
-    /** The same full-overwrite restore for a snapshot that came down from the sync server. */
+    /**
+     * The same full-overwrite restore for a snapshot that came down from the sync server. It is
+     * a replace, not a merge: the file's rows take one fresh stamp, rows it no longer carries get
+     * tombstones, and the next sync propagates that intent to the cloud and the other devices.
+     */
     suspend fun restoreFromJson(text: String): String = withContext(Dispatchers.IO) {
         replaceAll { parse(text).also(::validate) }
+    }
+
+    /** One merge's written data, plus how many repairs it made (for the "合并调整 N 处" notice). */
+    data class MergeWriteResult(val snapshot: SyncSnapshot, val adjustments: Int)
+
+    /**
+     * The MergeWriter: freeze the gate, commit unsaved editor text, merge the local snapshot with
+     * [remoteText], and write the result back in one transaction. The local file is untouched if
+     * validation or the write fails, and a copy of the pre-merge data is kept first. Unlike
+     * [restoreFromJson] this does not re-stamp rows: their own versions decide the merge.
+     */
+    suspend fun mergeFromJson(remoteText: String): MergeWriteResult = withContext(Dispatchers.IO) {
+        gate.freeze()
+        var committed = false
+        try {
+            flushEditors()
+            val remote = parse(remoteText)
+            val local = current()
+            val localElement = json.encodeToJsonElement(BackupFile.serializer(), local) as JsonObject
+            val remoteElement = json.encodeToJsonElement(BackupFile.serializer(), remote) as JsonObject
+            val merged = Merge.merge(localElement, remoteElement)
+            val adjustments = merged.adjustments.sumOf { it.count }
+            val localSnapshot = SyncSnapshot(json.encodeToString(BackupFile.serializer(), local), CanonicalJson.contentHash(localElement), local.exportedAt, isEmpty(local))
+            // The common case when the other side only echoed what this device had.
+            if (CanonicalJson.contentHash(merged.data) == localSnapshot.contentHash) return@withContext MergeWriteResult(localSnapshot, adjustments)
+
+            val file = json.decodeFromJsonElement(BackupFile.serializer(), merged.data).copy(exportedAt = clock())
+            validate(file)
+            savePreSyncCopy(localSnapshot.json)
+            val oldIds = db.todoDao().allTodos().map { it.id }
+            withContext(NonCancellable) {
+                val epoch = db.withTransaction {
+                    overwrite(file)
+                    gate.bumpEpochInTransaction()
+                }
+                gate.epochCommitted(epoch)
+                committed = true
+            }
+            settings.setRescheduleNeeded(true)
+            try {
+                effects.afterRestore(oldIds)
+                settings.setRescheduleNeeded(false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The data is merged; reminders are rebuilt on the next app start.
+            }
+            val written = json.encodeToJsonElement(BackupFile.serializer(), file) as JsonObject
+            MergeWriteResult(
+                SyncSnapshot(json.encodeToString(BackupFile.serializer(), file), CanonicalJson.contentHash(written), file.exportedAt, isEmpty(file)),
+                adjustments,
+            )
+        } catch (e: Exception) {
+            if (!committed) gate.invalidateCache()
+            throw e
+        } finally {
+            gate.unfreeze()
+            if (committed) onRestored()
+        }
+    }
+
+    /** A copy of the local data from just before a sync merge, in a file of its own. */
+    private suspend fun savePreSyncCopy(text: String) {
+        val dir = File(context.filesDir, if (legacyNames) "presync" else "presync-$profileId").apply { mkdirs() }
+        val f = File(dir, "asset-board-presync.json")
+        val part = File(dir, f.name + ".partial")
+        try {
+            part.writeText(text)
+            if (!part.renameTo(f)) throw IllegalStateException("重命名失败")
+        } catch (e: CancellationException) {
+            part.delete()
+            throw e
+        } catch (e: Exception) {
+            part.delete()
+            throw LedgerException("无法保存合并前副本：" + (e.message ?: ""))
+        }
+        // The backup folder is the user's; a failure there must not block the sync, the private
+        // copy above is already complete.
+        settings.backupTreeUri.value?.let { tree ->
+            runCatching {
+                val folder = DocumentFile.fromTreeUri(context, Uri.parse(tree))?.takeIf { it.canWrite() } ?: return@runCatching
+                val name = if (legacyNames) "asset-board-presync.json" else "asset-board-$profileId-presync.json"
+                replaceInFolder(folder, name, text)
+            }
+        }
     }
 
     /**
@@ -586,7 +783,21 @@ class BackupManager(
         var committed = false
         try {
             flushEditors()
-            val file = load()
+            val loaded = load()
+            // replace semantics: the file's rows take one fresh stamp (so they beat whatever the
+            // cloud holds), and rows the file no longer has become tombstones. Without this a
+            // restore would only be local: the next merge would hand the old remote versions back.
+            val reserved = ChangeStamps.stamp(clock())
+            val previous = current()
+            // The replace must beat every version it replaces and everything the file carries,
+            // even when the device clock is behind those stamps; otherwise the next merge would
+            // hand the old rows back.
+            val at = maxOf(
+                reserved.at,
+                maxStamp(json.encodeToJsonElement(BackupFile.serializer(), loaded) as JsonObject) + 1,
+                maxStamp(json.encodeToJsonElement(BackupFile.serializer(), previous) as JsonObject) + 1,
+            )
+            val file = prepareReplace(loaded, previous, ChangeStamps.nextAt(at), reserved.id)
             val savedTo = savePreRestoreCopy()
             val oldIds = db.todoDao().allTodos().map { it.id }
             // The transaction and the hand-over are not cancellable: a caller that goes away while
@@ -622,6 +833,106 @@ class BackupManager(
             // Screens bound to the old epoch could not save anything; they are rebuilt either way.
             if (committed) onRestored()
         }
+    }
+
+    /** The newest stamp anywhere in an encoded file: rows, state stamps, tombstones, the goal. */
+    private fun maxStamp(root: JsonObject): Long {
+        var max = 0L
+        fun consider(element: JsonElement?) {
+            val value = (element as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toLongOrNull() ?: return
+            if (value > max) max = value
+        }
+        for (table in CanonicalJson.rowKeyFields.keys) {
+            for (row in (root[table] as? JsonArray).orEmpty()) {
+                val fields = row as? JsonObject ?: continue
+                consider(fields["changedAt"])
+                consider(fields["stateAt"])
+            }
+        }
+        for (tombstone in (root["tombstones"] as? JsonArray).orEmpty()) {
+            consider((tombstone as? JsonObject)?.get("deletedAt"))
+        }
+        consider(root["netWorthGoalAt"])
+        consider((root["healthProfile"] as? JsonObject)?.get("changedAt"))
+        return max
+    }
+
+    /**
+     * Encodes replace/reset as merge-visible intent (docs/sync-merge-semantics.md §5.2): every
+     * row in [file] gets the operation's stamp, every row of [previous] it no longer has gets a
+     * tombstone, and the goal is stamped whether it is set or cleared. Row keys are the same ones
+     * the merge uses, so the two devices agree on which row a tombstone names.
+     */
+    private fun prepareReplace(file: BackupFile, previous: BackupFile, at: Long, id: String): BackupFile {
+        val target = json.encodeToJsonElement(BackupFile.serializer(), file) as JsonObject
+        val old = json.encodeToJsonElement(BackupFile.serializer(), previous) as JsonObject
+        val root = LinkedHashMap<String, JsonElement>(target)
+        val live = HashMap<String, Set<String>>()
+        val removed = ArrayList<Tombstone>()
+        for (table in CanonicalJson.rowKeyFields.keys) {
+            val stamped = (target[table] as? JsonArray).orEmpty().map { element ->
+                val fields = LinkedHashMap(element as JsonObject)
+                fields["changedAt"] = JsonPrimitive(at)
+                fields["changeId"] = JsonPrimitive(id)
+                if (table in STATE_TABLES) {
+                    fields["stateAt"] = JsonPrimitive(at)
+                    fields["stateId"] = JsonPrimitive(id)
+                }
+                JsonObject(fields)
+            }
+            val keys = stamped.map { CanonicalJson.rowKey(table, it) }.toSet()
+            live[table] = keys
+            root[table] = JsonArray(stamped)
+            for (row in (old[table] as? JsonArray).orEmpty()) {
+                val key = CanonicalJson.rowKey(table, row as JsonObject)
+                if (key !in keys) removed += Tombstone(table, key, at, "T:" + newId())
+            }
+        }
+        val seen = HashSet<String>()
+        val tombstones = ArrayList<JsonElement>()
+        fun keep(element: JsonElement) {
+            val obj = element as? JsonObject ?: return
+            val table = (obj["table"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return
+            val key = (obj["rowKey"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return
+            if (live[table]?.contains(key) == true) return
+            if (!seen.add(key)) return
+            // A tombstone the file carries still means "deleted" — as of the replace, so a remote
+            // row cannot beat it and resurrect what the user just restored without.
+            val fields = LinkedHashMap(obj)
+            fields["deletedAt"] = JsonPrimitive(at)
+            fields["changeId"] = JsonPrimitive("T:$id")
+            tombstones += JsonObject(fields)
+        }
+        for (source in listOf(target["tombstones"], old["tombstones"])) {
+            for (element in (source as? JsonArray).orEmpty()) keep(element)
+        }
+        for (tombstone in removed) {
+            tombstones += json.encodeToJsonElement(Tombstone.serializer(), tombstone) as JsonObject
+        }
+        root["tombstones"] = JsonArray(tombstones)
+
+        val hadGoal = previous.netWorthGoal != null || previous.netWorthGoalAt != 0L || previous.netWorthGoalChangeId.isNotEmpty()
+        if (file.netWorthGoal != null) {
+            root["netWorthGoal"] = JsonPrimitive(file.netWorthGoal)
+            root["netWorthGoalAt"] = JsonPrimitive(at)
+            root["netWorthGoalChangeId"] = JsonPrimitive(id)
+        } else if (hadGoal) {
+            root["netWorthGoal"] = JsonNull
+            root["netWorthGoalAt"] = JsonPrimitive(at)
+            root["netWorthGoalChangeId"] = JsonPrimitive(id)
+        } else {
+            root["netWorthGoal"] = JsonNull
+            root["netWorthGoalAt"] = JsonPrimitive(0)
+            root["netWorthGoalChangeId"] = JsonPrimitive("")
+        }
+
+        (target["healthProfile"] as? JsonObject)?.let { profile ->
+            val fields = LinkedHashMap(profile)
+            fields["changedAt"] = JsonPrimitive(at)
+            fields["changeId"] = JsonPrimitive(id)
+            root["healthProfile"] = JsonObject(fields)
+        }
+        return json.decodeFromJsonElement(BackupFile.serializer(), JsonObject(root))
     }
 
     private suspend fun overwrite(file: BackupFile) {
@@ -681,8 +992,12 @@ class BackupManager(
         db.weekDao().insertAll(file.weeklyReviews)
         db.weekDao().insertDrafts(file.weeklyDrafts)
         db.countdownDao().insertAll(file.countdowns)
+        dao.clearTombstones()
+        dao.putTombstones(file.tombstones)
         db.metaDao().delete(GoalRepository.KEY)
         file.netWorthGoal?.let { db.metaDao().put(AppMeta(GoalRepository.KEY, it.toString())) }
+        db.metaDao().put(AppMeta(GoalRepository.AT_KEY, file.netWorthGoalAt.toString()))
+        db.metaDao().put(AppMeta(GoalRepository.CHANGE_ID_KEY, file.netWorthGoalChangeId))
     }
 
     // ------------------------------------------------------------ the coordinator's private write channel
@@ -763,17 +1078,24 @@ class BackupManager(
         if (weeks.failBodyWrites) throw IllegalStateException("模拟写盘失败")
         val w = db.weekDao()
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         if (p.reviewId != null) {
-            return if (w.updateBody(p.reviewId, p.text, p.expectedRev ?: -1, now) == 1) p.reviewId to (p.expectedRev!! + 1) else null
+            return if (w.updateBody(p.reviewId, p.text, p.expectedRev ?: -1, now, stamp.at, stamp.id) == 1) {
+                p.reviewId to (p.expectedRev!! + 1)
+            } else null
         }
         val existing = w.liveByWeek(p.weekStart)
         return when {
             existing == null -> {
-                val r = WeeklyReview(newId(), p.weekStart, p.text, bodyRev = 1, createdAt = now, updatedAt = now)
+                val r = WeeklyReview(
+                    newId(), p.weekStart, p.text, bodyRev = 1, createdAt = now, updatedAt = now,
+                    changedAt = stamp.at, changeId = stamp.id,
+                )
                 w.insert(r)
                 r.id to 1L
             }
-            existing.body.isEmpty() && w.updateBody(existing.id, p.text, existing.bodyRev, now) == 1 -> existing.id to existing.bodyRev + 1
+            existing.body.isEmpty() && w.updateBody(existing.id, p.text, existing.bodyRev, now, stamp.at, stamp.id) == 1 ->
+                existing.id to existing.bodyRev + 1
             else -> null
         }
     }
@@ -782,17 +1104,24 @@ class BackupManager(
         if (diary.failBodyWrites) throw IllegalStateException("模拟写盘失败")
         val d = db.diaryDao()
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         if (p.entryId != null) {
-            return if (d.updateBody(p.entryId, p.text, p.expectedRev ?: -1, now) == 1) p.entryId to (p.expectedRev!! + 1) else null
+            return if (d.updateBody(p.entryId, p.text, p.expectedRev ?: -1, now, stamp.at, stamp.id) == 1) {
+                p.entryId to (p.expectedRev!! + 1)
+            } else null
         }
         val existing = d.liveByDate(p.date)
         return when {
             existing == null -> {
-                val e = DiaryEntry(newId(), p.date, p.text, bodyRev = 1, createdAt = now, updatedAt = now)
+                val e = DiaryEntry(
+                    newId(), p.date, p.text, bodyRev = 1, createdAt = now, updatedAt = now,
+                    changedAt = stamp.at, changeId = stamp.id,
+                )
                 d.insert(e)
                 e.id to 1L
             }
-            existing.body.isEmpty() && d.updateBody(existing.id, p.text, existing.bodyRev, now) == 1 -> existing.id to existing.bodyRev + 1
+            existing.body.isEmpty() && d.updateBody(existing.id, p.text, existing.bodyRev, now, stamp.at, stamp.id) == 1 ->
+                existing.id to existing.bodyRev + 1
             else -> null
         }
     }
@@ -802,16 +1131,23 @@ class BackupManager(
         if (notes.failBodyWrites) throw IllegalStateException("模拟写盘失败")
         val n = db.noteDao()
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         val written = when {
             p.noteId == null -> {
-                val note = Note(newId(), p.topicId?.takeIf { n.topic(it) != null }, p.text, bodyRev = 1, position = n.minPosition() - 1, createdAt = now, updatedAt = now)
+                val note = Note(
+                    newId(), p.topicId?.takeIf { n.topic(it) != null }, p.text, bodyRev = 1,
+                    position = n.minPosition() - 1, createdAt = now, updatedAt = now,
+                    changedAt = stamp.at, changeId = stamp.id,
+                )
                 n.insert(note)
                 note.id to 1L
             }
-            n.updateBody(p.noteId, p.text, p.expectedRev ?: -1, now) == 1 -> p.noteId to (p.expectedRev!! + 1)
+            n.updateBody(p.noteId, p.text, p.expectedRev ?: -1, now, stamp.at, stamp.id) == 1 -> p.noteId to (p.expectedRev!! + 1)
             else -> return null
         }
-        for (s in p.sources) n.insertSource(NoteSource(written.first, s.kind, s.ref, now))
+        for (s in p.sources) {
+            n.insertSource(NoteSource(written.first, s.kind, s.ref, now, changedAt = stamp.at, changeId = stamp.id))
+        }
         return written
     }
 
@@ -858,7 +1194,10 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 15
+        const val FORMAT_VERSION = 16
+
+        /** The four tables whose display/system fields move a separate state stamp. */
+        private val STATE_TABLES = setOf("diaryEntries", "notes", "todos", "countdowns")
         private const val MAX_BACKUP_BYTES = 64L * 1024 * 1024
 
         /**
@@ -867,13 +1206,24 @@ class BackupManager(
          * today rather than at the next manual stocktake.
          */
         internal fun withoutLedgerHistory(file: BackupFile, now: Long): BackupFile {
+            val stamp = ChangeStamps.stamp(now)
             val accounts = file.accounts.map { a ->
-                a.copy(baselineAt = now, baselineCost = if (a.isInvestment) balanceOf(a, file, now) else null)
+                a.copy(
+                    baselineAt = now,
+                    baselineCost = if (a.isInvestment) balanceOf(a, file, now) else null,
+                    changedAt = stamp.at,
+                    changeId = stamp.id,
+                )
             }
-            val valuations = accounts.map { a -> Valuation(newId(), a.id, now, balanceOf(a, file, now), note = "期初", createdAt = now) }
-            val snapshot = Snapshot(newId(), now, "数据初始化")
+            val valuations = accounts.map { a ->
+                Valuation(newId(), a.id, now, balanceOf(a, file, now), note = "期初", createdAt = now, changedAt = stamp.at, changeId = stamp.id)
+            }
+            val snapshot = Snapshot(newId(), now, "数据初始化", changedAt = stamp.at, changeId = stamp.id)
             val items = accounts.filter { !it.isDisabled }.map { a ->
-                SnapshotItem(snapshot.id, a.id, valuations.first { it.accountId == a.id }.id, included = a.includeInTotal)
+                SnapshotItem(
+                    snapshot.id, a.id, valuations.first { it.accountId == a.id }.id,
+                    included = a.includeInTotal, changedAt = stamp.at, changeId = stamp.id,
+                )
             }
             return file.copy(
                 accounts = accounts,

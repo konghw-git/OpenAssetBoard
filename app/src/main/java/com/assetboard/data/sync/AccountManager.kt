@@ -1,6 +1,11 @@
 package com.assetboard.data.sync
 
 import android.content.Context
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.assetboard.data.Profile
 import com.assetboard.data.ProfileStore
 import com.assetboard.data.SessionStore
@@ -8,6 +13,7 @@ import com.assetboard.data.SettingsStore
 import com.assetboard.data.backup.BackupManager
 import com.assetboard.domain.AppClock
 import com.assetboard.domain.LedgerException
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -18,13 +24,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-
-/** A remote snapshot that changed while this device also has changes. Never merged; the user picks. */
-data class SyncConflict(val remote: RemoteMeta, val localExportedAt: Long)
 
 /** The last reachability probe for one server address. */
 data class ServerCheck(
@@ -50,22 +54,23 @@ data class AccountState(
     /** One-shot notice for a snackbar. */
     val message: String? = null,
     val error: String? = null,
-    val conflict: SyncConflict? = null,
+    /** The server's retained versions, loaded for the history sheet; newest first. */
+    val revisions: List<RemoteMeta> = emptyList(),
+    val historyBusy: Boolean = false,
 )
-
-enum class ConflictChoice { KEEP_LOCAL, USE_REMOTE }
 
 /**
  * How a sync attempt ended. The quiet background worker comes back only for [RETRY] — a
  * transient connectivity or server failure; everything else is either done or pointless to
- * repeat (signed out, a conflict waiting for the user, an app upgrade needed).
+ * repeat (signed out, a snapshot that needs a newer app, a permanently racing upload).
  */
 enum class SyncOutcome { DONE, SKIPPED, RETRY }
 
 /**
  * Login, logout and snapshot sync for the active profile. The local database is always the
- * working copy; the server holds one full backup file per account, and a sync either uploads,
- * downloads, or stops and asks. There is deliberately no automatic merge.
+ * working copy; the server holds one full backup file per account. When both sides changed the
+ * merge runs locally (MergeWriter) and the result is uploaded, so there is no conflict dialog:
+ * record-level LWW decides, and only the repair count is reported.
  */
 class AccountManager(
     private val context: Context,
@@ -76,7 +81,11 @@ class AccountManager(
     private val scope: CoroutineScope,
     private val onSwitchProfile: suspend (Profile) -> Unit,
     private val api: SyncGateway = SyncApi { settings.networkEnabled.value },
+    private val mergeWriter: MergeWriter = MergeWriter(backup),
 ) {
+    @Volatile private var foreground = false
+    @Volatile private var tickerStarted = false
+    private var debounceJob: Job? = null
     private val session = SessionStore(context, profile.id)
     private val mutex = Mutex()
     private val checkMutex = Mutex()
@@ -95,7 +104,6 @@ class AccountManager(
 
     fun consumeMessage() = _state.update { it.copy(message = null) }
     fun clearError() = _state.update { it.copy(error = null) }
-    fun clearConflict() = _state.update { it.copy(conflict = null) }
 
     private fun initialState(): AccountState {
         val p = currentProfile()
@@ -390,10 +398,8 @@ class AccountManager(
             when (SyncDecision.decide(remote, p, local.contentHash, local.isEmpty)) {
                 SyncAction.UP_TO_DATE -> markSynced(p, remote.revision, remote.contentHash, "已是最新")
                 SyncAction.UPLOAD -> upload(p, remote, local)
-                SyncAction.DOWNLOAD -> download(p, remote)
-                SyncAction.CONFLICT -> _state.update {
-                    it.copy(busy = false, conflict = SyncConflict(remote, local.exportedAt))
-                }
+                SyncAction.DOWNLOAD -> download(p)
+                SyncAction.MERGE -> mergeWithRemote(p)
                 // Both directions are wrong here: the snapshot cannot be read, and uploading
                 // would overwrite data from a newer app. The only way forward is an upgrade.
                 SyncAction.REMOTE_TOO_NEW -> _state.update {
@@ -412,6 +418,7 @@ class AccountManager(
         }
     }
 
+    /** Uploads the local snapshot; a 409 means someone won the race, so merge and retry. */
     private suspend fun upload(p: Profile, remote: RemoteMeta, local: BackupManager.SyncSnapshot) {
         val server = p.serverUrl ?: settings.syncServerUrl.value
         try {
@@ -419,55 +426,195 @@ class AccountManager(
             markSynced(p, revision, local.contentHash, "已同步到云端（版本 $revision）")
         } catch (e: ApiException) {
             if (e.status != 409) throw e
-            // Someone uploaded between the metadata read and this write. Show the new remote
-            // revision instead of retrying blindly; the next decision is the user's.
-            val latest = api.meta(server, access!!)
-            _state.update { it.copy(busy = false, conflict = SyncConflict(latest, local.exportedAt)) }
+            mergeWithRemote(p)
         }
     }
 
-    private suspend fun download(p: Profile, remote: RemoteMeta) {
-        val text = api.download(p.serverUrl ?: settings.syncServerUrl.value, access!!)
+    /** The download-only case: the local side has no unsynced changes, so the remote body is applied. */
+    private suspend fun download(p: Profile) {
+        val snapshot = api.download(p.serverUrl ?: settings.syncServerUrl.value, access!!)
             ?: throw ApiException("云端还没有快照")
-        backup.restoreFromJson(text)
-        markSynced(p, remote.revision, remote.contentHash, "已从云端同步")
+        // A replace would re-stamp every row; a merge with the local copy is the same data here
+        // and keeps the remote versions intact for the next real merge.
+        val result = mergeWriter.write(snapshot.text)
+        if (result.snapshot.contentHash == snapshot.contentHash) {
+            markSynced(p, snapshot.revision, snapshot.contentHash, mergeMessage(result.adjustments))
+        } else {
+            upload(p, RemoteMeta(revision = snapshot.revision, contentHash = snapshot.contentHash), result.snapshot)
+        }
     }
 
-    suspend fun resolveConflict(choice: ConflictChoice) {
-        val conflict = _state.value.conflict ?: return
+    /**
+     * Reads the whole remote body (not just the metadata), merges it into the local database and
+     * uploads the result. The download's own X-Revision/X-Content-Hash are the If-Match base and
+     * the "nothing to upload" test — the metadata read that preceded it may already be stale.
+     * A 409 means another device uploaded in between: read the new body and merge again, bounded
+     * so a permanently racing client cannot spin forever.
+     */
+    private suspend fun mergeWithRemote(p: Profile, depth: Int = 0) {
+        val server = p.serverUrl ?: settings.syncServerUrl.value
+        var lastConflict: ApiException? = null
+        repeat(3) {
+            val remote = api.download(server, access!!)
+            if (remote == null) {
+                if (depth >= 3) throw ApiException("云端状态变化太频繁，请稍后再同步", 409)
+                upload(p, RemoteMeta(), backup.exportForSync())
+                return
+            }
+            val result = mergeWriter.write(remote.text)
+            if (result.snapshot.contentHash == remote.contentHash) {
+                markSynced(p, remote.revision, remote.contentHash, mergeMessage(result.adjustments))
+                return
+            }
+            try {
+                val revision = api.upload(server, access!!, remote.revision, result.snapshot.json, result.snapshot.contentHash)
+                markSynced(p, revision, result.snapshot.contentHash, mergeMessage(result.adjustments, uploaded = true))
+                return
+            } catch (e: ApiException) {
+                if (e.status != 409) throw e
+                lastConflict = e
+            }
+        }
+        if (depth < 3) {
+            mergeWithRemote(p, depth + 1)
+            return
+        }
+        throw lastConflict ?: ApiException("云端更新太频繁，请稍后再同步", 409)
+    }
+
+    private fun mergeMessage(adjustments: Int, uploaded: Boolean = false): String = when {
+        adjustments > 0 && uploaded -> "已合并并同步 · 调整 $adjustments 处"
+        adjustments > 0 -> "已从云端合并 · 调整 $adjustments 处"
+        uploaded -> "已合并并同步"
+        else -> "已从云端同步"
+    }
+
+    /** Loads the retained versions for the history sheet. */
+    suspend fun loadRevisions() {
+        val p = currentProfile()
+        if (p.accountId == null) return
+        _state.update { it.copy(historyBusy = true, error = null) }
+        try {
+            ensureAccess(p)
+            val list = api.revisions(p.serverUrl ?: settings.syncServerUrl.value, access!!)
+            _state.update { it.copy(historyBusy = false, revisions = list) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _state.update { it.copy(historyBusy = false) }
+            handle(e)
+        }
+    }
+
+    /**
+     * Restores one retained version. The restore is a replace (fresh stamps + tombstones for
+     * rows it no longer has), so the intent reaches the cloud; a sync is started right after the
+     * lock is released to make that happen.
+     */
+    suspend fun restoreRevision(revision: Long) {
         if (!mutex.tryLock()) {
             _state.update { it.copy(message = "正在同步") }
             return
         }
+        var restored = false
         try {
-            _state.update { it.copy(busy = true, conflict = null, error = null) }
+            _state.update { it.copy(busy = true, historyBusy = true, error = null) }
             val p = currentProfile()
             if (p.accountId == null) {
                 expire()
                 return
             }
             ensureAccess(p)
-            when (choice) {
-                ConflictChoice.KEEP_LOCAL -> upload(p, conflict.remote, backup.exportForSync())
-                ConflictChoice.USE_REMOTE -> download(p, conflict.remote)
-            }
+            val snapshot = api.revision(p.serverUrl ?: settings.syncServerUrl.value, access!!, revision)
+                ?: throw ApiException("这个历史版本已经无法找回")
+            backup.restoreFromJson(snapshot.text)
+            restored = true
+            _state.update { it.copy(busy = false, historyBusy = false, revisions = emptyList(), message = "已恢复云端版本 $revision，正在同步…") }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            _state.update { it.copy(historyBusy = false) }
             handle(e)
         } finally {
             _state.update { if (it.busy) it.copy(busy = false) else it }
             mutex.unlock()
         }
+        if (restored) scope.launch { runCatching { syncNow() } }
     }
 
-    /** On launch, sync quietly if there is a session; a failure only shows in the account page. */
+    /** On launch, schedule the quiet syncs and sync once after the screens have settled. */
     fun onAppStart() {
+        scheduleBackground()
+        startForegroundTicker()
         val p = currentProfile()
         if (p.accountId == null || !session.has()) return
         scope.launch {
             delay(6_000)
             runCatching { syncNow() }
+        }
+    }
+
+    /** Back in the foreground: sync if the last attempt is more than half a minute old. */
+    fun onForeground() {
+        foreground = true
+        startForegroundTicker()
+        val p = currentProfile()
+        if (p.accountId == null || !session.has()) return
+        scope.launch {
+            val last = p.lastSyncAt ?: 0L
+            if (AppClock.millis() - last > FOREGROUND_SYNC_MIN_GAP_MS) runCatching { syncNow() }
+        }
+    }
+
+    fun onBackground() {
+        foreground = false
+    }
+
+    /**
+     * An edit just committed: upload it after ten quiet seconds, so a burst of typing or a batch
+     * of toggles is one snapshot instead of twenty.
+     */
+    fun noteLocalChange() {
+        if (!isSignedIn()) return
+        debounceJob?.cancel()
+        debounceJob = scope.launch {
+            delay(LOCAL_CHANGE_DELAY_MS)
+            runCatching { syncNow() }
+        }
+    }
+
+    /** Applies the chosen interval to WorkManager (15 minutes is its floor; 5 is foreground only). */
+    fun scheduleBackground() {
+        val minutes = settings.syncIntervalMinutes.value
+        val work = WorkManager.getInstance(context)
+        if (minutes < 15) {
+            work.cancelUniqueWork(BACKGROUND_SYNC)
+            return
+        }
+        work.enqueueUniquePeriodicWork(
+            BACKGROUND_SYNC,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            PeriodicWorkRequestBuilder<SyncWorker>(minutes.toLong(), TimeUnit.MINUTES)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build(),
+        )
+    }
+
+    private fun startForegroundTicker() {
+        if (tickerStarted) return
+        tickerStarted = true
+        scope.launch {
+            while (isActive) {
+                delay(FOREGROUND_TICK_MS)
+                if (!foreground) continue
+                val minutes = settings.syncIntervalMinutes.value
+                if (minutes <= 0) continue
+                val p = currentProfile()
+                if (p.accountId == null || !session.has()) continue
+                val last = p.lastSyncAt ?: 0L
+                if (AppClock.millis() - last < minutes * 60_000L) continue
+                runCatching { syncNow() }
+            }
         }
     }
 
@@ -493,7 +640,7 @@ class AccountManager(
             it.copy(
                 signedIn = updated.accountId != null && session.has(), busy = false,
                 username = updated.username, serverUrl = updated.serverUrl ?: it.serverUrl,
-                revision = revision, lastSyncAt = updated.lastSyncAt, message = message, error = null, conflict = null,
+                revision = revision, lastSyncAt = updated.lastSyncAt, message = message, error = null,
             )
         }
     }
@@ -523,7 +670,7 @@ class AccountManager(
         val p = currentProfile()
         if (p.accountId != null) profiles.save(p.copy(accountId = null, lastAccountId = p.accountId))
         _state.update {
-            it.copy(signedIn = false, busy = false, loginBusy = false, error = "登录已过期，请重新登录", conflict = null)
+            it.copy(signedIn = false, busy = false, loginBusy = false, error = "登录已过期，请重新登录")
         }
     }
 
@@ -532,5 +679,12 @@ class AccountManager(
         const val CHECK_CACHE_MS = 15_000L
         /** A failed probe is not reused for long: the user may have just changed networks. */
         const val CHECK_FAILURE_CACHE_MS = 3_000L
+        /** An edit waits this long for the next one before it is uploaded. */
+        const val LOCAL_CHANGE_DELAY_MS = 10_000L
+        /** Coming back to the foreground does not sync more often than this. */
+        const val FOREGROUND_SYNC_MIN_GAP_MS = 30_000L
+        /** How often the foreground ticker looks at the configured interval. */
+        const val FOREGROUND_TICK_MS = 30_000L
+        const val BACKGROUND_SYNC = "periodic-sync"
     }
 }

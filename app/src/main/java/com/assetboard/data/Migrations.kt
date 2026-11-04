@@ -1,7 +1,11 @@
 package com.assetboard.data
 
+import android.database.Cursor
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import java.security.MessageDigest
+import java.time.LocalDate
+import java.time.ZoneId
 
 object Migrations {
     /** Adds the todo and diary tables; the six ledger tables are not touched. */
@@ -106,8 +110,174 @@ object Migrations {
         }
     }
 
+    /**
+     * Every synced row gets the merge stamps (docs/sync-merge-semantics.md §6.1) and physical
+     * deletes get a tombstone table. Stamps are backfilled from what the row already records:
+     * changed_at from the newest of its own time columns, change_id as a `legacy:` hash of the
+     * content so two devices migrating the same row agree. Rows without any time column (groups,
+     * sections, habits) start at 0 or their date strings; see the known limits in §6.4.
+     */
+    val MIGRATION_14_15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            for (table in SYNCED_TABLES) {
+                db.execSQL("ALTER TABLE `$table` ADD COLUMN `changed_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `$table` ADD COLUMN `change_id` TEXT NOT NULL DEFAULT ''")
+            }
+            for (table in STATE_TABLES) {
+                db.execSQL("ALTER TABLE `$table` ADD COLUMN `state_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `$table` ADD COLUMN `state_id` TEXT NOT NULL DEFAULT ''")
+            }
+            for (sql in BACKFILL_CHANGED_AT) db.execSQL(sql)
+            backfillHabitDates(db)
+            for ((table, columns) in BACKFILL_STATE_AT) {
+                db.execSQL("UPDATE `$table` SET state_at = COALESCE(${columns.joinToString(", ")}, 0)")
+            }
+            for (table in SYNCED_TABLES) backfillLegacyChangeIds(db, table, STAMP_COLUMNS)
+            for ((table, fields) in STATE_FIELDS) backfillLegacyChangeIds(db, table, fields.toSet(), "state_id")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `tombstones` (`tbl` TEXT NOT NULL, `row_key` TEXT NOT NULL, `deleted_at` INTEGER NOT NULL, `change_id` TEXT NOT NULL, PRIMARY KEY(`tbl`, `row_key`))")
+            backfillGoalStamp(db)
+        }
+    }
+
     /** Every step, in order, for [AppDatabase.build] and the tests that open an old file. */
-    val ALL = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+    val ALL = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
+
+    /** The backup's tables; the holiday cache and app_meta are device-local and never carry stamps. */
+    private val SYNCED_TABLES = listOf(
+        "account_groups", "accounts", "snapshots", "valuations", "snapshot_items", "flows",
+        "todo_lists", "todo_sections", "todos", "checklist_items", "diary_entries", "diary_drafts",
+        "habit_checks", "habits", "health_profile", "body_measurements", "food_entries",
+        "note_topics", "notes", "note_sources", "note_drafts", "weekly_reviews", "weekly_drafts", "countdowns",
+    )
+
+    private val STATE_TABLES = listOf("diary_entries", "notes", "todos", "countdowns")
+
+    /** The four stamp columns never take part in a content hash. */
+    private val STAMP_COLUMNS = setOf("changed_at", "change_id", "state_at", "state_id")
+
+    private val STATE_FIELDS = mapOf(
+        "diary_entries" to listOf("weather_code", "temp_min", "temp_max", "city", "lat", "lon", "weather_at", "weather_rev"),
+        "notes" to listOf("reviewed_at", "pinned"),
+        "todos" to listOf("reminded_period", "snooze_at"),
+        "countdowns" to listOf("pinned"),
+    )
+
+    /** Each table's own record of when its rows last changed; the max of what exists, as §1.3 records. */
+    private val BACKFILL_CHANGED_AT = listOf(
+        "UPDATE `accounts` SET changed_at = created_at",
+        "UPDATE `snapshots` SET changed_at = at",
+        "UPDATE `valuations` SET changed_at = max(at, created_at)",
+        "UPDATE `snapshot_items` SET changed_at = COALESCE((SELECT at FROM snapshots WHERE snapshots.id = snapshot_items.snapshot_id), 0)",
+        "UPDATE `flows` SET changed_at = max(at, created_at)",
+        "UPDATE `todo_lists` SET changed_at = max(COALESCE(archived_at, 0), created_at, COALESCE(deleted_at, 0))",
+        "UPDATE `todo_sections` SET changed_at = COALESCE(deleted_at, 0)",
+        "UPDATE `todos` SET changed_at = max(created_at, COALESCE(completed_at, 0), COALESCE(deleted_at, 0), COALESCE(snooze_at, 0), COALESCE(repeat_ended_at, 0))",
+        "UPDATE `checklist_items` SET changed_at = COALESCE((SELECT changed_at FROM todos WHERE todos.id = checklist_items.todo_id), 0)",
+        "UPDATE `diary_entries` SET changed_at = max(created_at, updated_at, COALESCE(deleted_at, 0))",
+        "UPDATE `diary_drafts` SET changed_at = created_at",
+        "UPDATE `habit_checks` SET changed_at = checked_at",
+        "UPDATE `health_profile` SET changed_at = updated_at",
+        "UPDATE `body_measurements` SET changed_at = max(measured_at, created_at, updated_at)",
+        "UPDATE `food_entries` SET changed_at = max(eaten_at, created_at, updated_at)",
+        "UPDATE `note_topics` SET changed_at = created_at",
+        "UPDATE `notes` SET changed_at = max(created_at, updated_at, COALESCE(deleted_at, 0))",
+        "UPDATE `note_sources` SET changed_at = created_at",
+        "UPDATE `note_drafts` SET changed_at = created_at",
+        "UPDATE `weekly_reviews` SET changed_at = max(created_at, updated_at, COALESCE(deleted_at, 0))",
+        "UPDATE `weekly_drafts` SET changed_at = created_at",
+        "UPDATE `countdowns` SET changed_at = max(created_at, updated_at)",
+    )
+
+    private val BACKFILL_STATE_AT = mapOf(
+        "diary_entries" to listOf("COALESCE(weather_at, 0)"),
+        "notes" to listOf("COALESCE(reviewed_at, 0)"),
+        "todos" to listOf("COALESCE(snooze_at, 0)"),
+        "countdowns" to listOf("updated_at"),
+    )
+
+    /**
+     * Habits only know the local dates they were added and removed on; the stamp is the start of
+     * that day. `added_on` wins when there is no `removed_on`; neither means the epoch.
+     */
+    private fun backfillHabitDates(db: SupportSQLiteDatabase) {
+        val zone = ZoneId.systemDefault()
+        val updates = mutableListOf<Pair<String, Long>>()
+        db.query("SELECT `key`, `added_on`, `removed_on` FROM `habits`").use { c ->
+            val key = c.getColumnIndexOrThrow("key")
+            val added = c.getColumnIndexOrThrow("added_on")
+            val removed = c.getColumnIndexOrThrow("removed_on")
+            while (c.moveToNext()) {
+                val day = (if (c.isNull(removed)) c.getString(added) else c.getString(removed)) ?: continue
+                val at = runCatching { LocalDate.parse(day).atStartOfDay(zone).toInstant().toEpochMilli() }.getOrDefault(0L)
+                updates += c.getString(key) to at
+            }
+        }
+        for ((key, at) in updates) db.execSQL("UPDATE `habits` SET changed_at = ? WHERE `key` = ?", arrayOf<Any?>(at, key))
+    }
+
+    /**
+     * `legacy:<hex>` from a deterministic hash of the row's content. [excluded] columns stay out
+     * of the projection (the stamps themselves, or everything but the state fields); [prefix]
+     * names a state projection apart from the content one.
+     */
+    private fun backfillLegacyChangeIds(
+        db: SupportSQLiteDatabase,
+        table: String,
+        excluded: Set<String>,
+        column: String = "change_id",
+        prefix: String = "legacy",
+    ) {
+        val columns = mutableListOf<String>()
+        db.query("PRAGMA table_info(`$table`)").use { c ->
+            val name = c.getColumnIndexOrThrow("name")
+            while (c.moveToNext()) {
+                val columnName = c.getString(name)
+                if (columnName !in excluded) columns += columnName
+            }
+        }
+        columns.sort()
+        val updates = mutableListOf<Pair<Long, String>>()
+        db.query("SELECT rowid, * FROM `$table`").use { c ->
+            val rowid = c.getColumnIndexOrThrow("rowid")
+            val indices = columns.map { c.getColumnIndexOrThrow(it) }
+            while (c.moveToNext()) {
+                val sb = StringBuilder(prefix).append('\u0000').append(table)
+                columns.forEachIndexed { i, name ->
+                    sb.append('\u0000').append(name).append('=').append(cell(c, indices[i]))
+                }
+                updates += c.getLong(rowid) to "$prefix:" + sha256(sb.toString()).take(32)
+            }
+        }
+        for ((rowid, id) in updates) db.execSQL("UPDATE `$table` SET `$column` = ? WHERE rowid = ?", arrayOf<Any?>(id, rowid))
+    }
+
+    /** One cell as a stable string: the type tag keeps 1, "1" and 1.0 apart. */
+    private fun cell(c: Cursor, index: Int): String {
+        val value = when (c.getType(index)) {
+            Cursor.FIELD_TYPE_NULL -> "~"
+            Cursor.FIELD_TYPE_INTEGER -> "i" + c.getLong(index)
+            Cursor.FIELD_TYPE_FLOAT -> "f" + java.lang.Double.toString(c.getDouble(index))
+            Cursor.FIELD_TYPE_BLOB -> "b" + c.getBlob(index).contentToString()
+            else -> "s" + c.getString(index).orEmpty()
+        }
+        return value.length.toString() + ":" + value
+    }
+
+    private fun sha256(text: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(text.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+
+    /** The goal gets a stamp too, so clearing it can be merged; its value alone dates it. */
+    private fun backfillGoalStamp(db: SupportSQLiteDatabase) {
+        var value: String? = null
+        db.query("SELECT `value` FROM `app_meta` WHERE `key` = 'net_worth_goal'").use { c ->
+            if (c.moveToNext()) value = c.getString(0)
+        }
+        if (value == null) return
+        val id = "legacy:" + sha256("netWorthGoal\u0000$value").take(32)
+        db.execSQL("INSERT OR REPLACE INTO `app_meta` (`key`, `value`) VALUES ('net_worth_goal_at', '0')")
+        db.execSQL("INSERT OR REPLACE INTO `app_meta` (`key`, `value`) VALUES ('net_worth_goal_change_id', ?)", arrayOf(id))
+    }
 
     private val V8_TABLES = listOf(
         "CREATE TABLE IF NOT EXISTS `food_entries` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `eaten_at` INTEGER NOT NULL, `name` TEXT, `per` INTEGER, `amount` INTEGER, `unit` TEXT, `energy_cal` INTEGER NOT NULL, `in_kj` INTEGER NOT NULL, `protein_mg` INTEGER, `fat_mg` INTEGER, `carb_mg` INTEGER, `sodium_mg` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",

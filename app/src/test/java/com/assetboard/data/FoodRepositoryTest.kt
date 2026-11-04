@@ -113,7 +113,8 @@ class FoodRepositoryTest {
         assertEquals(2, f.food.onDate(date("2026-10-20")).size)
 
         f.food.putBack(before)
-        assertEquals(before, f.db.foodDao().entry(lunch))
+        // Undo restores the content, not the old version stamp (§5.4).
+        assertEquals(before.copy(changedAt = 0, changeId = ""), f.db.foodDao().entry(lunch)!!.copy(changedAt = 0, changeId = ""))
         // A label's portion is its amount, not a count: it is recorded again instead.
         val milk = f.food.save(label("2026-10-20"))
         expectRule { f.food.oneMore(milk) }
@@ -127,6 +128,9 @@ class FoodRepositoryTest {
         assertNull(f.food.delete(id))
         f.food.restore(gone)
         f.food.restore(gone)
-        assertEquals(listOf(before), f.db.foodDao().all())
+        assertEquals(
+            listOf(before.copy(changedAt = 0, changeId = "")),
+            f.db.foodDao().all().map { it.copy(changedAt = 0, changeId = "") },
+        )
     }
 }

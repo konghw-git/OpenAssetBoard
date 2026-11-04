@@ -22,6 +22,8 @@ data class TodoList(
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
     @ColumnInfo(name = "delete_batch") val deleteBatch: String? = null,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 @Serializable
@@ -40,6 +42,8 @@ data class TodoSection(
     @ColumnInfo(name = "sort_order") val sortOrder: Int = 0,
     @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
     @ColumnInfo(name = "delete_batch") val deleteBatch: String? = null,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 enum class TodoKind { ORDINARY, REPEAT_SOURCE, COMPLETION }
@@ -95,6 +99,11 @@ data class Todo(
     @ColumnInfo(name = "completed_at") val completedAt: Long? = null,
     @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
     @ColumnInfo(name = "delete_batch") val deleteBatch: String? = null,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
+    /** Merge state stamp: only remindedPeriod and snoozeAt move it (docs/sync-merge-semantics.md §1.2). */
+    @ColumnInfo(name = "state_at", defaultValue = "0") val stateAt: Long = 0,
+    @ColumnInfo(name = "state_id", defaultValue = "''") val stateId: String = "",
 )
 
 @Serializable
@@ -109,6 +118,8 @@ data class ChecklistItem(
     val text: String,
     val done: Boolean = false,
     @ColumnInfo(name = "sort_order") val sortOrder: Int = 0,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 /** At most one undeleted entry per date; enforced by the repository, since Room has no partial index. */
@@ -133,6 +144,11 @@ data class DiaryEntry(
     @ColumnInfo(name = "delete_batch") val deleteBatch: String? = null,
     /** [com.assetboard.domain.Mood] 1 to 5, null for none; shown only, never counted. */
     val mood: Int? = null,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
+    /** Merge state stamp: the weather fields only (docs/sync-merge-semantics.md §1.2). */
+    @ColumnInfo(name = "state_at", defaultValue = "0") val stateAt: Long = 0,
+    @ColumnInfo(name = "state_id", defaultValue = "''") val stateId: String = "",
 )
 
 /** Text that could not be saved into its entry; user data, backed up, removed only once handled. */
@@ -149,6 +165,8 @@ data class DiaryDraft(
     val text: String,
     val reason: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 // ---------------------------------------------------------------- device-local, never backed up

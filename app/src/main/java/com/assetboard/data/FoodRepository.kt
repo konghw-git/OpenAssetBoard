@@ -67,13 +67,14 @@ class FoodRepository(
     suspend fun save(draft: FoodDraft): String = gate.write {
         val name = draft.name?.trim()?.takeIf { it.isNotEmpty() }
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         val date = draft.date.toString()
         val e = FoodEntry(
             id = draft.id ?: newId(), date = date, eatenAt = 0, name = name,
             per = draft.per, amount = draft.amount, unit = draft.unit,
             energyCal = draft.energyCal, inKj = draft.inKj,
             proteinMg = draft.proteinMg, fatMg = draft.fatMg, carbMg = draft.carbMg, sodiumMg = draft.sodiumMg,
-            createdAt = now, updatedAt = now,
+            createdAt = now, updatedAt = now, changedAt = stamp.at, changeId = stamp.id,
         )
         check(e)
         ensure(!draft.date.isAfter(today())) { "不能记录未来的日期" }
@@ -84,7 +85,12 @@ class FoodRepository(
             if (editing == null) {
                 dao.insert(e.copy(eatenAt = eatenAt))
             } else {
-                dao.update(e.copy(eatenAt = if (editing.date == date) editing.eatenAt else eatenAt, createdAt = editing.createdAt))
+                dao.update(
+                    e.copy(
+                        eatenAt = if (editing.date == date) editing.eatenAt else eatenAt,
+                        createdAt = editing.createdAt, changedAt = stamp.at, changeId = stamp.id,
+                    ),
+                )
             }
             e.id
         }
@@ -100,28 +106,40 @@ class FoodRepository(
             ensure(e.unit !in FoodUnit.labelUnits) { "按包装记的不能按份加" }
             val halves = Energy.servingHalves(e) + Energy.SERVING_PER
             ensure(halves <= Energy.SERVINGS_MAX_HALVES) { "最多 ${Energy.SERVINGS_MAX_HALVES / Energy.SERVING_PER} 份" }
-            val next = e.copy(per = Energy.SERVING_PER, amount = halves, unit = FoodUnit.SERVING, updatedAt = clock())
+            val stamp = ChangeStamps.stamp(clock())
+            val next = e.copy(
+                per = Energy.SERVING_PER, amount = halves, unit = FoodUnit.SERVING,
+                updatedAt = stamp.at, changedAt = stamp.at, changeId = stamp.id,
+            )
             check(next)
             dao.update(next)
             e
         }
     }
 
-    /** Undoes [oneMore]: the entry as it was, if it is still there. */
+    /** Undoes [oneMore]: the entry as it was, as a new change (§5.4). */
     suspend fun putBack(e: FoodEntry) = gate.write {
         check(e)
-        db.withTransaction { if (dao.entry(e.id) != null) dao.update(e) }
+        val stamp = ChangeStamps.stamp(clock())
+        db.withTransaction { if (dao.entry(e.id) != null) dao.update(e.copy(changedAt = stamp.at, changeId = stamp.id)) }
     }
 
     /** Removes the entry and hands it back, so an undo can put it back as it was. */
     suspend fun delete(id: String): FoodEntry? = gate.write {
-        db.withTransaction { dao.entry(id)?.also { dao.delete(id) } }
+        val now = clock()
+        db.withTransaction {
+            dao.entry(id)?.also {
+                db.dao().putTombstone(deletedTombstone("foodEntries", RowKey.of("foodEntries", id), now))
+                dao.delete(id)
+            }
+        }
     }
 
-    /** Puts back an entry [delete] returned, id and times unchanged. */
+    /** Puts back an entry [delete] returned, id and times unchanged, as a new change (§5.4). */
     suspend fun restore(e: FoodEntry) = gate.write {
         check(e)
-        db.withTransaction { if (dao.entry(e.id) == null) dao.insert(e) }
+        val stamp = ChangeStamps.stamp(clock())
+        db.withTransaction { if (dao.entry(e.id) == null) dao.insert(e.copy(changedAt = stamp.at, changeId = stamp.id)) }
     }
 
     companion object {

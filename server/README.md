@@ -2,14 +2,14 @@
 
 这是「日盈」的可选自建后端：**账号认证 + 每个用户一份不透明的备份快照**。
 
-它不解析账本，不做逐行合并，也不保存第二套数据模型。App 仍然是本地优先的：不登录时行为完全不变；登录后把现有的 `BackupFile` JSON 上传到这里，换设备或重装时再下载回来。
+它不解析账本，不参与合并，也不保存第二套数据模型。App 仍然是本地优先的：不登录时行为完全不变；登录后把现有的 `BackupFile` JSON 上传到这里，换设备或重装时再下载回来。两边都改过时，合并由客户端在本机完成（记录级 LWW），服务端仍只是一个带 revision 的哑快照存储。
 
 > 当前状态：服务端已部署在东京 VPS 的 `https://tyo.magnusk.top:9443`，Android 端的「设置 › 账号与同步」已经接入。当前实例的管理员账号是 `konghw`，初始密码在 VPS 的 `/root/assetboard-login.txt`（权限 600）。
 
 ## 设计边界
 
 - **账号由管理员创建**。没有 `/register`，没有邮件找回；密码由管理员在服务器上重置。
-- **每个用户一份快照**。同步是整份上传/下载，不是逐条增量。冲突时不合并，交给用户选。
+- **每个用户一份快照**。同步是整份上传/下载，不是逐条增量。服务端不做合并；客户端拿到两边快照后按记录合并，再把结果上传。
 - **服务端可读**。数据以明文 SQLite 保存，TLS 只保护传输；你作为服务器管理员能看到所有账号的数据。这是有意选择的简单性，不做端到端加密。
 - **单实例**。SQLite + 进程内限流；不需要 Redis，也不支持多副本。
 
@@ -101,12 +101,12 @@ assetboard-server version
 
 改密码的错误码：新密码不合法为 400 `invalid_password`，新旧相同为 400 `same_password`，旧密码错误为 401 `invalid_old_password`。
 
-### 上传与冲突
+### 上传与并发
 
 `PUT /v1/sync`：
 
 - `If-Match: <revision>`：客户端上次看到的版本。首次上传用 `0`，只有服务器还没有快照时才成功。
-- 服务器当前版本与 `If-Match` 不一致时返回 **409**，并带上当前版本；不会覆盖。
+- 服务器当前版本与 `If-Match` 不一致时返回 **409**，并带上当前版本；不会覆盖。客户端拿到 409 后重新 `GET`、合并、再重试，这是正常的读-合并-重试信号，不是需要用户裁决的冲突。
 - `X-Content-Hash: <64 位小写十六进制>`：可选。客户端的内容哈希（见下）；不传时服务器对请求体做 SHA-256。
 - 请求体必须是 JSON 对象，且包含合法的 `formatVersion`（1–1000）和 `schemaVersion`（1–10000）；其余内容原样保存。
 - 成功返回 `{"revision": n}`，并带 `ETag` 与 `X-Revision`。
@@ -117,8 +117,8 @@ assetboard-server version
 ETag: "3"
 X-Revision: 3
 X-Content-Hash: <客户端上传的内容哈希>
-X-Format-Version: 14
-X-Schema-Version: 13
+X-Format-Version: 16
+X-Schema-Version: 15
 X-Updated-At: 1793075494
 ```
 
@@ -126,7 +126,7 @@ X-Updated-At: 1793075494
 
 ### 内容哈希怎么算
 
-客户端把 `BackupFile` 的 `exportedAt` 设为 `0`，用与备份文件相同的 `Json { encodeDefaults = true }` 配置序列化为 UTF-8，取 SHA-256 的小写十六进制。
+客户端对 `BackupFile` 做 canonical JSON 序列化（UTF-16 键序、行按 rowKey 排序、`exportedAt` 置 0、ECMAScript 数字文本；见 `docs/sync-merge-semantics.md` §7），取 UTF-8 字节的 SHA-256 小写十六进制。Android 与网页用同一规范，服务端不重算，只在客户端自报缺失时对原始请求体做 SHA-256。
 
 服务端**不重算**这个值，只保存并在 `meta`/响应头里原样返回。它只用于判断“内容有没有变”，不参与鉴权；即使客户端算错，最坏结果也只是多传一次。版本号与 `If-Match` 才是并发控制的依据。
 
@@ -244,9 +244,9 @@ go test -race ./...
 
 ## 尚未实现
 
-- 逐行增量同步或自动合并（冲突必须由用户选择）。
+- 逐行增量同步（客户端仍然整份上传；合并只在客户端发生）。
 - 端到端加密。
 - Web 管理界面、邮件找回、开放注册、配额、审计日志。
 - 多实例 / 外部数据库。
 
-Android 端已接入：刷新令牌用 Android Keystore 加密保存，多档案各自使用一个本地数据库，客户端发送 `If-Match`（乐观并发）与 `X-Content-Hash`（内容变化检测）接入这里。服务端的接口与冲突语义保持不变。
+Android 与网页端都已接入：刷新令牌用 Android Keystore / HttpOnly cookie 保存，多档案各自使用一个本地数据库，客户端发送 `If-Match`（乐观并发）与 `X-Content-Hash`（canonical 内容哈希）接入这里。服务端的接口与哑存储语义保持不变；合并、墓碑与坏版本协商都在客户端。

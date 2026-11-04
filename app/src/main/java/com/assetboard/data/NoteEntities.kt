@@ -22,6 +22,8 @@ data class NoteTopic(
     val name: String,
     @ColumnInfo(name = "sort_order") val sortOrder: Int = 0,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 /**
@@ -47,6 +49,11 @@ data class Note(
     @ColumnInfo(name = "reviewed_at") val reviewedAt: Long? = null,
     @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
     @ColumnInfo(name = "delete_batch") val deleteBatch: String? = null,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
+    /** Merge state stamp: only reviewedAt and pinned move it (docs/sync-merge-semantics.md §1.2). */
+    @ColumnInfo(name = "state_at", defaultValue = "0") val stateAt: Long = 0,
+    @ColumnInfo(name = "state_id", defaultValue = "''") val stateId: String = "",
 ) {
     /** The first non-blank line; the one place a note's title is defined. */
     val title: String get() = NoteText.title(body)
@@ -65,6 +72,8 @@ data class NoteSource(
     val kind: String,
     val ref: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 /** Text that could not be saved into its note; it may point at no note at all. */
@@ -80,6 +89,8 @@ data class NoteDraft(
     val text: String,
     val reason: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "changed_at", defaultValue = "0") val changedAt: Long = 0,
+    @ColumnInfo(name = "change_id", defaultValue = "''") val changeId: String = "",
 )
 
 /** A source before it belongs to a row: what an append carries until its text lands. */
@@ -126,6 +137,7 @@ interface NoteDao {
     @Query("SELECT * FROM note_topics ORDER BY sort_order") suspend fun topics(): List<NoteTopic>
     @Query("SELECT * FROM note_topics WHERE id = :id") suspend fun topic(id: String): NoteTopic?
     @Query("SELECT * FROM note_sources WHERE note_id = :noteId ORDER BY ref DESC") fun observeSources(noteId: String): Flow<List<NoteSource>>
+    @Query("SELECT * FROM note_sources WHERE note_id = :noteId") suspend fun sourcesOf(noteId: String): List<NoteSource>
     @Query("SELECT * FROM note_drafts ORDER BY created_at DESC") fun observeDrafts(): Flow<List<NoteDraft>>
     @Query("SELECT * FROM note_drafts WHERE id = :id") suspend fun draft(id: String): NoteDraft?
 
@@ -149,6 +161,8 @@ interface NoteDao {
     @Query("SELECT COUNT(*) FROM notes WHERE topic_id = :topicId AND deleted_at IS NULL") suspend fun liveCountIn(topicId: String): Int
     @Query("SELECT id FROM notes WHERE topic_id = :topicId") suspend fun noteIdsInTopic(topicId: String): List<String>
     @Query("SELECT COALESCE(MIN(position), 0) FROM notes") suspend fun minPosition(): Long
+    @Query("UPDATE notes SET position = :position, changed_at = :stampAt, change_id = :stampId WHERE id = :id")
+    suspend fun setPosition(id: String, position: Long, stampAt: Long, stampId: String)
 
     /** The live, unpinned note left alone the longest, if that was before [before]. */
     @Query(
@@ -163,17 +177,25 @@ interface NoteDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertSource(source: NoteSource)
     @Insert suspend fun insertTopic(topic: NoteTopic)
     @Update suspend fun updateTopics(topics: List<NoteTopic>)
-    @Query("UPDATE note_topics SET name = :name WHERE id = :id") suspend fun renameTopic(id: String, name: String)
+    @Query("UPDATE note_topics SET name = :name, changed_at = :stampAt, change_id = :stampId WHERE id = :id")
+    suspend fun renameTopic(id: String, name: String, stampAt: Long, stampId: String)
     @Query("DELETE FROM note_topics WHERE id = :id") suspend fun deleteTopic(id: String)
 
     /** The versioned body write: affects 0 rows when the session's view is stale. */
-    @Query("UPDATE notes SET body = :body, body_rev = body_rev + 1, updated_at = :now WHERE id = :id AND deleted_at IS NULL AND body_rev = :expectedRev")
-    suspend fun updateBody(id: String, body: String, expectedRev: Long, now: Long): Int
+    @Query(
+        "UPDATE notes SET body = :body, body_rev = body_rev + 1, updated_at = :now, " +
+            "changed_at = :stampAt, change_id = :stampId WHERE id = :id AND deleted_at IS NULL AND body_rev = :expectedRev",
+    )
+    suspend fun updateBody(id: String, body: String, expectedRev: Long, now: Long, stampAt: Long, stampId: String): Int
 
     // Columns that leave body_rev and updated_at alone, so an open editor never goes stale over them.
-    @Query("UPDATE notes SET pinned = :pinned WHERE id = :id") suspend fun setPinned(id: String, pinned: Boolean): Int
-    @Query("UPDATE notes SET topic_id = :topicId WHERE id = :id") suspend fun setTopic(id: String, topicId: String?): Int
-    @Query("UPDATE notes SET reviewed_at = :at WHERE id = :id") suspend fun setReviewed(id: String, at: Long?): Int
+    // Pinned and reviewed are state fields (§1.2); topic is content.
+    @Query("UPDATE notes SET pinned = :pinned, state_at = :stampAt, state_id = :stampId WHERE id = :id")
+    suspend fun setPinned(id: String, pinned: Boolean, stampAt: Long, stampId: String): Int
+    @Query("UPDATE notes SET topic_id = :topicId, changed_at = :stampAt, change_id = :stampId WHERE id = :id")
+    suspend fun setTopic(id: String, topicId: String?, stampAt: Long, stampId: String): Int
+    @Query("UPDATE notes SET reviewed_at = :at, state_at = :stampAt, state_id = :stampId WHERE id = :id")
+    suspend fun setReviewed(id: String, at: Long?, stampAt: Long, stampId: String): Int
 
     @Insert suspend fun insertDraft(draft: NoteDraft)
     @Query("DELETE FROM note_drafts WHERE id = :id") suspend fun deleteDraft(id: String)

@@ -52,19 +52,23 @@ class WeekRepository(
     override suspend fun saveBody(weekStart: LocalDate, reviewId: String?, expectedRev: Long?, text: String): BodySave = serial {
         if (failBodyWrites) throw LedgerException("模拟写盘失败")
         val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         if (reviewId == null) {
             val existing = dao.liveByWeek(weekStart.toString())
             when {
                 existing == null -> {
-                    val r = WeeklyReview(newId(), weekStart.toString(), text, bodyRev = 1, createdAt = now, updatedAt = now)
+                    val r = WeeklyReview(
+                        newId(), weekStart.toString(), text, bodyRev = 1, createdAt = now, updatedAt = now,
+                        changedAt = stamp.at, changeId = stamp.id,
+                    )
                     dao.insert(r)
                     BodySave.Saved(r.id, 1, created = true)
                 }
-                existing.body.isEmpty() && dao.updateBody(existing.id, text, existing.bodyRev, now) == 1 ->
+                existing.body.isEmpty() && dao.updateBody(existing.id, text, existing.bodyRev, now, stamp.at, stamp.id) == 1 ->
                     BodySave.Saved(existing.id, existing.bodyRev + 1, created = false)
                 else -> BodySave.Conflict("这一周已有另一篇复盘")
             }
-        } else if (dao.updateBody(reviewId, text, expectedRev ?: -1, now) == 1) {
+        } else if (dao.updateBody(reviewId, text, expectedRev ?: -1, now, stamp.at, stamp.id) == 1) {
             BodySave.Saved(reviewId, (expectedRev ?: -1) + 1, created = false)
         } else {
             val r = dao.review(reviewId)
@@ -80,18 +84,30 @@ class WeekRepository(
 
     override suspend fun saveDraft(weekStart: LocalDate, reviewId: String?, text: String, reason: String): String = serial {
         if (failDraftWrites) throw LedgerException("模拟写盘失败")
+        val stamp = ChangeStamps.stamp(clock())
         val id = newId()
-        dao.insertDraft(WeeklyDraft(id, weekStart.toString(), reviewId?.takeIf { dao.review(it) != null }, text, reason, clock()))
+        dao.insertDraft(
+            WeeklyDraft(
+                id, weekStart.toString(), reviewId?.takeIf { dao.review(it) != null }, text, reason, stamp.at,
+                changedAt = stamp.at, changeId = stamp.id,
+            ),
+        )
         id
     }
 
-    suspend fun discardDraft(id: String) = serial { dao.deleteDraft(id) }
+    suspend fun discardDraft(id: String) = serial {
+        dao.draft(id)?.let { draft ->
+            db.dao().putTombstone(deletedTombstone("weeklyDrafts", RowKey.of("weeklyDrafts", draft.id), clock()))
+        }
+        dao.deleteDraft(id)
+    }
 
     /** Moves the review to the trash as its own batch; an open session on it becomes stale. */
     suspend fun delete(reviewId: String): String = serial {
         val r = dao.review(reviewId)?.takeIf { it.deletedAt == null } ?: throw LedgerException("复盘不存在")
         val batch = newId()
-        dao.update(r.copy(deletedAt = clock(), deleteBatch = batch, bodyRev = r.bodyRev + 1))
+        val stamp = ChangeStamps.stamp(clock())
+        dao.update(r.copy(deletedAt = stamp.at, deleteBatch = batch, bodyRev = r.bodyRev + 1, changedAt = stamp.at, changeId = stamp.id))
         batch
     }
 
@@ -107,12 +123,14 @@ class WeekRepository(
      */
     suspend fun restore(batch: String, replace: Boolean): Boolean = serial {
         val r = dao.inBatch(batch).firstOrNull { it.deletedAt != null } ?: return@serial false
+        val now = clock()
+        val stamp = ChangeStamps.stamp(now)
         val current = dao.liveByWeek(r.weekStart)
         if (current != null) {
             if (!replace) return@serial false
-            dao.update(current.copy(deletedAt = clock(), deleteBatch = newId(), bodyRev = current.bodyRev + 1))
+            dao.update(current.copy(deletedAt = now, deleteBatch = newId(), bodyRev = current.bodyRev + 1, changedAt = stamp.at, changeId = stamp.id))
         }
-        dao.update(r.copy(deletedAt = null, deleteBatch = null, bodyRev = r.bodyRev + 1))
+        dao.update(r.copy(deletedAt = null, deleteBatch = null, bodyRev = r.bodyRev + 1, changedAt = stamp.at, changeId = stamp.id))
         true
     }
 

@@ -13,3 +13,7 @@ keystore.properties
 /app/screenshots/
 # Local server operations notes: deployment details, never commit.
 /SERVER-OPS.md
+# Browser and Python tooling artifacts from local development.
+/.playwright-mcp/
+/shots/
+__pycache__/

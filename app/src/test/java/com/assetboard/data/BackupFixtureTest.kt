@@ -43,6 +43,29 @@ class BackupFixtureTest {
         return Uri.fromFile(File(f.context.cacheDir, name).apply { writeText(text) })
     }
 
+    /**
+     * A restore is a replace: the file's rows keep their content but take one fresh stamp, so the
+     * intent beats whatever the cloud holds, while rows are still the same set.
+     */
+    @Test fun formatSixteenRestoresContentWithOneFreshReplaceStamp() = f.run {
+        val uri = fixture("format-16.json")
+        assertEquals(16, f.backup.inspect(uri).formatVersion)
+        val codec = kotlinx.serialization.json.Json { encodeDefaults = true }
+        val text = javaClass.getResourceAsStream("/backups/format-16.json")!!.use { it.readBytes().decodeToString() }
+        val source = codec.decodeFromString<com.assetboard.data.backup.BackupFile>(text)
+        f.backup.restore(uri)
+        val restored = codec.decodeFromString<com.assetboard.data.backup.BackupFile>(f.backup.exportJson())
+        assertEquals(source.accounts.map { it.id }.toSet(), restored.accounts.map { it.id }.toSet())
+        assertEquals(source.notes.map { it.id }.toSet(), restored.notes.map { it.id }.toSet())
+        val stamp = restored.accounts.first().let { it.changedAt to it.changeId }
+        assertTrue("one operation, one stamp", restored.accounts.all { (it.changedAt to it.changeId) == stamp })
+        assertTrue("state stamps move with the replace too", restored.notes.all { (it.stateAt to it.stateId) == stamp })
+        assertTrue(stamp.first >= source.accounts.maxOf { it.changedAt })
+        assertEquals(source.tombstones.map { it.table to it.rowKey }.toSet(), restored.tombstones.map { it.table to it.rowKey }.toSet())
+        assertTrue("the replace re-stamps tombstones so they still win", restored.tombstones.all { it.deletedAt == stamp.first })
+        assertEquals(stamp.first, restored.netWorthGoalAt)
+    }
+
     @Test fun formatFifteenRestoresAccountIcons() = f.run {
         val uri = fixture("format-15.json")
         assertEquals(15, f.backup.inspect(uri).formatVersion)
