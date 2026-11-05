@@ -6,14 +6,17 @@
 
 *日日行动，日日有盈*
 
-**一个默认完全本地运行的 Android 个人 App：资产看板 + 待办 + 日记 + 笔记。**
+**一个本地优先的个人生活看板：资产 + 记账 + 待办 + 日记 + 笔记，支持 Android 与网页。**
 
-打开就知道自己有多少钱，顺手记下今天要做的事和今天发生了什么。默认没有账号、没有云、没有广告；需要时再登录你自己的服务器同步。
+打开就知道自己有多少钱，顺手记下今天要做的事和今天发生了什么。Android 默认无需账号、没有广告；需要跨设备使用时，可登录自建同步服务，在手机与网页之间同步。
 
 [![Release](https://img.shields.io/github/v/release/konghw-git/OpenAssetBoard?style=flat-square&color=1E5B4F)](https://github.com/konghw-git/OpenAssetBoard/releases/latest)
 [![License](https://img.shields.io/github/license/konghw-git/OpenAssetBoard?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](#安装)
+[![Web](https://img.shields.io/badge/Web-浏览器-1E5B4F?style=flat-square)](#网页端)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](#技术栈)
+
+[打开日盈网页版](https://tyo.magnusk.top:9443/) · [下载 Android 版](https://github.com/konghw-git/OpenAssetBoard/releases/latest)
 
 [English](README.en.md) · **简体中文**
 
@@ -92,11 +95,28 @@
 
 <img src="docs/images/32-notes.webp" width="24%" alt="笔记"> <img src="docs/images/33-note.webp" width="24%" alt="一篇笔记"> <img src="docs/images/34-extract.webp" width="24%" alt="从日记提炼"> <img src="docs/images/35-week.webp" width="24%" alt="周复盘">
 
+### 网页端
+
+网页端覆盖资产与账单、待办与习惯、日记、笔记、周复盘、健康与饮食等，可用同一账号与 Android 同步。账号由同步服务的管理员创建；Android 可以不登录独立使用，网页端需要登录和联网。
+
+网页中的业务数据只保存在页面内存中，刷新或关闭后从服务器重新读取；主题和隐藏金额等界面偏好保存在浏览器中。关闭页面前请确认状态显示「已与云端同步」，未上传的改动可能丢失。浏览器提醒需要页面保持打开，关闭页面后的提醒请使用 Android。
+
+**在线使用：[tyo.magnusk.top:9443](https://tyo.magnusk.top:9443/)**。使用已有的日盈账号登录；没有公开注册入口。
+
+网页代码位于 [`web/`](web/)，本地运行需要 Node.js 24 或以上：
+
+```bash
+cd web
+npm start
+```
+
+打开 <http://127.0.0.1:4173>，使用同步服务账号登录。默认连接项目预设的同步服务；自建服务可在启动时设置 `ASSETBOARD_UPSTREAM`。同步服务的部署和账号管理见 [`server/README.md`](server/README.md)。
+
 ### 共同
 
 - **本地优先**：数据默认只在本机 SQLite；备份是一个 JSON 文件，写到你选的文件夹，每次覆盖同一个文件。
 - **可选的账号与同步**：账号由服务器管理员创建；登录前会先检测服务器连通性并显示延迟，网络不通时提示更换网络，不会让人长时间等下去。登录后整份备份通过 HTTPS 同步到你自己的服务器；可以在账号页输入旧密码修改密码，改完其他设备退出登录、本机保持登录。同一台手机可以切换多个账号，每个账号一个独立的本地数据库；不登录时完全本地运行。两边都改过时按记录自动合并：较新的改动胜出，同一篇日记/笔记/周复盘的败者版本会存进草稿；不再需要「保留本机还是使用云端」。服务端与协议见 [`server/README.md`](server/README.md)。
-- **备份与恢复**：格式带版本号（当前 v16，能读 v1–v15）；恢复仍是一次有意的整库覆盖，会先把新格式里的行重新打戳、把文件里已没有的行写成墓碑，再随同步传播；恢复前自动另存当前数据，恢复有专门的写入闸门，旧操作不会写进新数据。
+- **备份与恢复**：格式带版本号（当前 v17，能读 v1–v16）；旧客户端同步 v17 数据前需要升级。恢复仍是一次有意的整库覆盖，会先把新格式里的行重新打戳、把文件里已没有的行写成墓碑，再随同步传播；恢复前自动另存当前数据，恢复有专门的写入闸门，旧操作不会写进新数据。
 - **联网是可选且可一键关闭的**：关掉后不发起任何网络请求，节假日用内置数据，不显示天气。
 - **玻璃拟态界面**：每个页面底下铺着几块色彩，打开时缓缓晕开；卡片、标签和按钮是带亮边的半透明玻璃，底部标签栏是悬浮的毛玻璃。净资产卡是暖色玻璃，琥珀、珊瑚、柿红的色块在下面缓慢流动，一点光沿着边缘游走。玻璃在设置里可选「清透」或「深色」。
 - **动效**：卡片依次入场，按住时朝手指倾斜，勾选时扩散一圈主题色；净资产打开时从零滚到实际值；页面从右侧推入，标签栏的高亮跟着翻页滑动。
@@ -135,7 +155,7 @@
 
 ## 数据与隐私
 
-- **默认情况下，资产、待办、日记的内容只在本机**。不登录也能使用全部功能；没有统计上报、没有广告。
+- **Android 默认情况下，资产、待办、日记的内容只在本机**。不登录即可使用 Android 本地功能；没有统计上报、没有广告。网页端需要账号和联网，其业务数据只在页面内存中，关闭后从服务器重新读取。
 - **账号同步是可选的自建服务**。只有你主动登录后，整份备份 JSON 才会通过 HTTPS 上传到**你自己的服务器**。服务器上的快照是明文（没有端到端加密），账号由管理员在服务器上创建；退出登录后数据仍保留在本机。不登录时，内容不会发往任何服务器。
 - 每一次写入都经过一个写入门（`WriteGate`）：恢复期间拒绝新写入，携带过期数据纪元的旧操作也不会写进恢复后的数据。
 - **默认会联网**，但你可以关掉。联网只用于：
@@ -184,7 +204,8 @@ scripts/dev-test.sh --accept   # 界面有意改动后：把这次画出的截�
 |---|---|
 | 语言 / UI | Kotlin 2.4、Jetpack Compose、Material 3 |
 | 架构 | MVVM + `StateFlow`，手写 `AppContainer`（无 DI 框架） |
-| 存储 | Room（schema 导出并随仓库版本化，显式迁移 1 → 2 → … → 12） |
+| 存储 | Room（schema 导出并随仓库版本化，显式迁移至版本 15） |
+| 网页 / 同步 | 原生 JavaScript + Node.js；可选 Go 同步服务 |
 | 后台 | WorkManager、AlarmManager、前台服务 |
 | 桌面 | Jetpack Glance 小组件 |
 | 图表 | 全部自绘 Canvas，无图表库 |

@@ -6,14 +6,17 @@
 
 *Act every day, gain every day.*
 
-**A local-first Android app: a personal asset board, a Things-style todo manager, a one-entry-a-day diary, and notes.**
+**A local-first personal dashboard for assets, expenses, todos, diary and notes, on Android and the web.**
 
-Open it and you know exactly what you're worth; jot down what you have to do today and what happened today. No account, no cloud, no ads by default; sign in to your own server when you want sync.
+Open it and see what you're worth, what you have to do and what happened today. Android needs no account and has no ads; sign in to a self-hosted sync service to share data with the web client.
 
 [![Release](https://img.shields.io/github/v/release/konghw-git/OpenAssetBoard?style=flat-square&color=1E5B4F)](https://github.com/konghw-git/OpenAssetBoard/releases/latest)
 [![License](https://img.shields.io/github/license/konghw-git/OpenAssetBoard?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](#install)
+[![Web](https://img.shields.io/badge/Web-browser-1E5B4F?style=flat-square)](#web-client)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](#stack)
+
+[Open Gain on the web](https://tyo.magnusk.top:9443/) · [Download for Android](https://github.com/konghw-git/OpenAssetBoard/releases/latest)
 
 **English** · [简体中文](README.md)
 
@@ -92,11 +95,28 @@ This app is built for it. One stocktake walks every account, you change the thre
 
 <img src="docs/images/32-notes.webp" width="24%" alt="Notes"> <img src="docs/images/33-note.webp" width="24%" alt="A note"> <img src="docs/images/34-extract.webp" width="24%" alt="Extract from the diary"> <img src="docs/images/35-week.webp" width="24%" alt="Weekly review">
 
+### Web client
+
+The web client covers assets and bills, todos and habits, diary, notes, weekly reviews, health and food. Sign in with the same account to sync with Android. Accounts are created by the sync server administrator; Android also works independently without signing in, while the web client requires an account and a connection.
+
+The web client keeps user data in page memory and reloads it from the server after a refresh or close. Interface preferences such as theme and amount visibility remain in the browser. Wait for the synced status before closing the page: changes not yet uploaded may be lost. Browser reminders require the page to stay open; use Android for reminders after closing it.
+
+**Use it online at [tyo.magnusk.top:9443](https://tyo.magnusk.top:9443/)**. Sign in with an existing Gain account; public registration is not available.
+
+The client lives in [`web/`](web/). To run it locally with Node.js 24 or later:
+
+```bash
+cd web
+npm start
+```
+
+Open <http://127.0.0.1:4173> and sign in with a sync account. The client uses the project's configured sync server by default; set `ASSETBOARD_UPSTREAM` when starting it to use your own. See [`server/README.md`](server/README.md) for server deployment and account management.
+
 ### Shared
 
 - **Local first**: everything lives in SQLite on the phone by default. The backup is one JSON file written to a folder you pick and overwritten each time.
 - **Optional account and sync**: an administrator creates the account on your own server. Before signing in, the app checks that the server is reachable and shows the round trip, so a blocked network gets a "change networks" message instead of a long wait. Once you sign in, the whole backup is synced over HTTPS to that server; the account page can change the password with the old one, which signs other devices out and keeps this one signed in. One phone can switch between accounts, each with its own local database; without signing in, everything stays local. When both sides changed, records are merged automatically: the newer edit wins, and the losing text of a diary entry, note or weekly review is kept as a draft. There is no "keep this copy or the cloud" question. See [`server/README.md`](server/README.md).
-- **Versioned backup and restore**: format v16, reads v1–v15. Restore is still a deliberate whole-database replace: its rows take a fresh stamp, rows the file no longer has become tombstones, and the intent propagates through sync. It copies the current data aside first and runs behind a write gate so an in-flight old operation can't land in the restored data.
+- **Versioned backup and restore**: format v17, reads v1–v16. Older clients must upgrade before syncing v17 data. Restore is still a deliberate whole-database replace: its rows take a fresh stamp, rows the file no longer has become tombstones, and the intent propagates through sync. It copies the current data aside first and runs behind a write gate so an in-flight old operation can't land in the restored data.
 - **Networking is optional and one switch away**: turn it off and the app makes no request at all — holidays come from built-in data and no weather is shown.
 - **Glass throughout**: every page sits on a few fields of colour that bloom in as it opens; cards, chips and buttons are translucent panes with a lit rim, and the tab bar is frosted glass floating over the pages. The net worth card is warm glass, amber, coral and persimmon drifting slowly under it and a spark of light running round its edge. The glass is clear or deep (a setting).
 - **Motion**: cards arrive one after another and tilt toward a holding finger, a ticked box spreads a ring of the theme colour, the net worth rolls up from zero as the overview opens, pages rise in from the right, and the tab bar's highlight glides with the pager.
@@ -135,8 +155,8 @@ Download the latest `OpenAssetBoard-x.y.z.apk` from [Releases](https://github.co
 
 ## Data and privacy
 
-- **By default, the contents of your assets, todos and diary stay on the phone.** Every feature works without an account; there is no telemetry and no advertising.
-- **Account sync is an optional, self-hosted service.** Only after you sign in is the whole backup JSON uploaded over HTTPS to **your own server**. Snapshots on that server are plaintext (no end-to-end encryption), and an administrator creates the accounts; signing out keeps the data on the phone. Without signing in, nothing is sent to a server.
+- **By default, Android keeps your assets, todos and diary on the phone.** Its local features work without an account; there is no telemetry or advertising.
+- **Account sync is an optional, self-hosted service on Android and required for the web client.** Only after you sign in is the whole backup JSON uploaded over HTTPS to **your own server**. Snapshots on that server are plaintext (no end-to-end encryption), and an administrator creates the accounts; signing out keeps the data on the phone. The web client keeps user data in page memory and reloads it from the server after closing or refreshing.
 - Every write goes through a write gate (`WriteGate`): restores reject new writes while they run, and an operation carrying a stale data epoch cannot write into restored data.
 - **Networking is on by default**, but you can switch it off. It is used only for:
   - To attach the day's weather when you write a diary entry, rough coordinates go to [Open-Meteo](https://open-meteo.com/) (open, no API key). Coordinates only — never your text.
@@ -184,7 +204,8 @@ scripts/dev-test.sh --accept   # after an intended UI change: what this run drew
 |---|---|
 | Language / UI | Kotlin 2.4, Jetpack Compose, Material 3 |
 | Architecture | MVVM with `StateFlow`, a hand-written `AppContainer` (no DI framework) |
-| Storage | Room, with exported schemas committed and explicit migrations 1 → 2 → … → 12 |
+| Storage | Room, with exported schemas committed and explicit migrations through version 15 |
+| Web / sync | Vanilla JavaScript + Node.js; optional Go sync server |
 | Background | WorkManager, AlarmManager, a foreground service |
 | Home screen | Jetpack Glance widgets |
 | Charts | Hand-drawn on Canvas, no chart library |
