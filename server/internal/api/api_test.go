@@ -250,6 +250,22 @@ func TestLoginIsRateLimited(t *testing.T) {
 	}
 }
 
+func TestLoginFailuresFromAnotherIPDoNotLockAccount(t *testing.T) {
+	e := newTestEnv(t, func(c *Config) { c.TrustProxy = true; c.LoginIPLimit = 100 })
+	e.createUser("alice", "password123")
+	body := []byte(`{"username":"alice","password":"wrong-password"}`)
+	for i := 0; i < 5; i++ {
+		r := e.do("POST", "/v1/auth/login", body, map[string]string{"X-Forwarded-For": "192.0.2.1"})
+		if r.status != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: %d", i, r.status)
+		}
+	}
+	r := e.do("POST", "/v1/auth/login", []byte(`{"username":"alice","password":"password123"}`), map[string]string{"X-Forwarded-For": "192.0.2.2"})
+	if r.status != http.StatusOK {
+		t.Fatalf("login from another IP = %d", r.status)
+	}
+}
+
 func TestAccessTokenExpires(t *testing.T) {
 	e := newTestEnv(t, nil)
 	e.createUser("alice", "password123")

@@ -19,7 +19,11 @@ export async function api(path, options = {}) {
   const text = await r.text();
   let value = null;
   try { value = text ? JSON.parse(text) : null; } catch { throw Error('服务器响应格式错误'); }
-  if (!r.ok) throw Object.assign(Error(value?.error?.message || '网络请求失败'), { status: r.status, revision: value?.revision });
+  if (!r.ok) {
+    const retry = Number(r.headers.get('retry-after'));
+    const message = r.status === 429 ? (retry > 0 ? `登录尝试过多，请在 ${Math.ceil(retry / 60)} 分钟后重试。` : '请求过于频繁，请稍后重试。') : value?.error?.message || '网络请求失败';
+    throw Object.assign(Error(message), { status: r.status, revision: value?.revision });
+  }
   return { value, text, revision: Number(r.headers.get('x-revision')) };
 }
 

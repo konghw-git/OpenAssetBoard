@@ -3,12 +3,13 @@ import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { isIP } from 'node:net';
 
 const root = path.resolve(fileURLToPath(new URL('./public/', import.meta.url)));
 const LIMIT = 32 * 1024 * 1024;
 const types = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.json':'application/json','.webmanifest':'application/manifest+json'};
 
-export function createApp({upstream = 'https://tyo.magnusk.top:9443', fetcher = fetch, secure = false} = {}) {
+export function createApp({upstream = 'https://tyo.magnusk.top:9443', fetcher = fetch, secure = false, trustProxy = false} = {}) {
   const target = new URL(upstream);
   if (target.protocol !== 'https:' && !(target.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(target.hostname))) throw Error('Upstream must use HTTPS, except on loopback');
   const sessions = new Map();
@@ -57,9 +58,12 @@ export function createApp({upstream = 'https://tyo.magnusk.top:9443', fetcher = 
         if (url.pathname === '/api/login' && req.method === 'POST') {
           if (sessions.size >= 10000) return json(res,503,{error:{message:'会话已满，请稍后重试'}});
           const input = JSON.parse(await body(req,4096));
-          const r = await request('/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:input.username,password:input.password})});
+          const headers = {'Content-Type':'application/json'};
+          const clientIP = req.headers['x-gain-client-ip'];
+          if (trustProxy && ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress) && typeof clientIP === 'string' && isIP(clientIP)) headers['X-Forwarded-For'] = clientIP;
+          const r = await request('/v1/auth/login',{method:'POST',headers,body:JSON.stringify({username:input.username,password:input.password})});
           const data = await r.json();
-          if (!r.ok) return json(res,r.status,data);
+          if (!r.ok) { if (r.status === 429 && r.headers.has('retry-after')) res.setHeader('Retry-After',r.headers.get('retry-after')); return json(res,r.status,data); }
           if (s) { await request('/v1/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken:s.refreshToken})}); sessions.delete(sid); }
           const id = randomBytes(32).toString('hex');
           sessions.set(id,{...data, expires:Date.now()+data.expiresIn*1000, until:Date.now()+2592000000});
@@ -109,5 +113,5 @@ export function createApp({upstream = 'https://tyo.magnusk.top:9443', fetcher = 
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 4173);
-  createApp({upstream:process.env.ASSETBOARD_UPSTREAM,secure:process.env.COOKIE_SECURE==='1'}).listen(port,process.env.HOST || '127.0.0.1',() => console.log(`日盈 Web: http://127.0.0.1:${port}`));
+  createApp({upstream:process.env.ASSETBOARD_UPSTREAM,secure:process.env.COOKIE_SECURE==='1',trustProxy:process.env.TRUST_PROXY==='1'}).listen(port,process.env.HOST || '127.0.0.1',() => console.log(`日盈 Web: http://127.0.0.1:${port}`));
 }

@@ -91,7 +91,7 @@ func New(cfg Config) (*Server, error) {
 		cfg.LoginIPLimit = 20
 	}
 	if cfg.LoginUserLimit <= 0 {
-		cfg.LoginUserLimit = 5
+		cfg.LoginUserLimit = 10
 	}
 	if cfg.PasswordUserLimit <= 0 {
 		cfg.PasswordUserLimit = 5
@@ -282,12 +282,13 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	username := strings.TrimSpace(req.Username)
 	now := s.now()
-	ipKey := "ip:" + s.clientIP(r)
+	clientIP := s.clientIP(r)
+	ipKey := "ip:" + clientIP
 	if ok, retry := s.ipLimiter.allow(ipKey, now); !ok {
 		tooMany(w, retry)
 		return
 	}
-	userKey := "user:" + strings.ToLower(username)
+	userKey := "user-ip:" + strings.ToLower(username) + "|" + clientIP
 	if username != "" {
 		if ok, retry := s.userLimiter.allow(userKey, now); !ok {
 			tooMany(w, retry)
