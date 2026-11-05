@@ -15,7 +15,7 @@
 
 ```jsonc
 {
-  "formatVersion": 16,     // 备份格式版本，读取时校验
+  "formatVersion": 17,     // 备份格式版本，读取时校验
   "schemaVersion": 15,     // 数据库 schema 版本
   "exportedAt": 1760000000000,
   "groups": [...],
@@ -50,6 +50,8 @@
 ```
 
 ### 合并戳（format 16）
+
+格式 17 允许 `tombstones` 使用 `table=healthProfile`、`rowKey=healthProfile#self`，表示健康档案已删除；较新的档案编辑可重新创建。旧客户端会拒绝格式 17 并提示升级，服务端无需升级。
 
 24 张同步表的每一行都有 `changedAt`（Long）与 `changeId`（String）；`diaryEntries`、`notes`、`todos`、`countdowns` 另有 `stateAt`/`stateId`（天气、置顶、已读、提醒投递这类状态字段）。`healthProfile` 也有内容戳。读 format 1–15 的文件时，每行会按「记录里最新的时间字段」补一个时间、按内容派生一个 `legacy:` 标识；`tombstones` 为空。字段分类、墓碑矩阵和合并规则见 [`sync-merge-semantics.md`](sync-merge-semantics.md)。
 ```

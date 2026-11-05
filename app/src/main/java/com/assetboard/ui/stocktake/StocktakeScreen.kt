@@ -53,6 +53,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import com.assetboard.ui.components.LocalHideAmounts
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -360,6 +363,7 @@ private fun StockRowItem(r: StockRow, onInput: (String, String) -> Unit) {
     val focus = LocalFocusManager.current
     val cs = MaterialTheme.colorScheme
     val invalid = r.parsed == null
+    val hidden = LocalHideAmounts.current
     // The + − × ÷ keys show under the field being typed in.
     var focused by remember { mutableStateOf(false) }
     Row(
@@ -395,6 +399,7 @@ private fun StockRowItem(r: StockRow, onInput: (String, String) -> Unit) {
                 textStyle = MaterialTheme.typography.titleMedium.merge(NumberStyle).copy(color = cs.onSurface, textAlign = TextAlign.End),
                 cursorBrush = SolidColor(cs.primary),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
+                visualTransformation = if (hidden) PasswordVisualTransformation() else VisualTransformation.None,
                 keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
                 modifier = Modifier
                     .widthIn(min = 120.dp, max = 160.dp)

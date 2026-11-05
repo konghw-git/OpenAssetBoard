@@ -18,6 +18,11 @@ object ChangeStamps {
 
     fun stamp(now: Long): ChangeStamp = ChangeStamp(nextAt(now), newId())
 
+    /** Observe persisted or merged versions before issuing a subsequent local change. */
+    fun observe(at: Long) {
+        last.updateAndGet { previous -> maxOf(previous, at) }
+    }
+
     fun nextAt(now: Long): Long {
         // The server's clock, not this device's, orders rows across devices (ServerClock).
         val corrected = now + com.assetboard.data.sync.ServerClock.offsetMs
@@ -52,7 +57,8 @@ object RowKey {
 }
 
 /** A tombstone for a row the user deleted now (active delete, §4.1). */
-fun deletedTombstone(table: String, rowKey: String, at: Long) = Tombstone(table, rowKey, at, "T:" + newId())
+fun deletedTombstone(table: String, rowKey: String, at: Long) =
+    Tombstone(table, rowKey, ChangeStamps.nextAt(at), "T:" + newId())
 
 /**
  * A tombstone for a row a merge kept out (dedup, cascade, purge): its version is the row's own,

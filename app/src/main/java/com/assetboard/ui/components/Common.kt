@@ -146,7 +146,7 @@ fun CalcKeys(input: String, onInput: (String) -> Unit, modifier: Modifier = Modi
         if (Money.isExpression(input)) {
             val result = Money.parse(input)
             Text(
-                if (result != null) "= " + Money.format(result) else "算式不完整",
+                if (result != null) "= " + amount(Money.format(result)) else "算式不完整",
                 style = MaterialTheme.typography.labelLarge.merge(NumberStyle),
                 color = if (result != null) cs.primary else cs.error,
                 maxLines = 1,

@@ -151,8 +151,15 @@ export async function merge(a, b) {
     ...mergeGoal(a, b),
   };
   for (const table of Object.keys(rowKeyFields)) out[table] = [];
-  out.healthProfile = mergeHealthProfile(a.healthProfile, b.healthProfile);
   const tombs = tombstoneMap(a, b);
+  const profile = mergeHealthProfile(a.healthProfile, b.healthProfile);
+  const profileTombstone = tombs.get('healthProfile#self');
+  if (profile && profileTombstone && compareVersion(tombVersion(profileTombstone), contentVersion(profile)) >= 0) {
+    out.healthProfile = null;
+  } else {
+    out.healthProfile = profile;
+    if (profile && profileTombstone) tombs.delete('healthProfile#self');
+  }
 
   // The input rows survive for resurrection (R10): a deleted parent's content may only exist
   // on the side that still has the row.

@@ -119,9 +119,9 @@ class AccountManagerTest {
         }
     }
 
-    /** A complete, valid format-16 snapshot, the same shape the Android side writes. */
+    /** A complete, valid snapshot in the current format. */
     private fun snapshotBody(): String =
-        checkNotNull(javaClass.classLoader?.getResource("backups/format-16.json")).readText()
+        checkNotNull(javaClass.classLoader?.getResource("backups/format-17.json")).readText()
 
     private fun snapshotHash(text: String): String =
         CanonicalJson.contentHash(Json.parseToJsonElement(text) as JsonObject)
@@ -221,7 +221,7 @@ class AccountManagerTest {
         val text = snapshotBody()
         val hash = snapshotHash(text)
         val fake = FakeGateway().apply {
-            meta = RemoteMeta(revision = 1, contentHash = hash, formatVersion = 16, schemaVersion = 15, size = text.length.toLong())
+            meta = RemoteMeta(revision = 1, contentHash = hash, formatVersion = 17, schemaVersion = 15, size = text.length.toLong())
             downloadSnapshot = RemoteSnapshot(text, revision = 1, contentHash = hash)
         }
         val container = AppContainer(context, profile, profile.dbFile, store, {}, fake)
@@ -391,7 +391,7 @@ class AccountManagerTest {
         val text = snapshotBody()
         val hash = snapshotHash(text)
         val fake = FakeGateway().apply {
-            meta = RemoteMeta(revision = 1, contentHash = hash, formatVersion = 16, schemaVersion = 15, size = text.length.toLong())
+            meta = RemoteMeta(revision = 1, contentHash = hash, formatVersion = 17, schemaVersion = 15, size = text.length.toLong())
             downloadSnapshot = RemoteSnapshot(text, revision = 1, contentHash = hash)
         }
         val container = AppContainer(context, profile, profile.dbFile, store, {}, fake)
@@ -471,6 +471,31 @@ class AccountManagerTest {
             fake.metaError = ApiException("unauthorized", status = 401, code = "unauthorized")
             assertNotEquals(SyncOutcome.RETRY, container.account.syncNow())
             assertFalse("a dead session must sign out locally", container.account.state.value.signedIn)
+        } finally {
+            container.close()
+        }
+    }
+
+    @Test
+    fun aDebouncedEditWaitsForAnInFlightSync() = runBlocking {
+        val store = ProfileStore(context)
+        val profile = store.save(accountProfile())
+        store.setActive(profile.id)
+        val fake = FakeGateway()
+        val container = AppContainer(context, profile, profile.dbFile, store, {}, fake)
+        try {
+            container.account.login("https://example.com", "alice", "password")
+            val gate = CompletableDeferred<Unit>()
+            fake.metaGate = gate
+            val first = launch { container.account.syncNow() }
+            withTimeout(5_000) { while (!container.account.state.value.busy) delay(10) }
+            container.account.noteLocalChange()
+            delay(10_500)
+            fake.metaGate = null
+            val before = fake.uploads.size
+            gate.complete(Unit)
+            first.join()
+            withTimeout(5_000) { while (fake.uploads.size < before + 2) delay(10) }
         } finally {
             container.close()
         }

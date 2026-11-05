@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-05
+
+### Fixed
+
+- **Hide amounts consistently across assets.** Allocation and debt ratios, goal progress and
+  suggestions, cash breakdown and trend percentage are masked too; account and stocktake fields
+  stay editable while concealing their values, including calculator results.
+- Keep local edits and deletions newer than previously received sync versions, including after
+  restarting the app or correcting a device clock.
+- Preserve offline restore and reset intent until sync succeeds for ordinary rows and the net
+  worth goal, so older cloud data unseen by this device does not reappear; keep records created
+  after the restore. Web imports apply the same rule when another device updates concurrently.
+- Wait for an in-flight sync before uploading a debounced edit, and keep later edits from
+  cancelling an upload already in progress.
+- Keep deleted health profiles deleted across sync. Backup format 17 carries a profile tombstone;
+  older clients must upgrade before syncing a format 17 snapshot.
+
 ## [1.4.1] - 2026-11-05
 
 ### Added

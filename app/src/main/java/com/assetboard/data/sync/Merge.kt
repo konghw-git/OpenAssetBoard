@@ -190,7 +190,6 @@ object Merge {
             header["exportedAt"] = JsonPrimitive(maxOf(long(a, "exportedAt") ?: 0, long(b, "exportedAt") ?: 0))
             header.putAll(mergeGoal())
             for (table in CanonicalJson.rowKeyFields.keys) out[table] = mutableListOf()
-            header["healthProfile"] = mergeHealthProfile() ?: JsonNull
 
             // Tombstones, indexed by row key, keeping the strongest when both sides have one.
             for (source in listOf(a, b)) {
@@ -200,6 +199,14 @@ object Merge {
                     val old = tombs[key]
                     if (old == null || compareVersion(tombVersion(tomb), tombVersion(old)) > 0) tombs[key] = tomb
                 }
+            }
+            val profile = mergeHealthProfile()?.let(::Row)
+            val profileTombstone = tombs["healthProfile#self"]
+            header["healthProfile"] = if (profile != null && profileTombstone != null &&
+                compareVersion(tombVersion(profileTombstone), contentVersion(profile)) >= 0
+            ) JsonNull else {
+                if (profile != null && profileTombstone != null) tombs.remove("healthProfile#self")
+                profile?.toJson() ?: JsonNull
             }
 
             // The input rows survive for resurrection (R10): a deleted parent's content may only

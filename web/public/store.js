@@ -1,5 +1,5 @@
 import { empty, validate, parseBackup, stampChanges, replaceData, maxStamp } from './domain.js';
-import { canonicalJson, contentHash } from './canonical.js';
+import { canonicalJson, contentHash, rowKey, rowKeyFields } from './canonical.js';
 import { merge } from './merge.js';
 
 let expectedUser = null;
@@ -48,6 +48,7 @@ export class Store extends EventTarget {
     this.pollTimer = null;
     this.closed = false;
     this.blocked = false;
+    this.pendingReplace = null;
     this.onVisibility = () => { if (document.hidden) this.flushOnHide(); };
     this.onPageHide = () => this.flushOnHide();
     if (typeof document !== 'undefined') {
@@ -86,7 +87,7 @@ export class Store extends EventTarget {
       fn(after, this.state);
       const at = Math.max(this.now(), maxStamp(after) + 1, maxStamp(before) + 1);
       stampChanges(before, after, at, crypto.randomUUID());
-      after.formatVersion = 16;
+      after.formatVersion = 17;
       after.schemaVersion = 15;
       after.exportedAt = this.now();
       validate(after);
@@ -127,6 +128,7 @@ export class Store extends EventTarget {
         const revision = Number(result.value?.revision ?? result.revision) || this.state.revision;
         const stillDirty = this.state.generation !== generation;
         this.state = { ...this.state, revision, dirty: stillDirty, initialized: true, lastSync: this.now() };
+        if (!stillDirty) this.pendingReplace = null;
         this.channel?.postMessage(this.user.id);
         this.error = '';
       } catch (e) {
@@ -149,7 +151,7 @@ export class Store extends EventTarget {
   async pullMergeLocked() {
     const metaResult = await this.request('/sync/meta');
     const meta = metaResult.value || {};
-    if ((Number(meta.formatVersion) || 0) > 16 || (Number(meta.schemaVersion) || 0) > 15) {
+    if ((Number(meta.formatVersion) || 0) > 17 || (Number(meta.schemaVersion) || 0) > 15) {
       this.blocked = true;
       throw Error('云端数据来自更新版本，已停止同步，请升级网页版');
     }
@@ -159,7 +161,22 @@ export class Store extends EventTarget {
     if (this.state.initialized && revision === this.state.revision) return false;
     const remote = await this.request('/sync');
     const incoming = parseBackup(remote.text);
-    const merged = await merge(this.state.data, incoming);
+    const local = structuredClone(this.state.data);
+    if (this.pendingReplace) {
+      const { at, id, keys } = this.pendingReplace;
+      const existing = new Set(local.tombstones.map(t => t.rowKey));
+      for (const table of Object.keys(rowKeyFields)) {
+        const live = new Set(local[table].map(row => rowKey(table, row)));
+        for (const row of incoming[table]) {
+          const key = rowKey(table, row);
+          if (!keys[table].has(key) && !live.has(key) && !existing.has(key) && row.changedAt <= at) {
+            local.tombstones.push({ table, rowKey: key, deletedAt: at, changeId: `T:${id}` });
+            existing.add(key);
+          }
+        }
+      }
+    }
+    const merged = await merge(local, incoming);
     validate(merged.data);
     const changed = canonicalJson(merged.data) !== canonicalJson(this.state.data);
     const dirty = canonicalJson(merged.data) !== canonicalJson(incoming);
@@ -218,8 +235,11 @@ export class Store extends EventTarget {
       const target = parseBackup(text);
       const before = structuredClone(this.state.data);
       const at = Math.max(this.now(), maxStamp(target) + 1, maxStamp(before) + 1);
-      const data = replaceData(before, target, at, crypto.randomUUID());
+      const id = crypto.randomUUID();
+      const data = replaceData(before, target, at, id);
       validate(data);
+      this.pendingReplace = { at, id, keys: Object.fromEntries(Object.keys(rowKeyFields).map(table =>
+        [table, new Set(data[table].map(row => rowKey(table, row)))])) };
       this.state = { ...this.state, previous: before, data, dirty: true, initialized: true, generation: this.state.generation + 1 };
       this.error = '';
       this.emit();

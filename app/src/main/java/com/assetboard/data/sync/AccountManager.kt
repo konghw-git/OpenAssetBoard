@@ -367,8 +367,11 @@ class AccountManager(
      * [fromUser] marks the manual buttons; only they report "already running" instead of
      * silently stepping aside for the attempt that is holding the lock.
      */
-    suspend fun syncNow(fromUser: Boolean = false): SyncOutcome {
-        if (!mutex.tryLock()) {
+    suspend fun syncNow(fromUser: Boolean = false): SyncOutcome = performSync(fromUser, waitForRunning = false)
+
+    private suspend fun performSync(fromUser: Boolean, waitForRunning: Boolean): SyncOutcome {
+        if (waitForRunning) mutex.lock()
+        else if (!mutex.tryLock()) {
             if (fromUser) _state.update { it.copy(message = "正在同步") }
             return SyncOutcome.SKIPPED
         }
@@ -395,7 +398,12 @@ class AccountManager(
             val server = p.serverUrl ?: settings.syncServerUrl.value
             val remote = api.meta(server, access!!)
             val local = backup.exportForSync()
-            when (SyncDecision.decide(remote, p, local.contentHash, local.isEmpty)) {
+            val pendingReplace = backup.pendingReplace()
+            val decision = SyncDecision.decide(remote, p, local.contentHash, local.isEmpty)
+            val action = if (remote.revision > 0 && decision != SyncAction.REMOTE_TOO_NEW && pendingReplace != null) {
+                SyncAction.MERGE
+            } else decision
+            when (action) {
                 SyncAction.UP_TO_DATE -> markSynced(p, remote.revision, remote.contentHash, "已是最新")
                 SyncAction.UPLOAD -> upload(p, remote, local)
                 SyncAction.DOWNLOAD -> download(p)
@@ -406,6 +414,7 @@ class AccountManager(
                     it.copy(busy = false, error = "云端数据来自更新版本的日盈，请先升级 App 再同步")
                 }
             }
+            if (action != SyncAction.REMOTE_TOO_NEW && pendingReplace != null) backup.clearPendingReplace(pendingReplace)
             return SyncOutcome.DONE
         } catch (e: CancellationException) {
             throw e
@@ -579,7 +588,8 @@ class AccountManager(
         debounceJob?.cancel()
         debounceJob = scope.launch {
             delay(LOCAL_CHANGE_DELAY_MS)
-            runCatching { syncNow() }
+            // The timer may be cancelled by the next edit; an already-started sync must not be.
+            scope.launch { runCatching { performSync(fromUser = false, waitForRunning = true) } }
         }
     }
 

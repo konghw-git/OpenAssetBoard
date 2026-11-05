@@ -240,6 +240,8 @@ class RestoreTest {
                     JsonObject((row as JsonObject).filterKeys { it !in stamps })
                 })
                 key == "healthProfile" -> (value as? JsonObject)?.let { JsonObject(it.filterKeys { k -> k !in stamps }) } ?: value
+                key == "netWorthGoalAt" -> kotlinx.serialization.json.JsonPrimitive(0)
+                key == "netWorthGoalChangeId" -> kotlinx.serialization.json.JsonPrimitive("")
                 else -> value
             }
         })

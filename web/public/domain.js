@@ -31,7 +31,7 @@ export function scaled(text,digits=2) {
 export const money = n => n == null ? '—' : (n/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
 export const inputMoney = n => n == null ? '' : (n/100).toFixed(2);
 export const defaultHabits = ['吃补剂','健身','控制饮食','喝够水','早睡早起'].map((label,i)=>({key:['supplements','workout','diet','water','sleep'][i],label,icon:['medication','fitness','restaurant','water','bedtime'][i],color:[0xFFD9822B,0xFFD0533F,0xFF5E9B3A,0xFF3D8FD1,0xFF7A62C2][i],position:i,addedOn:null,removedOn:null,rubric:''}));
-export function empty() { return {formatVersion:16,schemaVersion:15,exportedAt:Date.now(),...Object.fromEntries(tables.map(k=>[k,[]])),healthProfile:null,netWorthGoal:null,netWorthGoalAt:0,netWorthGoalChangeId:'',tombstones:[]}; }
+export function empty() { return {formatVersion:17,schemaVersion:15,exportedAt:Date.now(),...Object.fromEntries(tables.map(k=>[k,[]])),healthProfile:null,netWorthGoal:null,netWorthGoalAt:0,netWorthGoalChangeId:'',tombstones:[]}; }
 const deleted = {deletedAt:null,deleteBatch:null};
 export function row(table,values={}) {
   const now=Date.now(),base={id:uid(),createdAt:now};
@@ -129,7 +129,7 @@ export function backfillLegacy(file) {
   }
   data.netWorthGoalAt = 0;
   data.netWorthGoalChangeId = data.netWorthGoal != null ? `legacy:${legacyId(`netWorthGoal\u0000${data.netWorthGoal}`)}` : '';
-  data.formatVersion = 16;
+  data.formatVersion = 17;
   data.schemaVersion = 15;
   return data;
 }
@@ -140,7 +140,7 @@ export function parseBackup(text) {
     return v;
   });
   ensure(file && typeof file === 'object' && !Array.isArray(file), '备份必须是对象');
-  ensure(Number.isInteger(file.formatVersion) && file.formatVersion >= 1 && file.formatVersion <= 16, '备份版本不支持，请升级网页版');
+  ensure(Number.isInteger(file.formatVersion) && file.formatVersion >= 1 && file.formatVersion <= 17, '备份版本不支持，请升级网页版');
   ensure(Number.isInteger(file.schemaVersion) && file.schemaVersion >= 1 && file.schemaVersion <= 15, '数据来自更新的手机版，请升级网页版');
   return validate(file.formatVersion >= 16 ? file : backfillLegacy(file));
 }
@@ -249,28 +249,25 @@ export function replaceData(previous, target, at, id) {
     if (live.get(table).has(key) || tombstones.has(key)) continue;
     tombstones.set(key, { table, rowKey: key, deletedAt: at, changeId: `T:${id}` });
   }
+  if (!data.healthProfile) {
+    tombstones.set('healthProfile#self', { table: 'healthProfile', rowKey: 'healthProfile#self', deletedAt: at, changeId: `T:${id}` });
+  } else tombstones.delete('healthProfile#self');
   data.tombstones = [...tombstones.values()];
-  const hadGoal = previous.netWorthGoal != null || previous.netWorthGoalAt || previous.netWorthGoalChangeId;
-  if (data.netWorthGoal != null || hadGoal) {
-    data.netWorthGoalAt = at;
-    data.netWorthGoalChangeId = id;
-    if (data.netWorthGoal == null) data.netWorthGoal = null;
-  } else {
-    data.netWorthGoalAt = 0;
-    data.netWorthGoalChangeId = '';
-  }
+  data.netWorthGoalAt = at;
+  data.netWorthGoalChangeId = id;
+  if (data.netWorthGoal == null) data.netWorthGoal = null;
   if (data.healthProfile) {
     data.healthProfile.changedAt = at;
     data.healthProfile.changeId = id;
   }
-  data.formatVersion = 16;
+  data.formatVersion = 17;
   data.schemaVersion = 15;
   data.exportedAt = Date.now();
   return data;
 }
 export function validate(input) {
   ensure(input && typeof input==='object' && !Array.isArray(input),'备份必须是对象');
-  ensure(Number.isInteger(input.formatVersion)&&input.formatVersion>=1&&input.formatVersion<=16,'备份版本不支持，请升级网页版');
+  ensure(Number.isInteger(input.formatVersion)&&input.formatVersion>=1&&input.formatVersion<=17,'备份版本不支持，请升级网页版');
   ensure(Number.isInteger(input.schemaVersion)&&input.schemaVersion>=1&&input.schemaVersion<=15,'数据来自更新的手机版，请升级网页版');
   const data={...empty(),...input};
   const allowed = new Set(Object.keys(empty()));
@@ -351,7 +348,7 @@ export function validate(input) {
   for(const t of data.tombstones){
     ensure(t&&typeof t==='object'&&!Array.isArray(t),'墓碑记录无效');
     ensure(Object.keys(t).every(k=>['table','rowKey','deletedAt','changeId'].includes(k)),'墓碑含未知字段');
-    ensure(typeof t.table==='string'&&tables.includes(t.table),'墓碑表名无效');
+    ensure(typeof t.table==='string'&&(tables.includes(t.table)||(data.formatVersion>=17&&t.table==='healthProfile'&&t.rowKey==='healthProfile#self')),'墓碑表名无效');
     ensure(typeof t.rowKey==='string'&&t.rowKey.startsWith(t.table+'#'),'墓碑行键无效');
     ensure(Number.isSafeInteger(t.deletedAt)&&t.deletedAt>=0,'墓碑时间无效');
     ensure(typeof t.changeId==='string'&&t.changeId,'墓碑缺少版本');

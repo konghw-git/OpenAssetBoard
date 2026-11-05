@@ -43,6 +43,14 @@ class BackupFixtureTest {
         return Uri.fromFile(File(f.context.cacheDir, name).apply { writeText(text) })
     }
 
+    @Test fun formatSeventeenFixtureRestores() = f.run {
+        val uri = fixture("format-17.json")
+        assertEquals(17, f.backup.inspect(uri).formatVersion)
+        f.backup.restore(uri)
+        assertTrue(f.db.dao().accounts().isNotEmpty())
+        assertTrue(f.db.healthDao().profile() != null)
+    }
+
     /**
      * A restore is a replace: the file's rows keep their content but take one fresh stamp, so the
      * intent beats whatever the cloud holds, while rows are still the same set.

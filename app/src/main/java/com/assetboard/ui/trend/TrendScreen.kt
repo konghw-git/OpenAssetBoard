@@ -183,7 +183,7 @@ private fun HeadlineContent(p: NetWorthTrend.Period, range: ChartRange) {
                 ) {
                     Icon(if (c >= 0) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, null, tint = extra.signed(c), modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    val ratio = p.changeRatio?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.US, "%.2f", it * 100) + "%)" }.orEmpty()
+                    val ratio = p.changeRatio?.let { " (" + amount((if (it >= 0) "+" else "") + String.format(java.util.Locale.US, "%.2f", it * 100) + "%") + ")" }.orEmpty()
                     Text(amount(Money.format(c, signed = true)) + ratio, color = extra.signed(c), style = MaterialTheme.typography.labelLarge.merge(NumberStyle))
                 }
                 Spacer(Modifier.width(8.dp))

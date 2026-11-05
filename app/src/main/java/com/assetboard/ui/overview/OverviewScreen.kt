@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import com.assetboard.domain.LedgerException
 import com.assetboard.ui.components.GlassSnackbarHost
 import com.assetboard.ui.TabPageBottomInset
@@ -529,7 +531,8 @@ private fun HeroContent(s: OverviewState, goal: Long?, onStocktake: () -> Unit, 
             // Beside the figure when there is room; on a narrow phone, or with a figure too long
             // to share the line, the shares go under it rather than clipping the amount. The
             // decision uses the settled total, not the count-up, so the layout never jumps.
-            val needForAmount = with(LocalDensity.current) { (20.sp * 0.65f * Money.format(s.totals.netWorth).length).toDp() + 26.dp }
+            val displayedAmount = amount(Money.format(s.totals.netWorth))
+            val needForAmount = with(LocalDensity.current) { (20.sp * 0.65f * displayedAmount.length).toDp() + 26.dp }
             val beside = maxWidth >= 270.dp && maxWidth >= allocationLegendRoom + needForAmount
             Column {
                 Row(verticalAlignment = Alignment.Bottom) {
@@ -584,7 +587,7 @@ private fun HeroContent(s: OverviewState, goal: Long?, onStocktake: () -> Unit, 
         }
         Spacer(Modifier.height(20.dp))
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val debtLabel = "总负债" + if (s.totals.assets > 0) " · " + Money.percent(-s.totals.liabilities, s.totals.assets) else ""
+            val debtLabel = "总负债" + if (s.totals.assets > 0) " · " + amount(Money.percent(-s.totals.liabilities, s.totals.assets)) else ""
             if (maxWidth / LocalDensity.current.fontScale < 280.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HeroStat("总资产", s.totals.assets, Modifier.fillMaxWidth())
@@ -651,6 +654,7 @@ private fun StocktakeButton(onClick: () -> Unit) {
 @Composable
 private fun HeroGauges(s: OverviewState, goal: Long?, onCash: () -> Unit, onGoal: () -> Unit) {
     val extra = AppTheme.extra
+    val hidden = LocalHideAmounts.current
     val l = s.liquidity
     val progress = remember(s, goal) { goal?.let { GoalProgress.of(it, s.totals.netWorth, s.history.map { p -> p.snapshot.at to p.netWorth }) } }
     val reveal = remember { Animatable(0f) }
@@ -664,7 +668,7 @@ private fun HeroGauges(s: OverviewState, goal: Long?, onCash: () -> Unit, onGoal
                 .filter { it.first > 0 }
             GaugeTile(
                 Icons.Outlined.Payments, a.flame.first(), "可用现金", amount("¥" + Money.short(animatedCents(l.cash))), extra.onHero,
-                "占 " + Money.percent(l.cash, l.total), tile, onCash,
+                "占 " + amount(Money.percent(l.cash, l.total)), tile, onCash, showBar = !hidden,
             ) {
                 Row(Modifier.fillMaxWidth(reveal.value).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     parts.forEach { (cents, color) -> Box(Modifier.weight(cents.toFloat()).fillMaxHeight().clip(RoundedCornerShape(50)).background(color)) }
@@ -683,19 +687,21 @@ private fun HeroGauges(s: OverviewState, goal: Long?, onCash: () -> Unit, onGoal
 @Composable
 private fun GoalTile(p: GoalProgress, modifier: Modifier, onClick: () -> Unit) {
     val extra = AppTheme.extra
+    val hidden = LocalHideAmounts.current
     val shown = remember { Animatable(0f) }
     LaunchedEffect(p.fraction) { shown.animateTo(p.fraction, tween(360, easing = FastOutSlowInEasing)) }
     val gold = extra.onHeroAccent
     GaugeTile(
         Icons.Outlined.Flag, gold, "目标 " + amount(Money.compact(p.goal)),
-        if (p.reached) "已达成" else Money.percent(p.net.coerceAtLeast(0), p.goal),
-        if (p.reached) gold else extra.onHero,
+        if (hidden) MASKED else if (p.reached) "已达成" else Money.percent(p.net.coerceAtLeast(0), p.goal),
+        if (!hidden && p.reached) gold else extra.onHero,
         when {
+            hidden -> "点击编辑目标"
             p.reached -> "点这里设新目标"
             p.monthsToGo != null -> "约 ${monthsText(p.monthsToGo)}"
             else -> "还差 " + amount("¥" + Money.short(p.remaining))
         },
-        modifier, onClick,
+        modifier, onClick, showBar = !hidden,
     ) {
         Box(
             Modifier.fillMaxSize().drawBehind {
@@ -813,7 +819,7 @@ private fun ShareLine(name: String, value: Long, total: Long, dot: Color) {
         Text(name, color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(4.dp))
         Text(
-            Money.percent(value, total), color = extra.onHero, style = MaterialTheme.typography.labelSmall.merge(NumberStyle),
+            amount(Money.percent(value, total)), color = extra.onHero, style = MaterialTheme.typography.labelSmall.merge(NumberStyle),
             fontWeight = FontWeight.SemiBold, maxLines = 1,
         )
     }
@@ -828,7 +834,7 @@ private fun StripShare(name: String, value: Long, total: Long, dot: Color) {
         Spacer(Modifier.width(5.dp))
         Text(name, color = extra.onHeroMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
         Spacer(Modifier.width(5.dp))
-        Text(Money.percent(value, total), color = extra.onHero, style = MaterialTheme.typography.labelSmall.merge(NumberStyle), fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(amount(Money.percent(value, total)), color = extra.onHero, style = MaterialTheme.typography.labelSmall.merge(NumberStyle), fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -841,6 +847,7 @@ private fun monthsText(m: Int): String = when {
 /** Setting the goal: an amount in yuan ("100万" works too) or one of a few round amounts above today's net worth. */
 @Composable
 private fun GoalDialog(current: Long?, net: Long, onDismiss: () -> Unit, onSave: (Long?) -> Unit) {
+    val hidden = LocalHideAmounts.current
     var text by rememberSaveable { mutableStateOf(current?.let { Money.toInput(it).removeSuffix(".00") } ?: "") }
     val parsed = GoalProgress.parseInput(text)
     val suggestions = remember(net) { GoalProgress.suggestions(net) }
@@ -857,11 +864,12 @@ private fun GoalDialog(current: Long?, net: Long, onDismiss: () -> Unit, onSave:
                     prefix = { Text("¥") },
                     placeholder = { Text("如 1000000 或 100万") },
                     isError = text.isNotBlank() && parsed == null,
-                    supportingText = parsed?.let { { Text(Money.compact(it) + " 元") } },
+                    supportingText = if (hidden) null else parsed?.let { { Text(Money.compact(it) + " 元") } },
+                    visualTransformation = if (hidden) PasswordVisualTransformation() else VisualTransformation.None,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!hidden) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     suggestions.forEach { c ->
                         FilterChip(parsed == c, onClick = { text = Money.toInput(c).removeSuffix(".00") }, label = { Text(Money.compact(c)) })
                     }
@@ -924,6 +932,7 @@ private fun GroupSection(
 ) {
     val cs = MaterialTheme.colorScheme
     val color = AppTheme.extra.group(g.group.colorIndex)
+    val hidden = LocalHideAmounts.current
     val turn by animateFloatAsState(if (open) 180f else 0f, Motion.bouncy(), label = "fold")
     val shape = MaterialTheme.shapes.large
     // Open, the card takes a wash of the group's colour, so its accounts read as one set.
@@ -935,7 +944,7 @@ private fun GroupSection(
     val detail = when {
         g.rows.isEmpty() -> "还没有账户"
         g.group.isLiability -> "${g.rows.size} 个账户 · 负债"
-        totalAssets > 0 && g.subtotal > 0 -> "${g.rows.size} 个账户 · 占 ${Money.percent(g.subtotal, totalAssets)}"
+        totalAssets > 0 && g.subtotal > 0 -> "${g.rows.size} 个账户 · 占 ${amount(Money.percent(g.subtotal, totalAssets))}"
         else -> "${g.rows.size} 个账户"
     }
     Column(Modifier.fillMaxWidth().pressScale(source, 0.99f).glass(shape, glass, wash).clip(shape)) {
@@ -946,7 +955,7 @@ private fun GroupSection(
             .fillMaxWidth()
             .clickable(interactionSource = source, indication = null, onClick = onToggle)
             .drawBehind {
-                if (shareShown <= 0f) return@drawBehind
+                if (hidden || shareShown <= 0f) return@drawBehind
                 val h = 2.dp.toPx()
                 drawRoundRect(color.copy(alpha = 0.55f), Offset(0f, size.height - h), Size(size.width * shareShown, h), androidx.compose.ui.geometry.CornerRadius(h))
             }
@@ -1072,6 +1081,7 @@ private fun SwipeAccountPane(r: AccountRowUi, liability: Boolean, rows: RowActio
 private fun AccountRowEditor(r: AccountRowUi, noun: String, onSave: (String) -> Unit, onCancel: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val extra = AppTheme.extra
+    val hidden = LocalHideAmounts.current
     val start = Money.toInput(r.display)
     // Kept across a rotation, and re-read per account so another row never shows the last amount.
     var text by rememberSaveable(r.account.id) { mutableStateOf(start) }
@@ -1116,6 +1126,7 @@ private fun AccountRowEditor(r: AccountRowUi, noun: String, onSave: (String) -> 
                 singleLine = true,
                 textStyle = MaterialTheme.typography.titleMedium.merge(NumberStyle).copy(color = if (valid) cs.onSurface else cs.error),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                visualTransformation = if (hidden) PasswordVisualTransformation() else VisualTransformation.None,
                 keyboardActions = KeyboardActions(onDone = { if (valid) onSave(value.text) }),
                 cursorBrush = SolidColor(cs.primary),
                 modifier = Modifier.width(IntrinsicSize.Max).focusRequester(focus),
@@ -1465,7 +1476,7 @@ private fun CashSheet(s: OverviewState, onOpenAccount: (String) -> Unit, onDismi
             }
             if (l.total > 0) {
                 Spacer(Modifier.height(14.dp))
-                LiquidityBar(l, 10.dp)
+                if (!LocalHideAmounts.current) LiquidityBar(l, 10.dp)
                 Spacer(Modifier.height(10.dp))
                 liquidityShares(l).filter { it.cents > 0 || it.label == "现金" }.forEach { p ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1474,7 +1485,7 @@ private fun CashSheet(s: OverviewState, onOpenAccount: (String) -> Unit, onDismi
                         Text(p.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         MoneyText(p.cents, style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            Money.percent(p.cents, l.total), style = MaterialTheme.typography.labelMedium.merge(NumberStyle), color = cs.onSurfaceVariant,
+                            amount(Money.percent(p.cents, l.total)), style = MaterialTheme.typography.labelMedium.merge(NumberStyle), color = cs.onSurfaceVariant,
                             textAlign = TextAlign.End, modifier = Modifier.width(62.dp),
                         )
                     }

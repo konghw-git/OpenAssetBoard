@@ -44,6 +44,7 @@ class WriteGate(
     private var drained: CompletableDeferred<Unit>? = null
 
     @Volatile private var cachedEpoch: Long? = null
+    private var stampsLoaded = false
 
     /**
      * Called after a repository transaction commits (the account manager debounces an upload).
@@ -97,7 +98,13 @@ class WriteGate(
         }
         try {
             if (epoch.value != epochNow()) throw WriteRejected(MSG_STALE)
-            val result = db.withTransaction { block() }
+            val result = db.withTransaction {
+                if (!stampsLoaded) {
+                    observeStoredStamps()
+                    stampsLoaded = true
+                }
+                block()
+            }
             runCatching { onCommitted?.invoke() }
             return result
         } finally {
@@ -105,6 +112,21 @@ class WriteGate(
                 readers--
                 if (readers == 0) drained?.complete(Unit)
             }
+        }
+    }
+
+    private fun observeStoredStamps() {
+        val tables = listOf(
+            "account_groups", "accounts", "snapshots", "valuations", "snapshot_items", "flows",
+            "todo_lists", "todo_sections", "todos", "checklist_items", "diary_entries", "diary_drafts",
+            "habit_checks", "habits", "health_profile", "body_measurements", "food_entries", "note_topics",
+            "notes", "note_sources", "note_drafts", "weekly_reviews", "weekly_drafts", "countdowns",
+        )
+        val queries = tables.map { "SELECT MAX(changed_at) AS stamp FROM `$it`" } +
+            listOf("todos", "diary_entries", "notes", "countdowns").map { "SELECT MAX(state_at) AS stamp FROM `$it`" } +
+            listOf("SELECT MAX(deleted_at) AS stamp FROM tombstones", "SELECT CAST(value AS INTEGER) AS stamp FROM app_meta WHERE `key` = 'net_worth_goal_at'")
+        db.openHelper.readableDatabase.query("SELECT MAX(stamp) FROM (${queries.joinToString(" UNION ALL ")})").use { cursor ->
+            if (cursor.moveToFirst() && !cursor.isNull(0)) ChangeStamps.observe(cursor.getLong(0))
         }
     }
 

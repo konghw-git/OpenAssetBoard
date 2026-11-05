@@ -359,6 +359,16 @@ async function add(name, a, b) {
   await add('the goal and the health profile follow their own stamps', a, b);
 }
 
+{
+  const a = blank(), b = blank();
+  a.formatVersion = b.formatVersion = 17;
+  a.tombstones = [{ table: 'healthProfile', rowKey: 'healthProfile#self', deletedAt: 20, changeId: 'T:delete' }];
+  b.healthProfile = { height: 170, changedAt: 10, changeId: 'old' };
+  await add('health profile deletion beats an older profile', a, b);
+  const newer = structuredClone(b);
+  newer.healthProfile = { height: 180, changedAt: 21, changeId: 'new' };
+  await add('newer health profile clears its tombstone', a, newer);
+}
 await add('two empty files merge to an empty file', blank(), blank());
 
 // Tricky combinations (ties, repair/tombstone kinds, dangling references, duplicate keys) that

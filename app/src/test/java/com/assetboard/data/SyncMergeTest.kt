@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.withContext
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -25,6 +26,100 @@ import java.io.File
 class SyncMergeTest {
     private val f = Fixture()
     private val codec = Json { encodeDefaults = true }
+
+    @Test
+    fun offlineResetDeletesPreviouslyUnseenOlderCloudRowsButKeepsNewerOnes() = f.run {
+        val base = Json.parseToJsonElement(f.backup.exportForSync().json) as JsonObject
+        val old = JsonObject(mapOf("id" to JsonPrimitive("old"), "name" to JsonPrimitive("旧"),
+            "isLiability" to JsonPrimitive(false), "colorIndex" to JsonPrimitive(0), "sortOrder" to JsonPrimitive(0),
+            "changedAt" to JsonPrimitive(f.now - 1000), "changeId" to JsonPrimitive("old")))
+        val newer = JsonObject(old + mapOf("id" to JsonPrimitive("new"), "name" to JsonPrimitive("新"),
+            "changedAt" to JsonPrimitive(f.now + 60_000), "changeId" to JsonPrimitive("new")))
+        f.backup.reset()
+        val remote = JsonObject(base + mapOf("groups" to JsonArray(listOf(old, newer))))
+        withContext(f.gate.bound()) { f.backup.mergeFromJson(remote.toString()) }
+        assertEquals(null, f.db.dao().group("old"))
+        assertEquals("新", f.db.dao().group("new")?.name)
+    }
+
+    @Test
+    fun pendingReplaceSurvivesMultipleDownloadsUntilTheMatchingSyncCompletes() = f.run {
+        val base = Json.parseToJsonElement(f.backup.exportForSync().json) as JsonObject
+        f.backup.reset()
+        val pending = f.backup.pendingReplace()!!
+        val row = JsonObject(mapOf("id" to JsonPrimitive("remote"), "name" to JsonPrimitive("旧"),
+            "isLiability" to JsonPrimitive(false), "colorIndex" to JsonPrimitive(0), "sortOrder" to JsonPrimitive(0),
+            "changedAt" to JsonPrimitive(f.now - 1000), "changeId" to JsonPrimitive("remote")))
+        withContext(f.gate.bound()) {
+            f.backup.mergeFromJson(base.toString())
+            f.backup.mergeFromJson(JsonObject(base + mapOf("groups" to JsonArray(listOf(row)))).toString())
+        }
+        assertEquals(null, f.db.dao().group("remote"))
+        assertEquals(pending, f.backup.pendingReplace())
+        f.backup.clearPendingReplace("a different replace")
+        assertEquals(pending, f.backup.pendingReplace())
+        f.backup.clearPendingReplace(pending)
+        assertEquals(null, f.backup.pendingReplace())
+    }
+
+    @Test
+    fun ledgerResetDoesNotDiscardAnEarlierOfflineFullReset() = f.run {
+        val base = Json.parseToJsonElement(f.backup.exportForSync().json) as JsonObject
+        val remote = JsonObject(base + mapOf("groups" to JsonArray(listOf(JsonObject(mapOf(
+            "id" to JsonPrimitive("remote"), "name" to JsonPrimitive("旧"),
+            "isLiability" to JsonPrimitive(false), "colorIndex" to JsonPrimitive(0), "sortOrder" to JsonPrimitive(0),
+            "changedAt" to JsonPrimitive(f.now - 1000), "changeId" to JsonPrimitive("remote"),
+        ))))))
+        f.backup.reset()
+        withContext(f.gate.bound()) { f.backup.resetLedgerHistory() }
+        withContext(f.gate.bound()) { f.backup.mergeFromJson(remote.toString()) }
+        assertEquals(null, f.db.dao().group("remote"))
+    }
+
+    @Test
+    fun offlineResetAlsoClearsAnUnseenOlderCloudGoal() = f.run {
+        val base = Json.parseToJsonElement(f.backup.exportForSync().json) as JsonObject
+        val remote = JsonObject(base + mapOf("netWorthGoal" to JsonPrimitive(100_000),
+            "netWorthGoalAt" to JsonPrimitive(f.now - 1000), "netWorthGoalChangeId" to JsonPrimitive("remote")))
+        f.backup.reset()
+        withContext(f.gate.bound()) { f.backup.mergeFromJson(remote.toString()) }
+        val merged = codec.decodeFromString(BackupFile.serializer(), f.backup.exportJson())
+        assertEquals(null, merged.netWorthGoal)
+    }
+
+    @Test
+    fun resetDoesNotResurrectAnOlderHealthProfile() = f.run {
+        f.health.saveProfile(Sex.MALE, java.time.LocalDate.parse("1990-01-01"), 1750, null)
+        val remote = f.backup.exportForSync().json
+        f.backup.reset()
+        withContext(f.gate.bound()) { f.backup.mergeFromJson(remote) }
+        assertEquals(null, f.db.healthDao().profile())
+    }
+
+    @Test
+    fun editsAndDeletesAfterReceivingFutureStampsSurviveAnotherMergeAndRestart() = f.run {
+        val edited = f.ledger.createGroup("编辑", false, 0)
+        val deleted = f.ledger.createGroup("删除", false, 0)
+        val root = Json.parseToJsonElement(f.backup.exportForSync().json) as JsonObject
+        val future = f.now + 60_000
+        val groups = (root["groups"] as JsonArray).map { row ->
+            JsonObject(row.jsonObject + mapOf("changedAt" to JsonPrimitive(future), "changeId" to JsonPrimitive("remote")))
+        }
+        val remote = JsonObject(root + mapOf("groups" to JsonArray(groups)))
+        f.backup.mergeFromJson(remote.toString())
+
+        // The process can restart between receiving the snapshot and the next local operation.
+        ChangeStamps.resetForTests()
+        val restartedGate = WriteGate(f.db, crashOnMissingEpoch = true)
+        val ledger = LedgerRepository(f.db, restartedGate, f.scope, clock = { f.now })
+        withContext(restartedGate.bound()) {
+            ledger.updateGroup(edited, "本机修改", false, 0)
+            ledger.deleteGroup(deleted)
+        }
+        withContext(f.gate.bound()) { f.backup.mergeFromJson(remote.toString()) }
+        assertEquals("本机修改", f.db.dao().group(edited)?.name)
+        assertEquals(null, f.db.dao().group(deleted))
+    }
 
     @Test
     fun aMergeWritesTheUnionAndKeepsALocalCopy() = f.run {

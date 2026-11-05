@@ -314,7 +314,7 @@ class NoteRepository(
         // The foreign key would null the notes anyway; doing it here gives them a content stamp,
         // so a device still holding the topic link can't out-vote the un-filing (§4.2).
         for (noteId in noteIds) dao.setTopic(noteId, null, stamp.at, stamp.id)
-        db.dao().putTombstone(deletedTombstone("noteTopics", RowKey.of("noteTopics", id), stamp.at))
+        db.dao().putTombstone(deletedTombstone("noteTopics", RowKey.of("noteTopics", id), clock()))
         dao.deleteTopic(id)
         TopicDeletion(t, noteIds)
     }

@@ -77,6 +77,8 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.File
 import java.security.MessageDigest
 
+private const val PENDING_REPLACE = "sync_pending_replace"
+
 /**
  * Format 2 adds the todo and diary tables, format 3 the daily habit checks, format 4 the health
  * profile and weigh-ins, format 5 the notes, format 6 the notes' order and the weekly reviews,
@@ -669,6 +671,12 @@ class BackupManager(
     /** One merge's written data, plus how many repairs it made (for the "合并调整 N 处" notice). */
     data class MergeWriteResult(val snapshot: SyncSnapshot, val adjustments: Int)
 
+    suspend fun pendingReplace(): String? = db.metaDao().get(PENDING_REPLACE)
+
+    suspend fun clearPendingReplace(expected: String) = db.withTransaction {
+        if (db.metaDao().get(PENDING_REPLACE) == expected) db.metaDao().delete(PENDING_REPLACE)
+    }
+
     /**
      * The MergeWriter: freeze the gate, commit unsaved editor text, merge the local snapshot with
      * [remoteText], and write the result back in one transaction. The local file is untouched if
@@ -684,7 +692,10 @@ class BackupManager(
             val local = current()
             val localElement = json.encodeToJsonElement(BackupFile.serializer(), local) as JsonObject
             val remoteElement = json.encodeToJsonElement(BackupFile.serializer(), remote) as JsonObject
-            val merged = Merge.merge(localElement, remoteElement)
+            val pending = db.metaDao().get(PENDING_REPLACE)
+            val mergeLocal = if (pending == null) localElement else applyPendingReplace(localElement, remoteElement, pending)
+            val merged = Merge.merge(mergeLocal, remoteElement)
+            ChangeStamps.observe(maxStamp(merged.data))
             val adjustments = merged.adjustments.sumOf { it.count }
             val localSnapshot = SyncSnapshot(json.encodeToString(BackupFile.serializer(), local), CanonicalJson.contentHash(localElement), local.exportedAt, isEmpty(local))
             // The common case when the other side only echoed what this device had.
@@ -774,11 +785,11 @@ class BackupManager(
      */
     suspend fun resetLedgerHistory(): String = withContext(Dispatchers.IO) {
         val now = clock()
-        replaceAll { withoutLedgerHistory(current(), now).also(::validate) }
+        replaceAll(setOf("snapshots", "valuations", "snapshotItems", "flows")) { withoutLedgerHistory(current(), now).also(::validate) }
     }
 
     /** Steps 1 to 6 of [restore]; [load] runs once the editors are flushed and must throw on a bad file. */
-    private suspend fun replaceAll(load: suspend () -> BackupFile): String {
+    private suspend fun replaceAll(tables: Set<String> = CanonicalJson.rowKeyFields.keys, load: suspend () -> BackupFile): String {
         gate.freeze()
         var committed = false
         try {
@@ -797,7 +808,18 @@ class BackupManager(
                 maxStamp(json.encodeToJsonElement(BackupFile.serializer(), loaded) as JsonObject) + 1,
                 maxStamp(json.encodeToJsonElement(BackupFile.serializer(), previous) as JsonObject) + 1,
             )
-            val file = prepareReplace(loaded, previous, ChangeStamps.nextAt(at), reserved.id)
+            ChangeStamps.observe(at - 1)
+            val replaceAt = ChangeStamps.nextAt(clock())
+            val file = prepareReplace(loaded, previous, replaceAt, reserved.id, tables == CanonicalJson.rowKeyFields.keys)
+            val encoded = json.encodeToJsonElement(BackupFile.serializer(), file) as JsonObject
+            val operation = JsonObject(mapOf(
+                "at" to JsonPrimitive(replaceAt), "id" to JsonPrimitive(reserved.id),
+                "tables" to JsonObject(tables.associateWith { table ->
+                    JsonArray((encoded[table] as? JsonArray).orEmpty().map { JsonPrimitive(CanonicalJson.rowKey(table, it as JsonObject)) })
+                }),
+            ))
+            val earlier = db.metaDao().get(PENDING_REPLACE)?.let { Json.parseToJsonElement(it) as JsonArray }.orEmpty()
+            val pending = JsonArray(earlier + operation).toString()
             val savedTo = savePreRestoreCopy()
             val oldIds = db.todoDao().allTodos().map { it.id }
             // The transaction and the hand-over are not cancellable: a caller that goes away while
@@ -807,6 +829,7 @@ class BackupManager(
             withContext(NonCancellable) {
                 val epoch = db.withTransaction {
                     overwrite(file)
+                    db.metaDao().put(AppMeta(PENDING_REPLACE, pending))
                     if (failInsideRestoreTransaction) throw IllegalStateException("模拟写入失败")
                     gate.bumpEpochInTransaction()
                 }
@@ -833,6 +856,32 @@ class BackupManager(
             // Screens bound to the old epoch could not save anything; they are rebuilt either way.
             if (committed) onRestored()
         }
+    }
+
+    private fun applyPendingReplace(local: JsonObject, remote: JsonObject, pendingText: String): JsonObject {
+        val operations = Json.parseToJsonElement(pendingText) as JsonArray
+        val tombstones = (local["tombstones"] as? JsonArray).orEmpty().toMutableList()
+        val existing = tombstones.map { ((it as JsonObject)["rowKey"] as JsonPrimitive).content }.toMutableSet()
+        for (operation in operations.reversed()) {
+            val pending = operation as JsonObject
+            val at = (pending.getValue("at") as JsonPrimitive).content.toLong()
+            val id = (pending.getValue("id") as JsonPrimitive).content
+            val tables = pending.getValue("tables") as JsonObject
+            for ((table, keysValue) in tables) {
+                val keys = (keysValue as JsonArray).map { (it as JsonPrimitive).content }.toSet()
+                val live = (local[table] as? JsonArray).orEmpty().map { CanonicalJson.rowKey(table, it as JsonObject) }.toSet()
+                for (value in (remote[table] as? JsonArray).orEmpty()) {
+                    val row = value as JsonObject
+                    val key = CanonicalJson.rowKey(table, row)
+                    val changedAt = (row["changedAt"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L
+                    if (key !in keys && key !in live && key !in existing && changedAt <= at) {
+                        tombstones += json.encodeToJsonElement(Tombstone.serializer(), Tombstone(table, key, at, "T:$id"))
+                        existing += key
+                    }
+                }
+            }
+        }
+        return JsonObject(local + ("tombstones" to JsonArray(tombstones)))
     }
 
     /** The newest stamp anywhere in an encoded file: rows, state stamps, tombstones, the goal. */
@@ -863,7 +912,7 @@ class BackupManager(
      * tombstone, and the goal is stamped whether it is set or cleared. Row keys are the same ones
      * the merge uses, so the two devices agree on which row a tombstone names.
      */
-    private fun prepareReplace(file: BackupFile, previous: BackupFile, at: Long, id: String): BackupFile {
+    private fun prepareReplace(file: BackupFile, previous: BackupFile, at: Long, id: String, clearUnknownGoal: Boolean): BackupFile {
         val target = json.encodeToJsonElement(BackupFile.serializer(), file) as JsonObject
         val old = json.encodeToJsonElement(BackupFile.serializer(), previous) as JsonObject
         val root = LinkedHashMap<String, JsonElement>(target)
@@ -909,6 +958,13 @@ class BackupManager(
         for (tombstone in removed) {
             tombstones += json.encodeToJsonElement(Tombstone.serializer(), tombstone) as JsonObject
         }
+        if (file.healthProfile != null) {
+            tombstones.removeAll { ((it as JsonObject)["rowKey"] as? JsonPrimitive)?.content == "healthProfile#self" }
+        }
+        if (clearUnknownGoal && file.healthProfile == null) {
+            tombstones.removeAll { ((it as JsonObject)["rowKey"] as? JsonPrimitive)?.content == "healthProfile#self" }
+            tombstones += json.encodeToJsonElement(Tombstone.serializer(), Tombstone("healthProfile", "healthProfile#self", at, "T:$id"))
+        }
         root["tombstones"] = JsonArray(tombstones)
 
         val hadGoal = previous.netWorthGoal != null || previous.netWorthGoalAt != 0L || previous.netWorthGoalChangeId.isNotEmpty()
@@ -916,7 +972,7 @@ class BackupManager(
             root["netWorthGoal"] = JsonPrimitive(file.netWorthGoal)
             root["netWorthGoalAt"] = JsonPrimitive(at)
             root["netWorthGoalChangeId"] = JsonPrimitive(id)
-        } else if (hadGoal) {
+        } else if (hadGoal || clearUnknownGoal) {
             root["netWorthGoal"] = JsonNull
             root["netWorthGoalAt"] = JsonPrimitive(at)
             root["netWorthGoalChangeId"] = JsonPrimitive(id)
@@ -1194,7 +1250,7 @@ class BackupManager(
     }
 
     companion object {
-        const val FORMAT_VERSION = 16
+        const val FORMAT_VERSION = 17
 
         /** The four tables whose display/system fields move a separate state stamp. */
         private val STATE_TABLES = setOf("diaryEntries", "notes", "todos", "countdowns")

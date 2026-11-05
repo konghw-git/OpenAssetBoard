@@ -50,6 +50,52 @@ const note = (body, changedAt = 1_000_000, changeId = `edit-${body}`) => {
   return row;
 };
 
+test('import removes unseen older remote rows and preserves newer remote rows', async () => {
+  const { store, remote } = setup();
+  await store.sync();
+  const old = note('old', 10, 'old');
+  const newer = note('new', 2000, 'new');
+  remote.data.notes.push(old, newer);
+  remote.revision = 1;
+  await store.import(JSON.stringify(D.empty()));
+  assert.deepEqual(remote.data.notes.map((row) => row.body), ['new']);
+  store.close();
+});
+
+test('import clears an unseen older cloud goal', async () => {
+  const { store, remote } = setup();
+  await store.sync();
+  Object.assign(remote.data, { netWorthGoal: 100000, netWorthGoalAt: 10, netWorthGoalChangeId: 'old' });
+  remote.revision = 1;
+  await store.import(JSON.stringify(D.empty()));
+  assert.equal(remote.data.netWorthGoal, null);
+  store.close();
+});
+
+test('import removes an older health profile and keeps its deletion for later merges', async () => {
+  const { store, remote } = setup();
+  remote.data.healthProfile = D.row('healthProfile', { changedAt: 10, changeId: 'old' });
+  remote.revision = 1;
+  await store.sync();
+  await store.import(JSON.stringify(D.empty()));
+  assert.equal(remote.data.healthProfile, null);
+  assert.ok(remote.data.tombstones.some(t => t.rowKey === 'healthProfile#self'));
+  store.close();
+});
+
+test('a newer health profile defeats an earlier profile deletion', async () => {
+  const { store, remote } = setup();
+  await store.sync();
+  await store.import(JSON.stringify(D.empty()));
+  const oldTomb = remote.data.tombstones.find(t => t.rowKey === 'healthProfile#self');
+  remote.data.healthProfile = D.row('healthProfile', { changedAt: oldTomb.deletedAt + 1, changeId: 'new' });
+  remote.revision += 1;
+  await store.sync();
+  assert.ok(store.data.healthProfile);
+  assert.ok(!store.data.tombstones.some(t => t.rowKey === 'healthProfile#self'));
+  store.close();
+});
+
 test('an edit is stamped, uploaded with If-Match and the canonical hash', async () => {
   const { store, remote, calls } = setup();
   await store.sync();
@@ -151,7 +197,7 @@ test('invalid data never replaces the in-memory state', async () => {
 test('a snapshot from a newer version stops all uploads', async () => {
   const { store, remote } = setup();
   store.request = async (path) => {
-    if (path === '/sync/meta') return { value: { revision: 1, formatVersion: 17, schemaVersion: 15 } };
+    if (path === '/sync/meta') return { value: { revision: 1, formatVersion: 18, schemaVersion: 15 } };
     throw Error('must not download');
   };
   await assert.rejects(store.sync(), /更新版本/);
