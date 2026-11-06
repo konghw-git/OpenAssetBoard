@@ -1,5 +1,7 @@
 package com.assetboard.ui.todo
 
+import com.assetboard.domain.AppClock
+import java.time.ZonedDateTime
 import com.assetboard.data.TodoData
 import com.assetboard.data.TodoKind
 import com.assetboard.data.TodoList
@@ -30,7 +32,7 @@ data class ListDeckRow(
 )
 
 /** [ListDeckRow]s for [lists] in the given order. Null [d] (data still loading) yields empty rows. */
-fun buildListDeckRows(lists: List<TodoList>, d: TodoData?, today: LocalDate): List<ListDeckRow> {
+fun buildListDeckRows(lists: List<TodoList>, d: TodoData?, today: LocalDate, now: ZonedDateTime = ZonedDateTime.now(AppClock.clock)): List<ListDeckRow> {
     val mine = d?.todos.orEmpty().filter { it.deletedAt == null && it.kind != TodoKind.COMPLETION }
     val openByList = mine.filter(TodoViews::isOpen).groupBy { it.listId }
     val settledByList = mine.filterNot(TodoViews::isOpen).groupBy { it.listId }
@@ -43,7 +45,7 @@ fun buildListDeckRows(lists: List<TodoList>, d: TodoData?, today: LocalDate): Li
             id = l.id,
             name = l.name,
             open = open.size,
-            deadline = TodoViews.parse(l.deadline)?.let { TodoViews.deadlineBadge(it, today)?.text },
+            deadline = TodoViews.parse(l.deadline)?.let { TodoViews.deadlineBadge(it, today, now).text },
             sections = sectionsByList[l.id] ?: 0,
             preview = open.sortedBy { it.sortOrder }.take(3).map { it.title },
             progress = if (total == 0) null else settled.toFloat() / total,

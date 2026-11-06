@@ -1,5 +1,7 @@
 package com.assetboard.domain.todo
 
+import com.assetboard.domain.AppClock
+import java.time.ZonedDateTime
 import com.assetboard.data.Todo
 import com.assetboard.data.TodoKind
 import java.time.Instant
@@ -110,27 +112,26 @@ object TodoViews {
     // ------------------------------------------------------------ row labels
 
     /** The date tag on a row's line of tags: overdue days, deadline countdown, or a future date. */
-    fun trailing(t: Todo, today: LocalDate, inUpcomingView: Boolean = false): DateBadge? {
+    fun trailing(t: Todo, today: LocalDate, inUpcomingView: Boolean = false, now: ZonedDateTime = ZonedDateTime.now(AppClock.clock)): DateBadge? {
         val plan = parse(t.planDate)
         val deadline = parse(t.deadline)
-        if (deadline != null) deadlineBadge(deadline, today).takeIf { it.tone != DateBadge.Tone.PLAIN }?.let { return it }
+        if (deadline != null) return deadlineBadge(deadline, today, now)
         if (plan != null && plan.isBefore(today)) {
             return DateBadge("已过 ${ChronoUnit.DAYS.between(plan, today)} 天", DateBadge.Tone.WARN)
         }
         if (!inUpcomingView && plan != null && plan.isAfter(today)) return DateBadge(shortDate(plan, today), DateBadge.Tone.PLAIN)
-        if (deadline != null) return deadlineBadge(deadline, today)
         return null
     }
 
-    /** A deadline as a tag, for a todo or a list: past, today, the last three days, or plain. */
-    fun deadlineBadge(deadline: LocalDate, today: LocalDate): DateBadge {
+    /** A deadline always retains both its date and its distance. */
+    fun deadlineBadge(deadline: LocalDate, today: LocalDate, now: ZonedDateTime = ZonedDateTime.now(AppClock.clock)): DateBadge {
         val left = ChronoUnit.DAYS.between(today, deadline)
-        return when {
-            left < 0 -> DateBadge("已超期 ${-left} 天", DateBadge.Tone.ALERT, deadline = true)
-            left == 0L -> DateBadge("今天截止", DateBadge.Tone.ALERT, deadline = true)
-            left <= 3 -> DateBadge("截止还剩 $left 天", DateBadge.Tone.WARN, deadline = true)
-            else -> DateBadge("截止 " + shortDate(deadline, today), DateBadge.Tone.PLAIN, deadline = true)
+        val tone = when {
+            left <= 0 -> DateBadge.Tone.ALERT
+            left <= 3 -> DateBadge.Tone.WARN
+            else -> DateBadge.Tone.PLAIN
         }
+        return DateBadge(Deadline.label(deadline, now), tone, deadline = true)
     }
 
     fun shortDate(d: LocalDate, today: LocalDate): String {

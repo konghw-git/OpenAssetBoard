@@ -186,6 +186,7 @@ fun ListRow(
     trailing: @Composable (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
     chevron: Boolean = onClick != null,
+    subtitleMaxLines: Int = 2,
 ) {
     Row(
         modifier = modifier
@@ -202,7 +203,7 @@ fun ListRow(
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!subtitle.isNullOrBlank()) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = subtitleMaxLines, overflow = TextOverflow.Ellipsis)
             }
         }
         if (trailing != null) {

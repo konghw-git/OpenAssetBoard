@@ -68,7 +68,7 @@ class InlineEditorEnterTest {
         compose.onNodeWithText("买菜").performClick()
         compose.onNodeWithText("买菜").performTextInput("\n")
         compose.waitForIdle()
-        compose.onNodeWithText("完成").performClick()
+        compose.onNodeWithText("保存").performClick()
         compose.waitForIdle()
         assertEquals(listOf("a", "b"), committed!!.filter { it.text.isNotEmpty() }.map { it.id })
         assertEquals(listOf("买蛋", "买奶"), committed!!.filter { it.text.isNotEmpty() }.map { it.text })

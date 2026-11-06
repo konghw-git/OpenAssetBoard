@@ -93,6 +93,20 @@ object AiAgent {
         throw IllegalStateException("模型一直在调用工具，没有写出日记")
     }
 
+    /** Tool envelopes stay out of the live diary preview. */
+    fun writingPreview(partial: String): String {
+        var text = partial.trim('\r', '\n')
+        if (text.isNotEmpty() && text.length <= 3 && text.all { it == '`' }) return ""
+        if (text.startsWith("```")) {
+            val firstLine = text.indexOf('\n')
+            if (firstLine < 0) return ""
+            text = text.substring(firstLine + 1).removeSuffix("```").trim('\r', '\n')
+        }
+        val start = text.trimStart()
+        if (start.startsWith("{")) return ""
+        return if (parseCall(text) == null) text else ""
+    }
+
     /**
      * The tool call a reply asks for, or null when it is the diary itself. Accepts a reply that is
      * just the JSON object, or a short reply carrying one on its own line — but a long reply is

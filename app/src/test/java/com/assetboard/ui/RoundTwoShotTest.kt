@@ -153,7 +153,7 @@ class RoundTwoShotTest {
         // On the title itself: the card's middle is its checklist, which ticks.
         compose.onNodeWithText("准备组会 PPT", useUnmergedTree = true).performClick()
         compose.mainClock.advanceTimeBy(500)
-        compose.onNodeWithText("完成").assertExists()
+        compose.onNodeWithText("保存").assertExists()
         shot("53-todo-inline-edit")
         // Enter at the end of the last item: a new, empty one under it.
         val fields = compose.onAllNodes(hasSetTextAction())
@@ -161,7 +161,7 @@ class RoundTwoShotTest {
         compose.mainClock.advanceTimeBy(500)
         fields[4].performTextReplacement("​问导师的问题")
         shot("53b-todo-inline-added")
-        compose.onNodeWithText("完成").performClick()
+        compose.onNodeWithText("保存").performClick()
         compose.waitUntil(5_000) {
             runBlocking { c.todos.loadOnce().checklist.any { it.text == "问导师的问题" } }
         }
@@ -194,12 +194,12 @@ class RoundTwoShotTest {
         compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("交水电费").performTouchInput { up() }
         compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithText("完成").assertDoesNotExist()
+        compose.onNodeWithText("保存").assertDoesNotExist()
         compose.mainClock.autoAdvance = true
         compose.mainClock.advanceTimeBy(500)
         // Selected, not edited as well.
         compose.onNodeWithText("已选 1 条").assertExists()
-        compose.onNodeWithText("完成").assertDoesNotExist()
+        compose.onNodeWithText("保存").assertDoesNotExist()
         compose.onNodeWithText("给导师发周报").performClick()
         compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithText("已选 2 条").assertExists()
@@ -212,7 +212,7 @@ class RoundTwoShotTest {
         shot("62-todo-gathered")
         compose.onAllNodes(hasSetTextAction())[0].performTextReplacement("这周杂事")
         // Today is in the hand-set order: the new todo stands where the first of the two did, below the screen's edge here.
-        compose.onNodeWithText("完成").performScrollTo().performClick()
+        compose.onNodeWithText("保存").performScrollTo().performClick()
         compose.waitUntil(5_000) {
             runBlocking { c.todos.loadOnce().todos.any { it.title == "这周杂事" && it.deletedAt == null } }
         }

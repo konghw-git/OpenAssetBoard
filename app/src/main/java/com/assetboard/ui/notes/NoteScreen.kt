@@ -118,6 +118,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
     var outline by rememberSaveable { mutableStateOf(false) }
     val editorState = remember(vm) { NoteEditorState(vm::onInput) }
     val aiBusy by vm.aiBusy.collectAsStateWithLifecycle()
+    val aiPreview by vm.aiPreview.collectAsStateWithLifecycle()
     // The AI passes act on the selection when there is one, the whole body otherwise; the result
     // lands as one undo step on the editor state.
     val runAi: (AiAction) -> Unit = { kind ->
@@ -204,6 +205,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
                     .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = if (editing) 112.dp else 80.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                com.assetboard.ui.notes.AiStreamPreview(aiBusy != null, aiPreview)
                 session?.let { s ->
                     NoteEditor(s, editorState, autoFocus = noteId == null, scrollState = scroll, onFocus = { editing = it })
                 }

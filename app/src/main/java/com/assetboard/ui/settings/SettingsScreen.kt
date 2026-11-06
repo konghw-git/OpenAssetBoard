@@ -111,6 +111,7 @@ import com.assetboard.ui.components.tilt
 import com.assetboard.ui.theme.AppTheme
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import com.assetboard.ui.components.verticalScrollWithIndicator
 
@@ -468,7 +469,9 @@ fun SettingsScreen(
                         onCheck = {
                             scope.launch {
                                 aiCheck = AiCheck(running = true)
-                                aiCheck = runCatching { container.ai.testConnection() }
+                                aiCheck = runCatching { container.ai.testConnection { partial ->
+                                    withContext(kotlinx.coroutines.Dispatchers.Main) { aiCheck = AiCheck(running = true, detail = partial) }
+                                } }
                                     .fold(
                                         { reply -> AiCheck(ok = true, detail = "连接正常 · 回复「${reply.trim().take(16)}」") },
                                         { e -> AiCheck(ok = false, detail = e.message ?: "无法连接") },
@@ -599,7 +602,7 @@ private fun AiCheckStatus(check: AiCheck, onCheck: () -> Unit, enabled: Boolean 
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    Text("正在测试连接…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    Text(check.detail?.let { "正在接收 · $it" } ?: "正在测试连接…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
                 check.ok == true -> Text(check.detail ?: "连接正常", style = MaterialTheme.typography.bodySmall, color = cs.primary)
                 check.ok == false -> Text(check.detail ?: "无法连接", style = MaterialTheme.typography.bodySmall, color = cs.error)

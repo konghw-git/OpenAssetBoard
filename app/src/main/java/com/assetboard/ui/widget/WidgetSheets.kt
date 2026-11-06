@@ -1,5 +1,6 @@
 package com.assetboard.ui.widget
 
+import com.assetboard.ui.todo.rememberDeadlineNow
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
@@ -449,18 +450,17 @@ private fun TodoEditPage(id: String, dismiss: () -> Unit) {
                 keyboardActions = KeyboardActions(onDone = { dismiss() }),
                 modifier = Modifier.fillMaxWidth(),
             )
-            val badge = TodoViews.trailing(todo, today)
+            val badge = TodoViews.trailing(todo, today, now = rememberDeadlineNow())
             val meta = listOfNotNull(todo.remindTime, todo.listId?.let { data?.listById?.get(it)?.name }, if (todo.repeatRule != null) "重复" else null)
             if (badge != null || meta.isNotEmpty()) {
-                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.padding(top = 4.dp)) {
                     if (badge != null) {
                         val c = when (badge.tone) {
                             DateBadge.Tone.ALERT -> cs.error
                             DateBadge.Tone.WARN -> AppTheme.extra.group(2)
                             DateBadge.Tone.PLAIN -> cs.onSurfaceVariant
                         }
-                        Text(badge.text, style = MaterialTheme.typography.labelMedium, color = c)
-                        if (meta.isNotEmpty()) Text("  ·  ", style = MaterialTheme.typography.labelMedium, color = cs.outline)
+                        Text(badge.text.replace(" · ", "\n"), style = MaterialTheme.typography.labelMedium, color = c)
                     }
                     if (meta.isNotEmpty()) Text(meta.joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 }

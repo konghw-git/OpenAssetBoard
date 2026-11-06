@@ -38,7 +38,7 @@ class TodoDeckCardsTest {
     private fun data(todos: List<Todo> = emptyList(), sections: List<TodoSection> = emptyList()) =
         TodoData(lists = emptyList(), sections = sections, todos = todos, checklist = emptyList())
 
-    private fun rows(d: TodoData?, lists: List<TodoList>) = buildListDeckRows(lists, d, today)
+    private fun rows(d: TodoData?, lists: List<TodoList>) = buildListDeckRows(lists, d, today, today.atTime(20, 30).atZone(java.time.ZoneId.of("Asia/Shanghai")))
 
     @Test fun countsOnlyTheOpenTodosOfEachList() {
         val d = data(
@@ -79,7 +79,7 @@ class TodoDeckCardsTest {
 
     @Test fun theDeadlineShowsAsBadgeText() {
         val rows = rows(data(), listOf(list("soon", deadline = today.plusDays(1).toString()), list("plain")))
-        assertEquals("截止还剩 1 天", rows[0].deadline)
+        assertEquals("截止 2026-10-26（当天结束） · 剩余 1 天 3 小时", rows[0].deadline)
         assertNull(rows[1].deadline)
     }
 

@@ -59,6 +59,18 @@ class TodoRepositoryTest {
 
     // ------------------------------------------------------------ P: repeat, tokens, undo
 
+    @Test fun creatingAndEditingAChecklistNeverCompletesItsParent() = f.run {
+        val id = repo.create(TodoDraft("出行", planDate = repo.today()))
+        assertNull(get(id).completedAt)
+        val item = repo.addChecklistItem(id, "车票")
+        repo.editInline(id, "周末出行", listOf(InlineItem(item, "高铁票"), InlineItem(null, "身份证")))
+        repo.loadOnce().checklistByTodo[id].orEmpty().forEach { repo.toggleChecklist(it.id) }
+        val parent = get(id)
+        assertNull(parent.completedAt)
+        assertTrue(TodoViews.today(repo.loadOnce().todos, repo.today()).single { it.todo.id == id }.let { !it.done })
+        assertTrue(log().isEmpty())
+    }
+
     @Test fun p1_monthlyDoesNotMakeUpMissedPeriods() = f.run {
         val id = repeating(RepeatRule(RepeatType.MONTHLY_DAY, day = 15), "2026-09-15")
         f.setNow("2026-10-20")

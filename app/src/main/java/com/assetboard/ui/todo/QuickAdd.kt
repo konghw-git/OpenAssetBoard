@@ -1,5 +1,6 @@
 package com.assetboard.ui.todo
 
+import com.assetboard.domain.todo.Deadline
 import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -250,7 +251,7 @@ fun QuickAddForm(
             }
         }
         val more: @Composable () -> Unit = {
-            Choice(deadline?.let { "截止 " + TodoDayLabel(LocalDate.parse(it), today) } ?: "截止", selected = deadline != null, icon = Icons.Outlined.Event) {
+            Choice(deadline?.let { Deadline.label(LocalDate.parse(it), rememberDeadlineNow()).replace(" · ", "\n") } ?: "截止", selected = deadline != null, icon = Icons.Outlined.Event) {
                 if (deadline != null) deadline = null else dialog = "deadline"
             }
             // The time of day, which is also when the reminder goes off.
@@ -323,6 +324,6 @@ private fun Choice(label: String, selected: Boolean, icon: ImageVector? = null, 
             Icon(icon, null, tint = if (selected) fg else (tint ?: cs.onSurfaceVariant), modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(5.dp))
         }
-        Text(label, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = if ('\n' in label) 2 else 1)
     }
 }

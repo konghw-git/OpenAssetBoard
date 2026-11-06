@@ -1,5 +1,6 @@
 package com.assetboard.ui.todo
 
+import com.assetboard.domain.todo.Deadline
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
@@ -165,27 +166,41 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
     val confirmRecord = MutableStateFlow(false)
     private val title = MutableStateFlow<String?>(null)
     private val notes = MutableStateFlow<String?>(null)
+    private val itemEdits = MutableStateFlow<Map<String, String>>(emptyMap())
+    // Text fields must see their last input synchronously; a collected flow can echo stale text.
+    var newItem by mutableStateOf("")
     /** One text write at a time, each writing the latest text, so an older one never lands last. */
     private val textLock = Mutex()
 
     init {
         launchBound { title.debounce(600).collect { runCatching { commitText() } } }
         launchBound { notes.debounce(600).collect { runCatching { commitText() } } }
+        launchBound { itemEdits.debounce(600).collect { runCatching { commitText() } } }
     }
 
     fun editTitle(v: String) { title.value = v }
     fun editNotes(v: String) { notes.value = v }
 
+    fun save(onDone: () -> Unit) = action(onSuccess = onDone) { commitText(includeNewItem = true) }
+
     /** Writes the typed title and notes now; the repository skips what is already saved. */
-    private suspend fun commitText() = textLock.withLock {
+    private suspend fun commitText(includeNewItem: Boolean = false) = textLock.withLock {
         title.value?.let { if (it.isNotBlank()) repo.setTitle(id, it) }
         notes.value?.let { repo.setNotes(id, it) }
+        for ((itemId, text) in itemEdits.value) if (text.isNotBlank()) repo.setChecklistText(itemId, text)
+        if (includeNewItem) {
+            val text = newItem
+            if (text.isNotBlank()) {
+                repo.addChecklistItem(id, text)
+                if (newItem == text) newItem = ""
+            }
+        }
     }
 
     /** Leaving the page: write pending text now, on the app scope so it outlives the screen. */
     fun flush(container: AppContainer) {
-        if (title.value == null && notes.value == null) return
-        container.appScope.launch(epoch) { runCatching { commitText() } }
+        if (title.value == null && notes.value == null && itemEdits.value.isEmpty() && newItem.isBlank()) return
+        container.appScope.launch(epoch) { runCatching { commitText(includeNewItem = true) } }
     }
 
     fun setPlan(date: LocalDate?, time: LocalTime?) = action { repo.setPlan(id, date, time) }
@@ -196,19 +211,23 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
     fun setRemindBefore(minutes: Int) = action { repo.setRemindBefore(id, minutes) }
     fun setRepeat(rule: RepeatRule?, onDone: () -> Unit) = action(onSuccess = onDone) { repo.setRepeat(id, rule) }
     fun move(listId: String?, sectionId: String?) = action { repo.move(id, listId, sectionId) }
-    fun addItem(text: String) = action { if (text.isNotBlank()) repo.addChecklistItem(id, text) }
+    fun addItem() = action { commitText(includeNewItem = true) }
     fun toggleItem(itemId: String) = action { repo.toggleChecklist(itemId) }
-    fun editItem(itemId: String, text: String) = action { repo.setChecklistText(itemId, text) }
+    fun editItem(itemId: String, text: String) { itemEdits.value = itemEdits.value + (itemId to text) }
     fun moveChecklist(itemId: String, into: String, before: String?) = action {
+        commitText()
         val undo = repo.moveChecklistItem(itemId, into, before) ?: return@action
         events.tryEmit(UndoEvent("已移动检查项") { repo.undoChecklistMove(undo) })
     }
     /** A checklist item dragged out of the todo becomes a todo of its own. */
     fun extractItem(itemId: String) = action {
+        commitText()
         val extract = repo.extractChecklistItem(itemId) ?: return@action
         events.tryEmit(UndoEvent("「${extract.item.text.take(14)}」已变成独立待办") { repo.undoExtract(extract) })
     }
     fun deleteItem(itemId: String) = action {
+        commitText()
+        itemEdits.value = itemEdits.value - itemId
         val item = repo.deleteChecklistItem(itemId) ?: return@action
         events.tryEmit(UndoEvent("已删除检查项「${item.text.take(14)}」") { repo.restoreChecklistItem(item) })
     }
@@ -222,7 +241,7 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
     // trash keeps what was deleted, so the typed text goes in first.
     fun complete() = action {
         val t = state.value.todo ?: return@action
-        commitText()
+        commitText(includeNewItem = true)
         repo.complete(t.id, t.stateSeq)
         events.tryEmit(UndoEvent(if (t.kind == TodoKind.REPEAT_SOURCE) "本期已完成，已排到下一期" else "已完成"))
     }
@@ -233,7 +252,7 @@ class TodoDetailViewModel(container: AppContainer, private val id: String) : Act
 
     fun skip() = action {
         val t = state.value.todo ?: return@action
-        commitText()
+        commitText(includeNewItem = true)
         repo.skip(t.id, t.stateSeq)
         events.tryEmit(UndoEvent("已跳过本期"))
     }
@@ -299,6 +318,8 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
     val done = !TodoViews.isOpen(t)
     val ended = t.kind == TodoKind.REPEAT_SOURCE && t.repeatEndedAt != null
     val editable = !record && !ended
+    val leave = { if (editable) vm.save(onClose) else onClose() }
+    androidx.activity.compose.BackHandler(enabled = !inSheet) { leave() }
     val detailScroll = rememberScrollState()
     // The phone's calendar: the chosen one, its picker, and where this todo's event lives.
     val calendarScope = rememberCoroutineScope()
@@ -375,10 +396,11 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
         CompositionLocalProvider(LocalDust provides dust, LocalChecklistDrag provides checklistDrag) {
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) {
+                IconButton(onClick = leave) {
                     Icon(if (inSheet) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, if (inSheet) "关闭" else "返回")
                 }
                 Text(if (record) "完成记录" else "", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                if (editable) TextButton(onClick = { vm.save(onClose) }) { Text("保存并返回") }
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "更多") }
                     DropdownMenu(menu, { menu = false }) {
@@ -463,7 +485,7 @@ fun TodoDetailContent(todoId: String, onClose: () -> Unit, onOpenTodo: (String) 
                             if (done) {
                                 OutlinedButton(onClick = { vm.uncomplete() }, modifier = Modifier.weight(1f)) { Text("取消完成") }
                             } else {
-                                Button(onClick = vm::complete, modifier = Modifier.weight(1f)) { Text(if (t.kind == TodoKind.REPEAT_SOURCE) "完成本期" else "完成") }
+                                Button(onClick = vm::complete, modifier = Modifier.weight(1f)) { Text(if (t.kind == TodoKind.REPEAT_SOURCE) "标记本期完成" else "标记待办完成") }
                                 if (t.kind == TodoKind.REPEAT_SOURCE) OutlinedButton(onClick = vm::skip, modifier = Modifier.weight(1f)) { Text("跳过本期") }
                             }
                         }
@@ -616,11 +638,14 @@ private fun Schedule(
         RowDivider(58.dp)
         ListRow(
             title = "截止日",
-            subtitle = if (deadline != null && plan != null && deadline.isBefore(plan)) "截止日早于计划日" else null,
+            subtitleMaxLines = 4,
+            subtitle = deadline?.let { Deadline.label(it, rememberDeadlineNow()) }?.let { label ->
+                if (plan != null && deadline.isBefore(plan)) "$label\n截止日早于计划日" else label
+            },
             leading = { Icon(Icons.Outlined.Event, null, tint = cs.primary) },
             trailing = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(deadline?.let { dayTitle(it, today) } ?: "无", color = if (deadline != null && !deadline.isAfter(today)) cs.error else cs.onSurfaceVariant)
+                    if (deadline == null) Text("无", color = cs.onSurfaceVariant)
                     if (deadline != null && editable) IconButton(onClick = { vm.setDeadline(null) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, "清除截止日", Modifier.size(16.dp)) }
                 }
             },
@@ -631,13 +656,14 @@ private fun Schedule(
         val progress = rule?.count?.let { n -> "第 ${(t.occurrenceCount - rule.countBase + 1).coerceAtMost(n)} / $n 次" }
         ListRow(
             title = "重复",
-            subtitle = when {
+            subtitleMaxLines = 4,
+            subtitle = listOfNotNull(rule?.untilDate?.let { Deadline.label(LocalDate.parse(it), rememberDeadlineNow()) }, when {
                 t.kind == TodoKind.REPEAT_SOURCE && t.repeatEndedAt != null -> "已结束"
                 plan == null && t.kind == TodoKind.ORDINARY -> "先设置计划日，才能重复"
                 else -> progress
-            },
+            }).joinToString("\n").ifEmpty { null },
             leading = { Icon(Icons.Outlined.Repeat, null, tint = cs.primary) },
-            trailing = { Text(rule?.let(Recurrence::describe) ?: "不重复", color = cs.onSurfaceVariant) },
+            trailing = { Text(rule?.let { Recurrence.describe(it.copy(untilDate = null)) } ?: "不重复", color = cs.onSurfaceVariant) },
             onClick = if (editable && plan != null && t.completedAt == null) ({ onDialog("repeat") }) else null,
         )
         if (t.kind == TodoKind.ORDINARY && t.completedAt == null) {
@@ -711,7 +737,7 @@ private fun Checklist(todoId: String, items: List<ChecklistItem>, editable: Bool
                 }
                 BasicTextField(
                     value = text,
-                    onValueChange = { text = it.replace("\n", "") },
+                    onValueChange = { text = it.replace("\n", ""); vm.editItem(item.id, text) },
                     readOnly = !editable,
                     textStyle = todoTitleStyle.copy(
                         fontWeight = FontWeight.Normal,
@@ -744,7 +770,7 @@ private fun Checklist(todoId: String, items: List<ChecklistItem>, editable: Bool
             }
         }
         if (editable) {
-            var draft by remember { mutableStateOf("") }
+            val draft = vm.newItem
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 // A plus where the check circles stand, so a new item lands in their column.
                 Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
@@ -756,10 +782,10 @@ private fun Checklist(todoId: String, items: List<ChecklistItem>, editable: Bool
                     if (draft.isEmpty()) Text("添加检查项", color = cs.outline, style = todoTitleStyle.copy(fontWeight = FontWeight.Normal))
                     BasicTextField(
                         value = draft,
-                        onValueChange = { draft = it.replace("\n", "") },
+                        onValueChange = { vm.newItem = it.replace("\n", "") },
                         textStyle = todoTitleStyle.copy(fontWeight = FontWeight.Normal, color = cs.onSurface),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { vm.addItem(draft); draft = "" }),
+                        keyboardActions = KeyboardActions(onDone = { vm.addItem() }),
                         cursorBrush = SolidColor(cs.primary),
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -871,9 +897,9 @@ fun RepeatDialog(current: RepeatRule?, plan: LocalDate, occurrenceCount: Int, on
                     }
                 }
                 Text("结束", style = MaterialTheme.typography.labelLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = end == "none", onClick = { end = "none" }, label = { Text("不结束") })
-                    FilterChip(selected = end == "until", onClick = { end = "until"; picking = true }, label = { Text(if (end == "until") "至 $until" else "截止某日") })
+                    FilterChip(selected = end == "until", onClick = { end = "until"; picking = true }, label = { Text(if (end == "until") Deadline.label(LocalDate.parse(until), rememberDeadlineNow()) else "截止某日") })
                     FilterChip(selected = end == "count", onClick = { end = "count" }, label = { Text("共 N 次") })
                 }
                 if (end == "count") {

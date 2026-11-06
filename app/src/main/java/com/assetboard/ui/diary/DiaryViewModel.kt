@@ -71,6 +71,9 @@ data class DayStocktake(val point: NetWorthPoint, val change: Long?)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DiaryViewModel(private val container: AppContainer) : ActionViewModel(container) {
+    /** The running pass and its unsaved, cumulative preview. */
+    val aiBusy = MutableStateFlow<AiAction?>(null)
+    val aiPreview = MutableStateFlow("")
     private val diary = container.diary
     private val _date = MutableStateFlow(AppClock.today())
     val date: StateFlow<LocalDate> = _date.asStateFlow()
@@ -192,6 +195,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     }
 
     private fun show(d: LocalDate) {
+        aiPreview.value = ""
         _date.value = d
         pastMidnight.value = false
         weather.value = WeatherUi.Idle
@@ -266,8 +270,6 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         action { diary.setMood(d, mood?.value) }
     }
 
-    /** The AI pass running right now, if any: its buttons stay busy meanwhile. */
-    val aiBusy = MutableStateFlow<AiAction?>(null)
 
     /** An AI edit that changed the text: what it was before, for the snackbar's 撤销. */
     val tidied = MutableSharedFlow<Tidied>(extraBufferCapacity = 4)
@@ -297,11 +299,19 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
             messages.tryEmit("先写点内容再用 AI")
             return
         }
+        aiPreview.value = ""
         aiBusy.value = kind
         launchBound {
             try {
-                val out = if (kind == AiAction.GENERATE) generate() else {
-                    AiEdit.editText(container.ai::complete, kind, DocKind.DIARY, before, range)
+                suspend fun preview(partial: String) {
+                    if (_session.value === s && s.text.value == before) aiPreview.value = partial
+                    else aiPreview.value = ""
+                }
+                val out = if (kind == AiAction.GENERATE) generate(::preview) else {
+                    AiEdit.editText({ system, user ->
+                        preview("")
+                        container.ai.stream(system, user) { preview(AiEdit.stripFrame(AiEdit.unwrap(it))) }
+                    }, kind, DocKind.DIARY, before, range)
                 }
                 // Left the day while the model worked: the result must not land in a closed session.
                 if (_session.value !== s) {
@@ -329,6 +339,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
             } catch (e: Exception) {
                 messages.tryEmit("${failedLabel(kind)}失败：${e.message ?: "未知错误"}")
             } finally {
+                aiPreview.value = ""
                 aiBusy.value = null
             }
         }
@@ -338,14 +349,17 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
      * The diary agent: seed it with the day read fresh from the database and let it call the data
      * tools (everything but the notes) for whatever else it wants before writing.
      */
-    private suspend fun generate(): String {
+    private suspend fun generate(onText: suspend (String) -> Unit): String {
         val date = _date.value
         val tools = dayTools.tools(date)
         val system = AiEdit.DIARY_SYSTEM + "\n\n你可以调用以下工具查数据：\n" + AiAgent.toolsDoc(tools)
         val seed = AiEdit.daySummary(dayTools.dayFacts(date)) + "\n\n写这一天的日记。"
         return AiAgent.run(
             chat = { history: List<AiAgent.Turn> ->
-                container.ai.chat(system, history.map { ChatTurn(it.role, it.content) })
+                onText("")
+                container.ai.streamChat(system, history.map { ChatTurn(it.role, it.content) }) {
+                    onText(AiAgent.writingPreview(it))
+                }
             },
             tools = tools,
             seed = seed,

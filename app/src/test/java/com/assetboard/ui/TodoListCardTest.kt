@@ -87,7 +87,7 @@ class TodoListCardTest {
         openDeck()
         swipeToNextCard()
         val name = compose.onNodeWithText("论文", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        val tag = compose.onNodeWithText("截止还剩 2 天", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val tag = compose.onNodeWithText("截止 ${LocalDate.now().plusDays(2)}（当天结束）", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assert(tag.top >= name.bottom - 1f) { "the tag should be under the name: $name, $tag" }
     }
 

@@ -1,5 +1,6 @@
 package com.assetboard.ui.todo
 
+import com.assetboard.domain.todo.Deadline
 import com.assetboard.domain.AppClock
 import androidx.compose.foundation.gestures.scrollBy
 
@@ -708,7 +709,8 @@ fun TodoHomeScreen(
         val settings = LocalContainer.current.settings
         // Precomputed once per data change: rebuilding the rows here on every recomposition is
         // what made the deck slow to open.
-        val rows = remember(listOrder, d, today) { buildListDeckRows(listOrder, d, today) }
+        val now = rememberDeadlineNow()
+        val rows = remember(listOrder, d, today, now) { buildListDeckRows(listOrder, d, today, now) }
         val cards = rows.map { r ->
             DeckCard(
                 key = ViewKey.list(r.id),
@@ -1331,7 +1333,7 @@ private fun HeaderLine(line: Line.Header, modifier: Modifier, onRename: (String,
 private fun ListNotes(list: TodoList, today: LocalDate) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cs.surfaceContainer).padding(horizontal = 16.dp, vertical = 12.dp)) {
-        list.deadline?.let { Text("截止 " + dayTitle(LocalDate.parse(it), today), style = MaterialTheme.typography.labelLarge, color = cs.error) }
+        list.deadline?.let { Text(Deadline.label(LocalDate.parse(it), rememberDeadlineNow()), style = MaterialTheme.typography.labelLarge, color = cs.error) }
         if (list.notes.isNotBlank()) Text(list.notes, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
     }
 }
@@ -1394,7 +1396,7 @@ private fun ListEditDialog(list: TodoList, onDismiss: () -> Unit, onSave: (Strin
                 OutlinedTextField(name, { name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.width(280.dp))
                 OutlinedTextField(notes, { notes = it }, label = { Text("备注") }, minLines = 2, modifier = Modifier.width(280.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(deadline?.let { "截止 $it" } ?: "没有截止日", modifier = Modifier.weight(1f))
+                    Text(deadline?.let { Deadline.label(LocalDate.parse(it), rememberDeadlineNow()) } ?: "没有截止日", modifier = Modifier.weight(1f))
                     TextButton(onClick = { picking = true }) { Text("选择") }
                     if (deadline != null) TextButton(onClick = { deadline = null }) { Text("清除") }
                 }

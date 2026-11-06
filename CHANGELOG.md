@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-11-06
+
+### Changed
+
+- Show both the deadline date and the remaining days and hours on todos, lists, editors and
+  widgets. Date-only deadlines include the whole selected day; distances refresh while the
+  screen is open and distinguish overdue dates and less than one hour remaining.
+- Stream every AI writing action and connection check. Notes and diaries render Markdown as
+  text arrives, then validate and apply the finished edit with undo and stale-session protection.
+  Cancelled or interrupted streams do not apply a partial edit.
+- Reveal list and topic cards immediately with a short transition instead of waiting for the
+  decorative animation to finish.
+
+### Fixed
+
+- Separate saving a todo from marking it complete with explicit save and completion actions.
+  Save checklist edits and an unsubmitted new checklist item before leaving the detail page.
+- Wait until a newly created list appears in the page data before navigating to it, preventing
+  the page from treating it as missing and switching back to Today.
+
 ## [1.4.4] - 2026-11-06
 
 ### Fixed

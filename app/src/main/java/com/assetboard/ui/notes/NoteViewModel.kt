@@ -117,6 +117,7 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
 
     /** The AI pass running right now, if any: its buttons stay busy meanwhile. */
     val aiBusy = MutableStateFlow<AiAction?>(null)
+    val aiPreview = MutableStateFlow("")
 
     /**
      * One AI pass over [text]: [start, end) when a selection is meant, the whole body otherwise.
@@ -130,11 +131,20 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
             messages.tryEmit("先写点内容再用 AI")
             return
         }
+        val session = _session.value ?: return
+        aiPreview.value = ""
         aiBusy.value = kind
         launchBound {
             try {
-                val out = AiEdit.editText(container.ai::complete, kind, DocKind.NOTE, text, range)
-                if (_session.value?.text?.value != text) {
+                val out = AiEdit.editText({ system, user ->
+                    aiPreview.value = ""
+                    container.ai.stream(system, user) { partial ->
+                        if (_session.value === session && session.text.value == text) {
+                            aiPreview.value = AiEdit.stripFrame(AiEdit.unwrap(partial))
+                        } else aiPreview.value = ""
+                    }
+                }, kind, DocKind.NOTE, text, range)
+                if (_session.value !== session || session.text.value != text) {
                     messages.tryEmit("文本已改动，AI 的结果没有应用")
                 } else {
                     apply(AiEdit.replace(text, range.first, range.last + 1, out))
@@ -144,6 +154,7 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
             } catch (e: Exception) {
                 messages.tryEmit("${if (kind == AiAction.POLISH) "润色" else "AI 排版"}失败：${e.message ?: "未知错误"}")
             } finally {
+                aiPreview.value = ""
                 aiBusy.value = null
             }
         }

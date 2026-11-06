@@ -179,18 +179,17 @@ private fun TodoRow(row: ViewRow, today: LocalDate, lists: Map<String, String>, 
                 val badge = TodoViews.trailing(t, today)
                 val meta = listOfNotNull(t.remindTime, t.listId?.let { lists[it] }).joinToString(" · ")
                 if (badge != null || meta.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column {
                         if (badge != null) {
                             WText(
-                                badge.text, 11.sp,
+                                badge.text.replace(" · ", "\n"), 11.sp,
                                 when (badge.tone) {
                                     DateBadge.Tone.ALERT -> WColors.alert
                                     DateBadge.Tone.WARN -> WColors.warn
                                     DateBadge.Tone.PLAIN -> WColors.muted
                                 },
-                                medium = badge.tone != DateBadge.Tone.PLAIN,
+                                medium = badge.tone != DateBadge.Tone.PLAIN, maxLines = if (badge.deadline) 3 else 1,
                             )
-                            if (meta.isNotEmpty()) WText("  ·  ", 11.sp, WColors.faint)
                         }
                         if (meta.isNotEmpty()) WText(meta, 11.sp, WColors.muted)
                     }

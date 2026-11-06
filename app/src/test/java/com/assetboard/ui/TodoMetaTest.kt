@@ -45,13 +45,14 @@ class TodoMetaTest {
               }
             }
         }
-        for (text in listOf("已超期 120 天", "14:00 · 提前1天")) {
+        val deadline = com.assetboard.domain.todo.Deadline.label(today.minusDays(120)).replace(" · ", "\n")
+        for (text in listOf(deadline, "14:00 · 提前1天")) {
             val node = compose.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode()
             val results = mutableListOf<TextLayoutResult>()
             node.config[SemanticsActions.GetTextLayoutResult].action!!.invoke(results)
             val layout = results.single()
-            assertEquals("The tag is truncated: $text", text.length, layout.getLineEnd(0))
-            assertTrue("The tag is clipped: $text", layout.size.width + 1f >= layout.multiParagraph.intrinsics.maxIntrinsicWidth)
+            assertEquals("The tag is truncated: $text", text.length, layout.getLineEnd(layout.lineCount - 1))
+            for (line in 0 until layout.lineCount) assertTrue("The tag is clipped: $text", layout.getLineRight(line) <= layout.size.width + 1f)
         }
     }
 }

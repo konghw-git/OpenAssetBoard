@@ -1,5 +1,6 @@
 package com.assetboard.ui.todo
 
+import java.time.ZonedDateTime
 import com.assetboard.domain.AppClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -119,6 +120,22 @@ fun rememberToday(): LocalDate {
         }
     }
     return today
+}
+
+/** Refresh date distances on resume and at each minute boundary. */
+@Composable
+fun rememberDeadlineNow(): ZonedDateTime {
+    var now by remember { mutableStateOf(ZonedDateTime.now(AppClock.clock)) }
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(owner) {
+        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                now = ZonedDateTime.now(AppClock.clock)
+                delay((60_000 - Math.floorMod(AppClock.millis(), 60_000L)).coerceAtLeast(1))
+            }
+        }
+    }
+    return now
 }
 
 /** The quick date choices shared by quick add, the swipe sheet and the detail page. */
@@ -256,7 +273,8 @@ fun TodoRow(
     val cs = MaterialTheme.colorScheme
     val checklistDrag = LocalChecklistDrag.current
     val highlighted = selected || (checklistDrag?.item != null && checklistDrag.drop?.todoId == todo.id && checklistDrag.item?.todoId != todo.id)
-    val badge = if (done) null else TodoViews.trailing(todo, today, inUpcoming)
+    val badge = if (todo.deadline != null) TodoViews.trailing(todo, today, inUpcoming, rememberDeadlineNow())
+        else if (done) null else TodoViews.trailing(todo, today, inUpcoming)
     // While a checklist item is dragged, the lists show where it would land.
     val points = if (done) emptyList() else checklistDrag.preview(todo.id, checklist)
     val content by animateFloatAsState(if (done) 0.55f else 1f, tween(260), label = "done")
@@ -509,8 +527,21 @@ internal fun MetaChip(icon: ImageVector, text: String?, color: Color, bold: Bool
 
 /** A date tag on the line of tags: a deadline's with the event icon, a plan date's with the calendar. */
 @Composable
-internal fun DateChip(badge: DateBadge) =
-    MetaChip(if (badge.deadline) Icons.Outlined.Event else Icons.Outlined.CalendarToday, badge.text, badgeColor(badge.tone), bold = badge.tone == DateBadge.Tone.ALERT)
+internal fun DateChip(badge: DateBadge) {
+    if (!badge.deadline) {
+        MetaChip(Icons.Outlined.CalendarToday, badge.text, badgeColor(badge.tone), bold = badge.tone == DateBadge.Tone.ALERT)
+        return
+    }
+    val color = badgeColor(badge.tone)
+    Row(Modifier.clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.11f)).padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.Event, null, tint = color, modifier = Modifier.size(12.dp))
+        Spacer(Modifier.width(3.dp))
+        Text(badge.text.replace(" · ", "\n"), style = MaterialTheme.typography.labelSmall, color = color,
+            fontWeight = if (badge.tone == DateBadge.Tone.ALERT) FontWeight.SemiBold else null,
+            modifier = Modifier.weight(1f, fill = false))
+    }
+}
 
 @Composable
 fun TimePickDialog(

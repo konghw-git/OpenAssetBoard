@@ -1,5 +1,6 @@
 package com.assetboard.ui.diary
 
+import com.assetboard.ui.notes.AiStreamPreview
 import com.assetboard.domain.AppClock
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -326,6 +327,7 @@ fun DiaryScreen(
         extracting = date to picked
     }
     val aiBusy by vm.aiBusy.collectAsStateWithLifecycle()
+    val aiPreview by vm.aiPreview.collectAsStateWithLifecycle()
     // The AI passes act on the selection when there is one, the whole body otherwise.
     val runAi: (AiAction) -> Unit = { kind ->
         val sel = editorState.value.selection
@@ -418,6 +420,7 @@ fun DiaryScreen(
                     .padding(top = 12.dp + with(LocalDensity.current) { pull.pulled.toDp() }, bottom = 48.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                AiStreamPreview(aiBusy != null, aiPreview)
                 // Part of the page, above the text, so it scrolls away with it; put away while writing.
                 if (!editing) {
                     DayCard(

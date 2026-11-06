@@ -68,7 +68,7 @@ import java.util.UUID
  * Every item starts with an invisible [MARK], so that Backspace at its start reaches the field
  * as a change of text whatever the keyboard sends (soft keyboards often send nothing for a
  * Backspace in an empty field). Nothing is written while editing: [onCommit] gets the result
- * once, when the editor leaves the screen (完成, Back, another row, the app going to the
+ * once, when the editor leaves the screen (保存, Back, another row, the app going to the
  * background), so a save never comes back to move the cursor. With [blankTitle] the title starts
  * empty under the stored one as a hint (a todo just made, still to be named); left empty, it keeps
  * the stored one. [onUndo], for a todo just made from others, offers to take it apart again for as
@@ -227,7 +227,7 @@ fun TodoInlineEditor(
                 )
             }
             Text(
-                "完成", style = MaterialTheme.typography.labelLarge, color = cs.primary,
+                "保存", style = MaterialTheme.typography.labelLarge, color = cs.primary,
                 modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onDone).padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }

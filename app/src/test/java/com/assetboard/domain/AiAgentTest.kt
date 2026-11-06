@@ -9,6 +9,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AiAgentTest {
+    @Test fun livePreviewHidesPartialToolEnvelopes() {
+        for (partial in listOf("{", "{\"tool\":", "{\"tool\":\"day_overview\"}", "```", "```json\n{\"tool\":")) {
+            assertEquals("", AiAgent.writingPreview(partial))
+        }
+        assertEquals("　　今天跑了五公里。", AiAgent.writingPreview("　　今天跑了五公里。"))
+        assertEquals("　　今天跑了五公里。", AiAgent.writingPreview("```markdown\n　　今天跑了五公里。"))
+    }
 
     @Test fun aJsonLineIsAToolCallAndProseIsNot() {
         assertEquals(AiAgent.Call("todos", mapOf("date" to "2026-10-25")), AiAgent.parseCall("""{"tool":"todos","args":{"date":"2026-10-25"}}"""))

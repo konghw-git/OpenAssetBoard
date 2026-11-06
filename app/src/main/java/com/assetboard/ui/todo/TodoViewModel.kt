@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 
 /** A snackbar message, optionally with a 5-second undo. */
@@ -177,7 +178,12 @@ class TodoViewModel(private val container: AppContainer) : ActionViewModel(conta
         onResult(true)
     }
 
-    fun createList(name: String, onCreated: (String) -> Unit) = action { onCreated(repo.createList(name)) }
+    fun createList(name: String, onCreated: (String) -> Unit) = action {
+        val id = repo.createList(name)
+        // Navigation rejects missing lists. Wait for Room's emission before selecting the new id.
+        data.first { it?.listById?.containsKey(id) == true }
+        onCreated(id)
+    }
     fun updateList(id: String, name: String, notes: String, deadline: LocalDate?) = action { repo.updateList(id, name, notes, deadline) }
     fun setArchived(id: String, archived: Boolean) = action { repo.setArchived(id, archived) }
     fun moveList(id: String, delta: Int) = action { repo.moveList(id, delta) }

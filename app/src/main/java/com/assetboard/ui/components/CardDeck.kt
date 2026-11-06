@@ -232,8 +232,8 @@ fun CardDeckContent(
     val burst = remember { Animatable(0f) }
     val reveal = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        burst.animateTo(1f, tween(1_250, easing = FastOutSlowInEasing))
-        reveal.animateTo(1f, tween(520, easing = FastOutSlowInEasing))
+        launch { burst.animateTo(1f, tween(1_250, easing = FastOutSlowInEasing)) }
+        reveal.animateTo(1f, tween(180, easing = FastOutSlowInEasing))
     }
     LaunchedEffect(naming) { if (naming) runCatching { createFocus.requestFocus() } }
     fun createNow() {
@@ -830,7 +830,7 @@ private fun DeckListRow(card: DeckCard, selected: Boolean, onClick: () -> Unit, 
             if (subtitle != null) {
                 Text(
                     subtitle, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
         }
@@ -901,7 +901,7 @@ private fun DeckCardView(
                     card.footnote.split(" · ").take(2).forEach { part ->
                         Text(
                             part, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
-                            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }

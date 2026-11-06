@@ -80,6 +80,29 @@ class NoteAiEditTest {
     private fun field() = compose.onNode(hasSetTextAction())
     private fun shown(text: String) = compose.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty()
 
+    @Test fun aPartialReplyIsRenderedBeforeTheFinalEditAndStillUndoesAsOneStep() {
+        val release = CompletableDeferred<Unit>()
+        val ai = object : AiGateway {
+            override suspend fun complete(system: String, user: String): String = error("Expected a streaming request")
+            override suspend fun stream(system: String, user: String, onText: suspend (String) -> Unit): String {
+                onText("逐步收到的文字")
+                release.await()
+                return "逐步收到的文字，已经完成。"
+            }
+        }
+        show("原来的内容", ai)
+        field().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasContentDescription("润色")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("润色").performClick()
+        compose.waitUntil(5_000) { shown("逐步收到的文字") }
+        field().assertTextContains("原来的内容", substring = false)
+        release.complete(Unit)
+        compose.waitUntil(5_000) { shown("逐步收到的文字，已经完成。") }
+        field().assertTextContains("逐步收到的文字，已经完成。", substring = false)
+        compose.onNodeWithContentDescription("撤销").performClick()
+        field().assertTextContains("原来的内容", substring = false)
+    }
+
     @Test fun aSelectionGoesAlone() {
         val body = "标题\n\n第一段。第二段。"
         show(body, MarkingAi())
