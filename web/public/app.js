@@ -115,7 +115,7 @@ function bindPage(){
   if($('#text-editor'))attachEditor(page==='diary'?'diaryEntries':'weeklyReviews',page==='diary'?live('diaryEntries').find(e=>e.date===selectedDate):live('weeklyReviews').find(e=>e.weekStart===D.monday(selectedDate)));
   if($('#mood'))$('#mood').onchange=async e=>{try{await saveText(true);const mood=e.target.value?Number(e.target.value):null;await store.change(d=>{d.diaryEntries.find(x=>x.id===editor.id).mood=mood;});}catch(e){fail(e);}};
 }
-function attachEditor(table,record){editor={table,id:record?.id||D.uid(),rev:record?.bodyRev??0,pending:false,date:selectedDate,weekStart:D.monday(selectedDate),text:record?.body||'',created:!!record};$('#text-editor').oninput=e=>{editor.text=e.target.value;editor.pending=true;updateStatus();clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveText().catch(fail),1000);if(!maxTimer)maxTimer=setTimeout(()=>saveText().catch(fail),4500);};}
+function attachEditor(table,record){editor={table,id:record?.id||D.uid(),rev:record?.bodyRev??0,baseBody:record?.body||'',pending:false,date:selectedDate,weekStart:D.monday(selectedDate),text:record?.body||'',created:!!record};$('#text-editor').oninput=e=>{editor.text=e.target.value;editor.pending=true;updateStatus();clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveText().catch(fail),1000);if(!maxTimer)maxTimer=setTimeout(()=>saveText().catch(fail),4500);};}
 async function saveText(force=false){
   clearTimeout(saveTimer);clearTimeout(maxTimer);maxTimer=null;
   if(!editor||!editor.pending&&!force)return savePromise;
@@ -125,7 +125,7 @@ async function saveText(force=false){
       let result;
       await store.change(d=>{result=D.saveDocument(d,{...current,text});});
       if(result.conflict){current.conflict=true;notify('另一处已有新内容，你的文字已保存在「设置 → 文字草稿」');}
-      else {current.rev=result.rev;current.created=true;}
+      else {current.rev=result.rev;current.baseBody=text;current.created=true;}
       updateStatus();
     }catch(e){current.pending=true;updateStatus();throw e;}
   });return savePromise;

@@ -139,10 +139,81 @@ function mergeGoal(a, b) {
 }
 
 /**
+ * Older writers only stamped the valuation when editing a stocktake. Before row LWW, give
+ * each conflicting input group one version, so its date, values and items win together. An
+ * unchanged group keeps its bytes (including on self-merge). Adopted valuations join the
+ * version comparison but remain independently owned when the stocktake is deleted.
+ */
+async function stocktakeInputs(a, b) {
+  const tables = ['snapshots', 'valuations', 'snapshotItems'];
+  const sides = [a, b].map(source => ({ ...source,
+    ...Object.fromEntries(tables.map(table => [table, (source[table] ?? []).map(row => ({ ...row }))])),
+  }));
+  const by = (rows, field) => {
+    const index = new Map();
+    for (const row of rows) {
+      const list = index.get(row[field]) ?? [];
+      list.push(row);
+      index.set(row[field], list);
+    }
+    return index;
+  };
+  const indexes = sides.map(side => ({
+    snapshots: new Map([...by(side.snapshots, 'id')].map(([id, rows]) =>
+      [id, rows.reduce((x, y) => pick(contentVersion, x, y))])),
+    valuations: by(side.valuations, 'id'),
+    owned: by(side.valuations, 'snapshotId'),
+    items: by(side.snapshotItems, 'snapshotId'),
+  }));
+  const tombs = tombstoneMap(a, b);
+  const extra = new Map();
+  const ids = [...new Set(sides.flatMap(side => side.snapshots.map(s => s.id)))].sort();
+  for (const id of ids) {
+    const groups = indexes.map(index => {
+      const snapshot = index.snapshots.get(id);
+      if (!snapshot) return null;
+      const items = index.items.get(id) ?? [];
+      const valuations = [...new Set([...(index.owned.get(id) ?? []), ...items.flatMap(i => index.valuations.get(i.valuationId) ?? [])])];
+      const members = { snapshots: [snapshot], valuations, snapshotItems: items };
+      const rows = Object.values(members).flat();
+      const version = rows.map(contentVersion).reduce((x, y) => compareVersion(x, y) >= 0 ? x : y);
+      const text = S(Object.fromEntries(tables.map(table => [table, [...members[table]].sort((x, y) => {
+        const xKey = rowKey(table, x), yKey = rowKey(table, y);
+        if (xKey !== yKey) return xKey < yKey ? -1 : 1;
+        return S(x) < S(y) ? -1 : S(x) > S(y) ? 1 : 0;
+      })])));
+      return { members, rows, version, text };
+    });
+    const tomb = tombs.get(rowKey('snapshots', { id }));
+    const different = groups[0] && groups[1] && groups[0].text !== groups[1].text;
+    if (!different && !tomb) continue;
+    const tie = different && compareVersion(groups[0].version, groups[1].version) === 0;
+    for (const group of groups.filter(Boolean)) {
+      // A parent delete orders the whole cascade, even if the old writer minted each tombstone
+      // a millisecond apart. Never extend it to an adopted, independently owned valuation.
+      if (tomb) {
+        for (const table of ['valuations', 'snapshotItems']) for (const row of group.members[table]) {
+          if (table === 'valuations' && row.snapshotId !== id) continue;
+          const key = rowKey(table, row);
+          extra.set(key, { table, rowKey: key, deletedAt: tomb.deletedAt,
+            changeId: await derivedId('T:', ['snapshot', key, String(tomb.deletedAt), tomb.changeId]) });
+        }
+      }
+      if (tomb && compareVersion(tombVersion(tomb), group.version) >= 0) continue;
+      if (!tie && group.rows.every(row => compareVersion(contentVersion(row), group.version) === 0)) continue;
+      const stamp = { at: group.version.at, id: await derivedId('R:', ['R8', id, group.text]) };
+      group.rows.forEach(row => setContent(row, stamp));
+    }
+  }
+  return sides.map(side => ({ ...side, tombstones: [...(side.tombstones ?? []), ...extra.values()] }));
+}
+
+/**
  * merge(a, b) -> { data, adjustments }. Neither input is changed. See §5.1 for the steps; the
  * repairs run to a fixpoint so their order cannot depend on the input order.
  */
 export async function merge(a, b) {
+  [a, b] = await stocktakeInputs(a, b);
   const adjustments = [];
   const out = {
     formatVersion: Math.max(a.formatVersion ?? 16, b.formatVersion ?? 16),
@@ -185,12 +256,12 @@ export async function merge(a, b) {
     for (const row of a[table] ?? []) {
       const key = rowKey(table, row);
       const old = rows.get(key);
-      rows.set(key, old ? await mergeRow(table, old, row, pending, adjustments) : { ...row });
+      rows.set(key, old ? await mergeRow(table, old, row, pending, adjustments, tombs) : { ...row });
     }
     for (const row of b[table] ?? []) {
       const key = rowKey(table, row);
       const old = rows.get(key);
-      rows.set(key, old ? await mergeRow(table, old, row, pending, adjustments) : { ...row });
+      rows.set(key, old ? await mergeRow(table, old, row, pending, adjustments, tombs) : { ...row });
     }
     for (const [key, row] of [...rows]) {
       const t = tombs.get(key);
@@ -227,11 +298,11 @@ function mergeHealthProfile(pa, pb) {
 }
 
 /** One row: content fields from the content winner, state fields from the state winner. */
-async function mergeRow(table, x, y, pending, adjustments) {
+async function mergeRow(table, x, y, pending, adjustments, tombs) {
   const win = pick(contentVersion, x, y);
   const lose = win === x ? y : x;
   if (ARCHIVE[table] && contentProjection(table, win) !== contentProjection(table, lose)) {
-    await archive(pending[ARCHIVE[table]], table, lose, adjustments);
+    await archive(pending[ARCHIVE[table]], table, lose, adjustments, tombs);
   }
   const row = { ...win };
   const fields = stateFields[table];
@@ -252,7 +323,7 @@ async function mergeRow(table, x, y, pending, adjustments) {
  * The loser's text goes into the matching draft table, with an id and a stamp derived from the
  * row it came from, so both devices make the same draft and neither loses the text (§2.1).
  */
-async function archive(drafts, table, loser, adjustments) {
+async function archive(drafts, table, loser, adjustments, tombs) {
   const key = rowKey(table, loser);
   const seed = `syncLose:${key}:${loser.changeId ?? ''}`;
   const id = seed.length <= 120 ? seed : `syncLose:${(await sha256(seed)).slice(0, 32)}`;
@@ -267,6 +338,9 @@ async function archive(drafts, table, loser, adjustments) {
     ...(table === 'notes' ? { noteId: loser.id ?? null } : {}),
     ...(table === 'weeklyReviews' ? { weekStart: loser.weekStart, reviewId: loser.id ?? null } : {}),
   };
+  const draftTable = ARCHIVE[table];
+  const tomb = tombs.get(rowKey(draftTable, draft));
+  if (tomb && compareVersion(tombVersion(tomb), contentVersion(draft)) >= 0) return;
   if (!drafts.some((d) => d.id === id)) drafts.push(draft);
   note(adjustments, 'archive', 1, '冲突的文字已存入草稿');
 }
@@ -291,7 +365,7 @@ async function naturalKeys(out, tombs, adjustments) {
         if (lose === win) continue;
         changed = true;
         if (ARCHIVE[table] && contentProjection(table, lose) !== contentProjection(table, win)) {
-          await archive(out[ARCHIVE[table]], table, lose, adjustments);
+          await archive(out[ARCHIVE[table]], table, lose, adjustments, tombs);
         }
         await dropRow(out, tombs, table, lose, 'dedup', adjustments);
         if (def.special === 'topic') {

@@ -9,7 +9,7 @@ d.flows.push(D.row('flows',{fromAccountId:account.id,amount:2850,at:now,createdA
 D.stocktake(d,{},now+60000);
 const todo=D.row('todos',{id:'web-repeat',title:'网页重复待办',planDate:'2026-10-20',kind:'REPEAT_SOURCE',repeatRule:JSON.stringify({type:'DAILY',interval:1,unit:'DAY',weekdays:[],month:1,day:1,untilDate:null,count:null,countBase:0}),createdAt:now});
 d.todos.push(todo);d.checklistItems.push(D.row('checklistItems',{todoId:todo.id,text:'检查一步'}));D.completeTodo(d,todo.id,now);
-const note=D.row('notes',{id:'web-note',body:'网页笔记\n写在浏览器里',createdAt:now,updatedAt:now});d.notes.push(note);D.saveDocument(d,{table:'notes',id:note.id,rev:0,text:'网页笔记\n自动保存内容',created:true});
+const note=D.row('notes',{id:'web-note',body:'网页笔记\n写在浏览器里',createdAt:now,updatedAt:now});d.notes.push(note);D.saveDocument(d,{table:'notes',id:note.id,rev:0,baseBody:note.body,text:'网页笔记\n自动保存内容',created:true});
 d.foodEntries.push(D.row('foodEntries',{name:'网页燕麦',date:'2026-10-20',per:100,amount:50,unit:'G',energyCal:370000,proteinMg:12000,createdAt:now,updatedAt:now,eatenAt:now}));
 d.exportedAt=now;D.validate(d);
 await writeFile(new URL('../../app/src/test/resources/backups/web-roundtrip.json',import.meta.url),JSON.stringify(d,null,2)+'\n');

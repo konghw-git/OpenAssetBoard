@@ -810,7 +810,7 @@ class BackupManager(
             )
             ChangeStamps.observe(at - 1)
             val replaceAt = ChangeStamps.nextAt(clock())
-            val file = prepareReplace(loaded, previous, replaceAt, reserved.id, tables == CanonicalJson.rowKeyFields.keys)
+            val file = prepareReplace(loaded, previous, replaceAt, reserved.id, tables)
             val encoded = json.encodeToJsonElement(BackupFile.serializer(), file) as JsonObject
             val operation = JsonObject(mapOf(
                 "at" to JsonPrimitive(replaceAt), "id" to JsonPrimitive(reserved.id),
@@ -909,18 +909,24 @@ class BackupManager(
     /**
      * Encodes replace/reset as merge-visible intent (docs/sync-merge-semantics.md §5.2): every
      * row in [file] gets the operation's stamp, every row of [previous] it no longer has gets a
-     * tombstone, and the goal is stamped whether it is set or cleared. Row keys are the same ones
-     * the merge uses, so the two devices agree on which row a tombstone names.
+     * tombstone, and the goal is stamped whether it is set or cleared. A ledger-only reset keeps
+     * unrelated rows, scalar stamps and tombstones untouched. Row keys match the merge's keys.
      */
-    private fun prepareReplace(file: BackupFile, previous: BackupFile, at: Long, id: String, clearUnknownGoal: Boolean): BackupFile {
+    private fun prepareReplace(file: BackupFile, previous: BackupFile, at: Long, id: String, tables: Set<String>): BackupFile {
+        val fullReplace = tables == CanonicalJson.rowKeyFields.keys
         val target = json.encodeToJsonElement(BackupFile.serializer(), file) as JsonObject
         val old = json.encodeToJsonElement(BackupFile.serializer(), previous) as JsonObject
         val root = LinkedHashMap<String, JsonElement>(target)
         val live = HashMap<String, Set<String>>()
         val removed = ArrayList<Tombstone>()
         for (table in CanonicalJson.rowKeyFields.keys) {
+            val oldRows = (old[table] as? JsonArray).orEmpty().associateBy { CanonicalJson.rowKey(table, it as JsonObject) }
             val stamped = (target[table] as? JsonArray).orEmpty().map { element ->
-                val fields = LinkedHashMap(element as JsonObject)
+                // A ledger-only reset changes account baselines too, but must not turn unrelated
+                // todos, text or state into new edits that could beat their cloud versions.
+                val key = CanonicalJson.rowKey(table, element as JsonObject)
+                if (table !in tables && oldRows[key] == element) return@map element
+                val fields = LinkedHashMap(element)
                 fields["changedAt"] = JsonPrimitive(at)
                 fields["changeId"] = JsonPrimitive(id)
                 if (table in STATE_TABLES) {
@@ -932,7 +938,7 @@ class BackupManager(
             val keys = stamped.map { CanonicalJson.rowKey(table, it) }.toSet()
             live[table] = keys
             root[table] = JsonArray(stamped)
-            for (row in (old[table] as? JsonArray).orEmpty()) {
+            for (row in oldRows.values) {
                 val key = CanonicalJson.rowKey(table, row as JsonObject)
                 if (key !in keys) removed += Tombstone(table, key, at, "T:" + newId())
             }
@@ -943,46 +949,40 @@ class BackupManager(
             val obj = element as? JsonObject ?: return
             val table = (obj["table"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return
             val key = (obj["rowKey"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return
-            if (live[table]?.contains(key) == true) return
             if (!seen.add(key)) return
             // A tombstone the file carries still means "deleted" — as of the replace, so a remote
             // row cannot beat it and resurrect what the user just restored without.
-            val fields = LinkedHashMap(obj)
-            fields["deletedAt"] = JsonPrimitive(at)
-            fields["changeId"] = JsonPrimitive("T:$id")
-            tombstones += JsonObject(fields)
+            if (fullReplace || table in tables) {
+                if (live[table]?.contains(key) == true) return
+                val fields = LinkedHashMap(obj)
+                fields["deletedAt"] = JsonPrimitive(at)
+                fields["changeId"] = JsonPrimitive("T:$id")
+                tombstones += JsonObject(fields)
+            } else tombstones += obj
         }
         for (source in listOf(target["tombstones"], old["tombstones"])) {
             for (element in (source as? JsonArray).orEmpty()) keep(element)
         }
         for (tombstone in removed) {
-            tombstones += json.encodeToJsonElement(Tombstone.serializer(), tombstone) as JsonObject
+            if (seen.add(tombstone.rowKey)) tombstones += json.encodeToJsonElement(Tombstone.serializer(), tombstone) as JsonObject
         }
-        if (file.healthProfile != null) {
+        val replaceProfile = fullReplace || file.healthProfile != previous.healthProfile
+        if (replaceProfile && file.healthProfile != null) {
             tombstones.removeAll { ((it as JsonObject)["rowKey"] as? JsonPrimitive)?.content == "healthProfile#self" }
         }
-        if (clearUnknownGoal && file.healthProfile == null) {
+        if (replaceProfile && file.healthProfile == null) {
             tombstones.removeAll { ((it as JsonObject)["rowKey"] as? JsonPrimitive)?.content == "healthProfile#self" }
             tombstones += json.encodeToJsonElement(Tombstone.serializer(), Tombstone("healthProfile", "healthProfile#self", at, "T:$id"))
         }
         root["tombstones"] = JsonArray(tombstones)
 
-        val hadGoal = previous.netWorthGoal != null || previous.netWorthGoalAt != 0L || previous.netWorthGoalChangeId.isNotEmpty()
-        if (file.netWorthGoal != null) {
-            root["netWorthGoal"] = JsonPrimitive(file.netWorthGoal)
+        if (fullReplace || file.netWorthGoal != previous.netWorthGoal) {
+            root["netWorthGoal"] = file.netWorthGoal?.let(::JsonPrimitive) ?: JsonNull
             root["netWorthGoalAt"] = JsonPrimitive(at)
             root["netWorthGoalChangeId"] = JsonPrimitive(id)
-        } else if (hadGoal || clearUnknownGoal) {
-            root["netWorthGoal"] = JsonNull
-            root["netWorthGoalAt"] = JsonPrimitive(at)
-            root["netWorthGoalChangeId"] = JsonPrimitive(id)
-        } else {
-            root["netWorthGoal"] = JsonNull
-            root["netWorthGoalAt"] = JsonPrimitive(0)
-            root["netWorthGoalChangeId"] = JsonPrimitive("")
         }
 
-        (target["healthProfile"] as? JsonObject)?.let { profile ->
+        (target["healthProfile"] as? JsonObject)?.takeIf { replaceProfile }?.let { profile ->
             val fields = LinkedHashMap(profile)
             fields["changedAt"] = JsonPrimitive(at)
             fields["changeId"] = JsonPrimitive(id)

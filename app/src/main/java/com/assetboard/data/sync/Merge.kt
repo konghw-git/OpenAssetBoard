@@ -175,7 +175,93 @@ object Merge {
         row.putString("stateId", stamp.id)
     }
 
-    fun merge(a: JsonObject, b: JsonObject): Result = Run(a, b).execute()
+    fun merge(a: JsonObject, b: JsonObject): Result {
+        val (left, right) = stocktakeInputs(a, b)
+        return Run(left, right).execute()
+    }
+
+    private data class StocktakeGroup(
+        val members: Map<String, List<Row>>,
+        val rows: List<Row>,
+        val version: Version,
+        val text: String,
+    )
+
+    /**
+     * Older writers stamped only the valuation when editing a stocktake. Give each conflicting
+     * input group one version before row LWW, so its date, values and items win together. An
+     * unchanged group keeps its bytes, including on self-merge. Adopted valuations join the
+     * comparison but are not owned by the stocktake's deletion cascade.
+     */
+    private fun stocktakeInputs(a: JsonObject, b: JsonObject): Pair<JsonObject, JsonObject> {
+        val tables = listOf("snapshots", "valuations", "snapshotItems")
+        val sources = listOf(a, b)
+        val sides = sources.map { source -> tables.associateWith { table ->
+            (source[table] as? JsonArray).orEmpty().map { Row(it as JsonObject) }
+        } }
+        val snapshotsById = sides.map { side ->
+            side.getValue("snapshots").groupBy { it.string("id") }
+                .mapValues { (_, rows) -> rows.reduce { x, y -> pick(::contentVersion, x, y) } }
+        }
+        val valuationsById = sides.map { it.getValue("valuations").groupBy { row -> row.string("id") } }
+        val ownedBySnapshot = sides.map { it.getValue("valuations").groupBy { row -> row.string("snapshotId") } }
+        val itemsBySnapshot = sides.map { it.getValue("snapshotItems").groupBy { row -> row.string("snapshotId") } }
+        val tombs = LinkedHashMap<String, Row>()
+        for (source in sources) for (value in (source["tombstones"] as? JsonArray).orEmpty()) {
+            val tomb = Row(value as JsonObject)
+            val key = tomb.string("rowKey") ?: continue
+            val old = tombs[key]
+            if (old == null || compareVersion(tombVersion(tomb), tombVersion(old)) > 0) tombs[key] = tomb
+        }
+        val extra = LinkedHashMap<String, Row>()
+        val ids = sides.flatMap { it.getValue("snapshots").mapNotNull { row -> row.string("id") } }.distinct().sorted()
+        for (id in ids) {
+            val groups = sides.indices.map { index ->
+                val snapshot = snapshotsById[index][id]
+                    ?: return@map null
+                val items = itemsBySnapshot[index][id].orEmpty()
+                val valuations = (ownedBySnapshot[index][id].orEmpty() +
+                    items.flatMap { valuationsById[index][it.string("valuationId")].orEmpty() }).distinct()
+                val members = linkedMapOf("snapshots" to listOf(snapshot), "valuations" to valuations, "snapshotItems" to items)
+                val rows = members.values.flatten()
+                val version = rows.map(::contentVersion).reduce { x, y -> if (compareVersion(x, y) >= 0) x else y }
+                val text = canonicalValue(JsonObject(members.mapValues { (table, entries) ->
+                    JsonArray(entries.sortedWith(compareBy<Row> { rowKey(table, it.toJson()) }
+                        .thenBy { canonicalValue(it.toJson()) }).map { it.toJson() })
+                }))
+                StocktakeGroup(members, rows, version, text)
+            }
+            val key = com.assetboard.data.RowKey.of("snapshots", id)
+            val tomb = tombs[key]
+            val left = groups[0]
+            val right = groups[1]
+            val different = left != null && right != null && left.text != right.text
+            if (!different && tomb == null) continue
+            val tie = different && compareVersion(left.version, right.version) == 0
+            for (group in groups.filterNotNull()) {
+                // A parent delete orders the whole cascade, even if the old writer minted each
+                // tombstone a millisecond apart. Adopted valuations remain independent.
+                if (tomb != null) {
+                    for (table in listOf("valuations", "snapshotItems")) for (row in group.members.getValue(table)) {
+                        if (table == "valuations" && row.string("snapshotId") != id) continue
+                        val rowKey = rowKey(table, row.toJson())
+                        val at = tomb.long("deletedAt") ?: 0L
+                        val changeId = derivedId("T:", listOf("snapshot", rowKey, at.toString(), tomb.string("changeId") ?: ""))
+                        extra[rowKey] = tombstone(table, rowKey, at, changeId)
+                    }
+                }
+                if (tomb != null && compareVersion(tombVersion(tomb), group.version) >= 0) continue
+                if (!tie && group.rows.all { compareVersion(contentVersion(it), group.version) == 0 }) continue
+                val stamp = Version(group.version.at, derivedId("R:", listOf("R8", id, group.text)))
+                group.rows.forEach { setContent(it, stamp) }
+            }
+        }
+        val prepared = sources.mapIndexed { index, source ->
+            JsonObject(source + sides[index].mapValues { (_, rows) -> JsonArray(rows.map { it.toJson() }) } +
+                ("tombstones" to JsonArray((source["tombstones"] as? JsonArray).orEmpty() + extra.values.map { it.toJson() })))
+        }
+        return prepared[0] to prepared[1]
+    }
 
     private class Run(private val a: JsonObject, private val b: JsonObject) {
         private val adjustments = mutableListOf<Adjustment>()
@@ -343,6 +429,8 @@ object Merge {
                     draft.putNullable("reviewId", loser.get("id"))
                 }
             }
+            val tomb = tombs[rowKey(ARCHIVE.getValue(table), draft.toJson())]
+            if (tomb != null && compareVersion(tombVersion(tomb), contentVersion(draft)) >= 0) return
             if (drafts.none { it.string("id") == id }) drafts.add(draft)
             note("archive", 1, "冲突的文字已存入草稿")
         }

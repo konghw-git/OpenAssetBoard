@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-11-06
+
+### Fixed
+
+- **Keep stocktakes consistent across sync.** Concurrent date and balance edits choose a complete
+  stocktake instead of mixing its date, valuations and items. Deleting a stocktake while another
+  device edits it no longer leaves dangling references or blocks sync; legacy per-row stamps,
+  adjacent deletion timestamps and repeated snapshot keys are handled on Android and the web.
+- **Preserve remote text under an open web editor.** Notes, diaries and weekly reviews compare
+  the loaded body as well as its revision, so independent devices reaching the same revision
+  cannot make an old editor silently overwrite a newly synced body. Unsaved text becomes a draft.
+- **Reset asset history without overruling unrelated edits.** Unchanged todos, notes, health
+  profiles, countdowns, goals and their sync versions and tombstones stay untouched, allowing
+  newer edits from another device to win normally.
+- Keep an existing standalone valuation independently owned when a web stocktake adopts it;
+  deleting that stocktake now preserves the original valuation.
+- Serialize cloud-history reads with sync, logout and password changes so overlapping requests
+  cannot rotate the same single-use refresh token and expire the device's session.
+- Apply Android's 20–300 kg target-weight bounds on the web before uploading a health profile,
+  preventing an out-of-range target from blocking the phone's sync.
+- Honor draft tombstones when generating conflict archives or deduplicating diary and weekly
+  entries, so discarded drafts do not reappear when an old copy syncs again.
+- Keep web login throttling scoped to each client and show the retry delay.
+
 ## [1.4.2] - 2026-11-05
 
 ### Fixed

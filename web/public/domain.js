@@ -340,7 +340,7 @@ export function validate(input) {
   if(data.habits.length){ensure(data.habits.filter(h=>!h.removedOn).length>=1&&data.habits.filter(h=>!h.removedOn).length<=7,'每日习惯需为 1–7 项');for(const h of data.habits)ensure(h.label?.trim()&&h.label.length<=8&&(h.rubric??'').length<=200,'习惯名称或标准过长');}
   for(const m of data.bodyMeasurements) {ensure(Number.isSafeInteger(m.weightG)&&m.weightG>=20000&&m.weightG<=300000,'体重超出范围');ensure(m.bodyFatBp==null||Number.isInteger(m.bodyFatBp)&&m.bodyFatBp>=300&&m.bodyFatBp<=7000,'体脂率超出范围');}
   for(const f of data.foodEntries) {ensure(Number.isSafeInteger(f.energyCal)&&f.energyCal>=0&&f.energyCal<=20000000,'热量超出范围');ensure((f.per==null)===(f.amount==null),'份量必须成对填写');if(f.per!=null)ensure(Number.isInteger(f.per)&&f.per>0&&f.per<=10000&&Number.isInteger(f.amount)&&f.amount>0&&f.amount<=100000&&['G','ML','SERVING'].includes(f.unit),'份量无效');for(const n of ['proteinMg','fatMg','carbMg','sodiumMg'])ensure(f[n]==null||Number.isSafeInteger(f[n])&&f[n]>=0&&f[n]<=5000000,'营养素超出范围');}
-  if(data.healthProfile){const p=data.healthProfile;ensure(p.id==='self'&&['MALE','FEMALE'].includes(p.sex)&&validDate(p.birthDate)&&p.heightMm>=1000&&p.heightMm<=2500,'健康档案无效');ensure(Number.isSafeInteger(p.changedAt)&&p.changedAt>=0&&typeof p.changeId==='string'&&p.changeId,'健康档案缺少时间戳');}
+  if(data.healthProfile){const p=data.healthProfile;ensure(p.id==='self'&&['MALE','FEMALE'].includes(p.sex)&&validDate(p.birthDate)&&p.heightMm>=1000&&p.heightMm<=2500,'健康档案无效');ensure(p.targetWeightG==null||Number.isSafeInteger(p.targetWeightG)&&p.targetWeightG>=20000&&p.targetWeightG<=300000,'目标体重需在 20–300 kg 之间');ensure(Number.isSafeInteger(p.changedAt)&&p.changedAt>=0&&typeof p.changeId==='string'&&p.changeId,'健康档案缺少时间戳');}
   ensure(data.netWorthGoal==null||Number.isSafeInteger(data.netWorthGoal)&&data.netWorthGoal>0,'目标资产必须大于 0');
   ensure(Number.isSafeInteger(data.netWorthGoalAt)&&data.netWorthGoalAt>=0&&typeof data.netWorthGoalChangeId==='string','目标资产时间戳无效');
   ensure(Array.isArray(data.tombstones),'墓碑数据格式错误');
@@ -385,7 +385,7 @@ export function stocktake(d,values,at=Date.now(),note='') {
   for(const a of d.accounts.filter(a=>!a.isDisabled&&a.baselineAt<=at)){
     const value=values[a.id]??balance(d,a.id,at);ensure(value!=null,'账户缺少期初估值');
     let v=d.valuations.find(v=>v.accountId===a.id&&v.at===at);
-    if(v){ensure(!v.snapshotId,'此估值已属于盘点');Object.assign(v,{value,snapshotId:s.id});}
+    if(v){ensure(!v.snapshotId,'此估值已属于盘点');v.value=value;}
     else {v=row('valuations',{accountId:a.id,at,value,snapshotId:s.id});d.valuations.push(v);}
     d.snapshotItems.push({snapshotId:s.id,accountId:a.id,valuationId:v.id,included:a.includeInTotal,changedAt:at,changeId:uid()});
   }
@@ -457,9 +457,10 @@ export function calendarFile(todos) {
 }
 
 export function saveDocument(d,session) {
-  const {table,id,rev,text,created,date,weekStart}=session,existing=d[table].find(r=>r.id===id);
+  const {table,id,rev,baseBody,text,created,date,weekStart}=session,existing=d[table].find(r=>r.id===id);
   const dateCollision=!existing&&table!=='notes'&&live(d[table]).some(r=>table==='diaryEntries'?r.date===date:r.weekStart===weekStart);
-  if(dateCollision||created&&!existing||existing&&(existing.deletedAt||existing.bodyRev!==rev)) {
+  // Revision counters can collide across devices; the loaded body identifies the editor's base.
+  if(dateCollision||created&&!existing||existing&&(existing.deletedAt||existing.bodyRev!==rev||existing.body!==baseBody)) {
     const draftTable={notes:'noteDrafts',diaryEntries:'diaryDrafts',weeklyReviews:'weeklyDrafts'}[table];
     const ref={notes:'noteId',diaryEntries:'diaryId',weeklyReviews:'reviewId'}[table];
     d[draftTable].push({id:uid(),[ref]:existing?.id??null,text,reason:'网页编辑时发现版本变化',createdAt:Date.now(),changedAt:Date.now(),changeId:uid(),...(table==='diaryEntries'?{date}:table==='weeklyReviews'?{weekStart}:{})});

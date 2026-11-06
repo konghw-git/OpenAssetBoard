@@ -2828,6 +2828,1306 @@
       "adjustments": []
     },
     {
+      "name": "stocktake date and value edits choose one complete group",
+      "a": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [
+          {
+            "changedAt": 20,
+            "changeId": "date",
+            "id": "s",
+            "at": 2000
+          }
+        ],
+        "valuations": [
+          {
+            "changedAt": 20,
+            "changeId": "date",
+            "id": "v",
+            "accountId": "acct",
+            "at": 2000,
+            "value": 100,
+            "snapshotId": "s"
+          }
+        ],
+        "snapshotItems": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "snapshotId": "s",
+            "accountId": "acct",
+            "valuationId": "v",
+            "included": true
+          }
+        ],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "b": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "s",
+            "at": 1000
+          }
+        ],
+        "valuations": [
+          {
+            "changedAt": 30,
+            "changeId": "value",
+            "id": "v",
+            "accountId": "acct",
+            "at": 1000,
+            "value": 200,
+            "snapshotId": "s"
+          }
+        ],
+        "snapshotItems": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "snapshotId": "s",
+            "accountId": "acct",
+            "valuationId": "v",
+            "included": true
+          }
+        ],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":0,\"baselineCost\":null,\"changeId\":\"c1\",\"changedAt\":10,\"createdAt\":1,\"groupId\":\"g\",\"id\":\"acct\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[],\"countdowns\":[],\"diaryDrafts\":[],\"diaryEntries\":[],\"exportedAt\":0,\"flows\":[],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"c1\",\"changedAt\":10,\"colorIndex\":0,\"id\":\"g\",\"isLiability\":false,\"name\":\"G\",\"sortOrder\":0}],\"habitChecks\":[],\"habits\":[],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[],\"noteSources\":[],\"noteTopics\":[],\"notes\":[],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"acct\",\"changeId\":\"R:d46acb3f5c04a8bda1954f85cf98b9ae\",\"changedAt\":30,\"included\":true,\"snapshotId\":\"s\",\"valuationId\":\"v\"}],\"snapshots\":[{\"at\":1000,\"changeId\":\"R:d46acb3f5c04a8bda1954f85cf98b9ae\",\"changedAt\":30,\"id\":\"s\"}],\"todoLists\":[],\"todoSections\":[],\"todos\":[],\"tombstones\":[],\"valuations\":[{\"accountId\":\"acct\",\"at\":1000,\"changeId\":\"R:d46acb3f5c04a8bda1954f85cf98b9ae\",\"changedAt\":30,\"id\":\"v\",\"snapshotId\":\"s\",\"value\":200}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "eeb0fce81064eb67405528bc98049a33495442d0dca7eae2ecf3ee9b96e8b439",
+      "adjustments": []
+    },
+    {
+      "name": "a newer stocktake date carries its values and items",
+      "a": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [
+          {
+            "changedAt": 40,
+            "changeId": "date",
+            "id": "s",
+            "at": 2000
+          }
+        ],
+        "valuations": [
+          {
+            "changedAt": 40,
+            "changeId": "date",
+            "id": "v",
+            "accountId": "acct",
+            "at": 2000,
+            "value": 100,
+            "snapshotId": "s"
+          }
+        ],
+        "snapshotItems": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "snapshotId": "s",
+            "accountId": "acct",
+            "valuationId": "v",
+            "included": true
+          }
+        ],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "b": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "s",
+            "at": 1000
+          }
+        ],
+        "valuations": [
+          {
+            "changedAt": 30,
+            "changeId": "value",
+            "id": "v",
+            "accountId": "acct",
+            "at": 1000,
+            "value": 200,
+            "snapshotId": "s"
+          }
+        ],
+        "snapshotItems": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "snapshotId": "s",
+            "accountId": "acct",
+            "valuationId": "v",
+            "included": true
+          }
+        ],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":0,\"baselineCost\":null,\"changeId\":\"c1\",\"changedAt\":10,\"createdAt\":1,\"groupId\":\"g\",\"id\":\"acct\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[],\"countdowns\":[],\"diaryDrafts\":[],\"diaryEntries\":[],\"exportedAt\":0,\"flows\":[],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"c1\",\"changedAt\":10,\"colorIndex\":0,\"id\":\"g\",\"isLiability\":false,\"name\":\"G\",\"sortOrder\":0}],\"habitChecks\":[],\"habits\":[],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[],\"noteSources\":[],\"noteTopics\":[],\"notes\":[],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"acct\",\"changeId\":\"R:94717a1918c131fc758b13be0e6543bb\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s\",\"valuationId\":\"v\"}],\"snapshots\":[{\"at\":2000,\"changeId\":\"R:94717a1918c131fc758b13be0e6543bb\",\"changedAt\":40,\"id\":\"s\"}],\"todoLists\":[],\"todoSections\":[],\"todos\":[],\"tombstones\":[],\"valuations\":[{\"accountId\":\"acct\",\"at\":2000,\"changeId\":\"R:94717a1918c131fc758b13be0e6543bb\",\"changedAt\":40,\"id\":\"v\",\"snapshotId\":\"s\",\"value\":100}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "2485e59918ce255a84da3e5749d1361b73c936d3d766a85412d9628cf3f2e709",
+      "adjustments": []
+    },
+    {
+      "name": "a newer stocktake value revives the complete deleted group",
+      "a": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [],
+        "valuations": [],
+        "snapshotItems": [],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": [
+          {
+            "table": "snapshotItems",
+            "rowKey": "snapshotItems#s|acct",
+            "deletedAt": 20,
+            "changeId": "T:delete"
+          },
+          {
+            "table": "valuations",
+            "rowKey": "valuations#v",
+            "deletedAt": 21,
+            "changeId": "T:delete"
+          },
+          {
+            "table": "snapshots",
+            "rowKey": "snapshots#s",
+            "deletedAt": 22,
+            "changeId": "T:delete"
+          }
+        ]
+      },
+      "b": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "s",
+            "at": 1000
+          }
+        ],
+        "valuations": [
+          {
+            "changedAt": 30,
+            "changeId": "value",
+            "id": "v",
+            "accountId": "acct",
+            "at": 1000,
+            "value": 200,
+            "snapshotId": "s"
+          }
+        ],
+        "snapshotItems": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "snapshotId": "s",
+            "accountId": "acct",
+            "valuationId": "v",
+            "included": true
+          }
+        ],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":0,\"baselineCost\":null,\"changeId\":\"c1\",\"changedAt\":10,\"createdAt\":1,\"groupId\":\"g\",\"id\":\"acct\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[],\"countdowns\":[],\"diaryDrafts\":[],\"diaryEntries\":[],\"exportedAt\":0,\"flows\":[],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"c1\",\"changedAt\":10,\"colorIndex\":0,\"id\":\"g\",\"isLiability\":false,\"name\":\"G\",\"sortOrder\":0}],\"habitChecks\":[],\"habits\":[],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[],\"noteSources\":[],\"noteTopics\":[],\"notes\":[],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"acct\",\"changeId\":\"R:d46acb3f5c04a8bda1954f85cf98b9ae\",\"changedAt\":30,\"included\":true,\"snapshotId\":\"s\",\"valuationId\":\"v\"}],\"snapshots\":[{\"at\":1000,\"changeId\":\"R:d46acb3f5c04a8bda1954f85cf98b9ae\",\"changedAt\":30,\"id\":\"s\"}],\"todoLists\":[],\"todoSections\":[],\"todos\":[],\"tombstones\":[],\"valuations\":[{\"accountId\":\"acct\",\"at\":1000,\"changeId\":\"R:d46acb3f5c04a8bda1954f85cf98b9ae\",\"changedAt\":30,\"id\":\"v\",\"snapshotId\":\"s\",\"value\":200}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "eeb0fce81064eb67405528bc98049a33495442d0dca7eae2ecf3ee9b96e8b439",
+      "adjustments": []
+    },
+    {
+      "name": "a stocktake deletion orders every child even across adjacent timestamps",
+      "a": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [],
+        "valuations": [],
+        "snapshotItems": [],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": [
+          {
+            "table": "snapshotItems",
+            "rowKey": "snapshotItems#s|acct",
+            "deletedAt": 20,
+            "changeId": "T:delete"
+          },
+          {
+            "table": "valuations",
+            "rowKey": "valuations#v",
+            "deletedAt": 21,
+            "changeId": "T:delete"
+          },
+          {
+            "table": "snapshots",
+            "rowKey": "snapshots#s",
+            "deletedAt": 22,
+            "changeId": "T:delete"
+          }
+        ]
+      },
+      "b": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "s",
+            "at": 1000
+          }
+        ],
+        "valuations": [
+          {
+            "changedAt": 21,
+            "changeId": "value",
+            "id": "v",
+            "accountId": "acct",
+            "at": 1000,
+            "value": 200,
+            "snapshotId": "s"
+          }
+        ],
+        "snapshotItems": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "snapshotId": "s",
+            "accountId": "acct",
+            "valuationId": "v",
+            "included": true
+          }
+        ],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":0,\"baselineCost\":null,\"changeId\":\"c1\",\"changedAt\":10,\"createdAt\":1,\"groupId\":\"g\",\"id\":\"acct\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[],\"countdowns\":[],\"diaryDrafts\":[],\"diaryEntries\":[],\"exportedAt\":0,\"flows\":[],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"c1\",\"changedAt\":10,\"colorIndex\":0,\"id\":\"g\",\"isLiability\":false,\"name\":\"G\",\"sortOrder\":0}],\"habitChecks\":[],\"habits\":[],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[],\"noteSources\":[],\"noteTopics\":[],\"notes\":[],\"schemaVersion\":15,\"snapshotItems\":[],\"snapshots\":[],\"todoLists\":[],\"todoSections\":[],\"todos\":[],\"tombstones\":[{\"changeId\":\"T:0bf1e27dbccc0ac06e90a3d1f2ccd25a\",\"deletedAt\":22,\"rowKey\":\"snapshotItems#s|acct\",\"table\":\"snapshotItems\"},{\"changeId\":\"T:delete\",\"deletedAt\":22,\"rowKey\":\"snapshots#s\",\"table\":\"snapshots\"},{\"changeId\":\"T:88cfe8185c46332f7b579c669605fbeb\",\"deletedAt\":22,\"rowKey\":\"valuations#v\",\"table\":\"valuations\"}],\"valuations\":[],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "fabdb4caf88445bc692863e33b4d1c1294b4bb4d6315bd2338901ee779c5a2c5",
+      "adjustments": []
+    },
+    {
+      "name": "a stocktake deletion wins an exact group timestamp tie",
+      "a": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [],
+        "valuations": [],
+        "snapshotItems": [],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": [
+          {
+            "table": "snapshotItems",
+            "rowKey": "snapshotItems#s|acct",
+            "deletedAt": 20,
+            "changeId": "T:delete"
+          },
+          {
+            "table": "valuations",
+            "rowKey": "valuations#v",
+            "deletedAt": 21,
+            "changeId": "T:delete"
+          },
+          {
+            "table": "snapshots",
+            "rowKey": "snapshots#s",
+            "deletedAt": 22,
+            "changeId": "T:delete"
+          }
+        ]
+      },
+      "b": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "s",
+            "at": 1000
+          }
+        ],
+        "valuations": [
+          {
+            "changedAt": 22,
+            "changeId": "value",
+            "id": "v",
+            "accountId": "acct",
+            "at": 1000,
+            "value": 200,
+            "snapshotId": "s"
+          }
+        ],
+        "snapshotItems": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "snapshotId": "s",
+            "accountId": "acct",
+            "valuationId": "v",
+            "included": true
+          }
+        ],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":0,\"baselineCost\":null,\"changeId\":\"c1\",\"changedAt\":10,\"createdAt\":1,\"groupId\":\"g\",\"id\":\"acct\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[],\"countdowns\":[],\"diaryDrafts\":[],\"diaryEntries\":[],\"exportedAt\":0,\"flows\":[],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"c1\",\"changedAt\":10,\"colorIndex\":0,\"id\":\"g\",\"isLiability\":false,\"name\":\"G\",\"sortOrder\":0}],\"habitChecks\":[],\"habits\":[],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[],\"noteSources\":[],\"noteTopics\":[],\"notes\":[],\"schemaVersion\":15,\"snapshotItems\":[],\"snapshots\":[],\"todoLists\":[],\"todoSections\":[],\"todos\":[],\"tombstones\":[{\"changeId\":\"T:0bf1e27dbccc0ac06e90a3d1f2ccd25a\",\"deletedAt\":22,\"rowKey\":\"snapshotItems#s|acct\",\"table\":\"snapshotItems\"},{\"changeId\":\"T:delete\",\"deletedAt\":22,\"rowKey\":\"snapshots#s\",\"table\":\"snapshots\"},{\"changeId\":\"T:88cfe8185c46332f7b579c669605fbeb\",\"deletedAt\":22,\"rowKey\":\"valuations#v\",\"table\":\"valuations\"}],\"valuations\":[],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "fabdb4caf88445bc692863e33b4d1c1294b4bb4d6315bd2338901ee779c5a2c5",
+      "adjustments": []
+    },
+    {
+      "name": "repeated snapshot keys fold to the newest parent before grouping",
+      "a": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [
+          {
+            "changedAt": 30,
+            "changeId": "new",
+            "id": "s",
+            "at": 1000
+          },
+          {
+            "changedAt": 5,
+            "changeId": "older-duplicate",
+            "id": "s",
+            "at": 2000
+          }
+        ],
+        "valuations": [
+          {
+            "changedAt": 30,
+            "changeId": "new",
+            "id": "v",
+            "accountId": "acct",
+            "at": 1000,
+            "value": 100,
+            "snapshotId": "s"
+          }
+        ],
+        "snapshotItems": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "snapshotId": "s",
+            "accountId": "acct",
+            "valuationId": "v",
+            "included": true
+          }
+        ],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "b": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "g",
+            "name": "G",
+            "isLiability": false,
+            "colorIndex": 0,
+            "sortOrder": 0
+          }
+        ],
+        "accounts": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "acct",
+            "groupId": "g",
+            "name": "银行",
+            "kind": "NORMAL",
+            "baselineAt": 0,
+            "createdAt": 1,
+            "includeInTotal": true,
+            "isDisabled": false,
+            "baselineCost": null
+          }
+        ],
+        "snapshots": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "s",
+            "at": 1000
+          }
+        ],
+        "valuations": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "id": "v",
+            "accountId": "acct",
+            "at": 1000,
+            "value": 100,
+            "snapshotId": "s"
+          }
+        ],
+        "snapshotItems": [
+          {
+            "changedAt": 10,
+            "changeId": "c1",
+            "snapshotId": "s",
+            "accountId": "acct",
+            "valuationId": "v",
+            "included": true
+          }
+        ],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":0,\"baselineCost\":null,\"changeId\":\"c1\",\"changedAt\":10,\"createdAt\":1,\"groupId\":\"g\",\"id\":\"acct\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[],\"countdowns\":[],\"diaryDrafts\":[],\"diaryEntries\":[],\"exportedAt\":0,\"flows\":[],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"c1\",\"changedAt\":10,\"colorIndex\":0,\"id\":\"g\",\"isLiability\":false,\"name\":\"G\",\"sortOrder\":0}],\"habitChecks\":[],\"habits\":[],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[],\"noteSources\":[],\"noteTopics\":[],\"notes\":[],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"acct\",\"changeId\":\"R:4aff4782170801380db621e3e7788a64\",\"changedAt\":30,\"included\":true,\"snapshotId\":\"s\",\"valuationId\":\"v\"}],\"snapshots\":[{\"at\":1000,\"changeId\":\"R:4aff4782170801380db621e3e7788a64\",\"changedAt\":30,\"id\":\"s\"}],\"todoLists\":[],\"todoSections\":[],\"todos\":[],\"tombstones\":[],\"valuations\":[{\"accountId\":\"acct\",\"at\":1000,\"changeId\":\"R:4aff4782170801380db621e3e7788a64\",\"changedAt\":30,\"id\":\"v\",\"snapshotId\":\"s\",\"value\":100}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "4a099682cf1ef1c27997a1687b1b10da05aaa939670bb799192b5e32f0d1b93d",
+      "adjustments": []
+    },
+    {
+      "name": "a discarded noteDrafts archive stays deleted on an old-body replay",
+      "a": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "groups": [],
+        "accounts": [],
+        "snapshots": [],
+        "valuations": [],
+        "snapshotItems": [],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [
+          {
+            "changedAt": 20,
+            "changeId": "new",
+            "id": "text",
+            "body": "new"
+          }
+        ],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "tombstones": [
+          {
+            "table": "noteDrafts",
+            "rowKey": "noteDrafts#syncLose:notes%23text:old",
+            "deletedAt": 30,
+            "changeId": "T:discard"
+          }
+        ]
+      },
+      "b": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [],
+        "accounts": [],
+        "snapshots": [],
+        "valuations": [],
+        "snapshotItems": [],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [
+          {
+            "changedAt": 10,
+            "changeId": "old",
+            "id": "text",
+            "body": "old"
+          }
+        ],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "resultCanonical": "{\"accounts\":[],\"bodyMeasurements\":[],\"checklistItems\":[],\"countdowns\":[],\"diaryDrafts\":[],\"diaryEntries\":[],\"exportedAt\":0,\"flows\":[],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[],\"habitChecks\":[],\"habits\":[],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[],\"noteSources\":[],\"noteTopics\":[],\"notes\":[{\"body\":\"new\",\"changeId\":\"new\",\"changedAt\":20,\"id\":\"text\"}],\"schemaVersion\":15,\"snapshotItems\":[],\"snapshots\":[],\"todoLists\":[],\"todoSections\":[],\"todos\":[],\"tombstones\":[{\"changeId\":\"T:discard\",\"deletedAt\":30,\"rowKey\":\"noteDrafts#syncLose:notes%23text:old\",\"table\":\"noteDrafts\"}],\"valuations\":[],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "e2163c0cef9900c1c20715b24a4e0c48179d1653320776dd757d561d8c84fb4b",
+      "adjustments": []
+    },
+    {
+      "name": "a discarded diaryDrafts archive stays deleted on an old-body replay",
+      "a": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "groups": [],
+        "accounts": [],
+        "snapshots": [],
+        "valuations": [],
+        "snapshotItems": [],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [
+          {
+            "changedAt": 20,
+            "changeId": "new",
+            "id": "text",
+            "body": "new",
+            "date": "2026-10-20"
+          }
+        ],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "tombstones": [
+          {
+            "table": "diaryDrafts",
+            "rowKey": "diaryDrafts#syncLose:diaryEntries%23text:old",
+            "deletedAt": 30,
+            "changeId": "T:discard"
+          }
+        ]
+      },
+      "b": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [],
+        "accounts": [],
+        "snapshots": [],
+        "valuations": [],
+        "snapshotItems": [],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [
+          {
+            "changedAt": 10,
+            "changeId": "old",
+            "id": "text",
+            "body": "old",
+            "date": "2026-10-20"
+          }
+        ],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "resultCanonical": "{\"accounts\":[],\"bodyMeasurements\":[],\"checklistItems\":[],\"countdowns\":[],\"diaryDrafts\":[],\"diaryEntries\":[{\"body\":\"new\",\"changeId\":\"new\",\"changedAt\":20,\"date\":\"2026-10-20\",\"id\":\"text\"}],\"exportedAt\":0,\"flows\":[],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[],\"habitChecks\":[],\"habits\":[],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[],\"noteSources\":[],\"noteTopics\":[],\"notes\":[],\"schemaVersion\":15,\"snapshotItems\":[],\"snapshots\":[],\"todoLists\":[],\"todoSections\":[],\"todos\":[],\"tombstones\":[{\"changeId\":\"T:discard\",\"deletedAt\":30,\"rowKey\":\"diaryDrafts#syncLose:diaryEntries%23text:old\",\"table\":\"diaryDrafts\"}],\"valuations\":[],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "27442c33b99c99aca66c756de2ceb21fdcf77788598d1d432bea03773c504ae6",
+      "adjustments": []
+    },
+    {
+      "name": "a discarded weeklyDrafts archive stays deleted on an old-body replay",
+      "a": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "groups": [],
+        "accounts": [],
+        "snapshots": [],
+        "valuations": [],
+        "snapshotItems": [],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [
+          {
+            "changedAt": 20,
+            "changeId": "new",
+            "id": "text",
+            "body": "new",
+            "weekStart": "2026-10-19"
+          }
+        ],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "tombstones": [
+          {
+            "table": "weeklyDrafts",
+            "rowKey": "weeklyDrafts#syncLose:weeklyReviews%23text:old",
+            "deletedAt": 30,
+            "changeId": "T:discard"
+          }
+        ]
+      },
+      "b": {
+        "formatVersion": 16,
+        "schemaVersion": 15,
+        "exportedAt": 0,
+        "groups": [],
+        "accounts": [],
+        "snapshots": [],
+        "valuations": [],
+        "snapshotItems": [],
+        "flows": [],
+        "todoLists": [],
+        "todoSections": [],
+        "todos": [],
+        "checklistItems": [],
+        "diaryEntries": [],
+        "diaryDrafts": [],
+        "habitChecks": [],
+        "habits": [],
+        "bodyMeasurements": [],
+        "foodEntries": [],
+        "noteTopics": [],
+        "notes": [],
+        "noteSources": [],
+        "noteDrafts": [],
+        "weeklyReviews": [
+          {
+            "changedAt": 10,
+            "changeId": "old",
+            "id": "text",
+            "body": "old",
+            "weekStart": "2026-10-19"
+          }
+        ],
+        "weeklyDrafts": [],
+        "countdowns": [],
+        "healthProfile": null,
+        "netWorthGoal": null,
+        "netWorthGoalAt": 0,
+        "netWorthGoalChangeId": "",
+        "tombstones": []
+      },
+      "resultCanonical": "{\"accounts\":[],\"bodyMeasurements\":[],\"checklistItems\":[],\"countdowns\":[],\"diaryDrafts\":[],\"diaryEntries\":[],\"exportedAt\":0,\"flows\":[],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[],\"habitChecks\":[],\"habits\":[],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[],\"noteSources\":[],\"noteTopics\":[],\"notes\":[],\"schemaVersion\":15,\"snapshotItems\":[],\"snapshots\":[],\"todoLists\":[],\"todoSections\":[],\"todos\":[],\"tombstones\":[{\"changeId\":\"T:discard\",\"deletedAt\":30,\"rowKey\":\"weeklyDrafts#syncLose:weeklyReviews%23text:old\",\"table\":\"weeklyDrafts\"}],\"valuations\":[],\"weeklyDrafts\":[],\"weeklyReviews\":[{\"body\":\"new\",\"changeId\":\"new\",\"changedAt\":20,\"id\":\"text\",\"weekStart\":\"2026-10-19\"}]}",
+      "resultHash": "5483d6be952b588a51079585728c9938aef268ac814f0bdfc459544f4ac34b4a",
+      "adjustments": []
+    },
+    {
       "name": "two empty files merge to an empty file",
       "a": {
         "formatVersion": 16,
@@ -4209,8 +5509,8 @@
           }
         ]
       },
-      "resultCanonical": "{\"accounts\":[{\"baselineAt\":30,\"baselineCost\":null,\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a0\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":9,\"baselineCost\":null,\"changeId\":\"R:30e1976040e4676c6c3eef9fe931fb92\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a1\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":39,\"baselineCost\":null,\"changeId\":\"R:0a8714d96204aaa0f363b068f6148426\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a2\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[{\"changeId\":\"R:repair\",\"changedAt\":30,\"done\":false,\"id\":\"ci0\",\"text\":\"x\",\"todoId\":\"t3\"},{\"changeId\":\"R:repair\",\"changedAt\":30,\"done\":true,\"id\":\"ci1\",\"text\":\"x\",\"todoId\":\"t0\"},{\"changeId\":\"c\",\"changedAt\":40,\"done\":true,\"id\":\"ci2\",\"text\":\"x\",\"todoId\":\"t0\"}],\"countdowns\":[{\"changeId\":\"a\",\"changedAt\":10,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c0\",\"pinned\":false,\"stateAt\":40,\"stateId\":\"sa\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false},{\"changeId\":\"a\",\"changedAt\":30,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c1\",\"pinned\":true,\"stateAt\":20,\"stateId\":\"sb\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false}],\"diaryDrafts\":[{\"changeId\":\"R:b19480fe11e8e30820d2167f535c9815\",\"changedAt\":10,\"createdAt\":10,\"date\":\"2026-10-21\",\"diaryId\":\"d1\",\"id\":\"syncLose:diaryEntries#d1:legacy:x\",\"reason\":\"同步合并保留败者版本\",\"text\":\"网页\"}],\"diaryEntries\":[{\"body\":\"手机\",\"bodyRev\":0,\"changeId\":\"T:odd\",\"changedAt\":30,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-21\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d0\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":40,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0},{\"body\":\"手机\",\"bodyRev\":0,\"changeId\":\"legacy:x\",\"changedAt\":40,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-20\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d1\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":30,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0}],\"exportedAt\":0,\"flows\":[{\"amount\":1,\"at\":20,\"changeId\":\"legacy:x\",\"changedAt\":10,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f0\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":40,\"changeId\":\"a\",\"changedAt\":20,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a0\",\"id\":\"f1\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a2\"},{\"amount\":1,\"at\":40,\"changeId\":\"R:repair\",\"changedAt\":10,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f2\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a0\"},{\"amount\":1,\"at\":30,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f3\",\"kind\":\"EXPENSE\",\"toAccountId\":null}],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"R:repair\",\"changedAt\":10,\"colorIndex\":0,\"id\":\"g0\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":0},{\"changeId\":\"c\",\"changedAt\":30,\"colorIndex\":0,\"id\":\"g1\",\"isLiability\":false,\"name\":\"投资\",\"sortOrder\":1}],\"habitChecks\":[{\"changeId\":\"c\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"c\",\"changedAt\":40,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h6\",\"skipped\":false},{\"changeId\":\"a\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h1\",\"skipped\":false},{\"changeId\":\"legacy:x\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"T:odd\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h7\",\"skipped\":false}],\"habits\":[{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h0\",\"label\":\"H\",\"position\":0,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h1\",\"label\":\"H\",\"position\":1,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h2\",\"label\":\"H\",\"position\":2,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h3\",\"label\":\"H\",\"position\":3,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":0,\"color\":0,\"icon\":\"fitness\",\"key\":\"h4\",\"label\":\"H\",\"position\":4,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h5\",\"label\":\"H\",\"position\":5,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:c75bd94203b241f025198a2a5e3c1a22\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h6\",\"label\":\"H\",\"position\":6,\"removedOn\":\"2026-01-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"T:odd\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h7\",\"label\":\"H\",\"position\":7,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h8\",\"label\":\"H\",\"position\":8,\"removedOn\":null}],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[{\"changeId\":\"R:c55a85bc528117641687796bcab237c4\",\"changedAt\":10,\"createdAt\":10,\"id\":\"syncLose:notes#n0:R:repair\",\"noteId\":\"n0\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"},{\"changeId\":\"R:0575b5fdf9d357d841f806babbc1c2d7\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n1:legacy:x\",\"noteId\":\"n1\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"},{\"changeId\":\"R:8a9fc0b6b012563d810ff5dae6d6d15f\",\"changedAt\":10,\"createdAt\":10,\"id\":\"syncLose:notes#n2:a\",\"noteId\":\"n2\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"}],\"noteSources\":[{\"changeId\":\"b\",\"changedAt\":0,\"kind\":\"DAY\",\"noteId\":\"n0\",\"ref\":\"2026-10-20\"},{\"changeId\":\"T:odd\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-20\"},{\"changeId\":\"R:repair\",\"changedAt\":40,\"kind\":\"DAY\",\"noteId\":\"n2\",\"ref\":\"2026-10-20\"}],\"noteTopics\":[{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"id\":\"topic1\",\"name\":\"B\"}],\"notes\":[{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"a\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n0\",\"pinned\":false,\"position\":0,\"reviewedAt\":40,\"stateAt\":30,\"stateId\":\"sb\",\"topicId\":null,\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"c\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n1\",\"pinned\":false,\"position\":1,\"reviewedAt\":30,\"stateAt\":20,\"stateId\":\"sb\",\"topicId\":null,\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n2\",\"pinned\":false,\"position\":2,\"reviewedAt\":20,\"stateAt\":40,\"stateId\":\"sa\",\"topicId\":null,\"updatedAt\":1}],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"a2\",\"changeId\":\"c\",\"changedAt\":10,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v2\"},{\"accountId\":\"a0\",\"changeId\":\"T:odd\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v0\"},{\"accountId\":\"a1\",\"changeId\":\"T:odd\",\"changedAt\":30,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v0\"}],\"snapshots\":[{\"at\":0,\"changeId\":\"T:odd\",\"changedAt\":10,\"id\":\"s0\"},{\"at\":40,\"changeId\":\"legacy:x\",\"changedAt\":30,\"id\":\"s1\"}],\"todoLists\":[{\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l0\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":0},{\"changeId\":\"legacy:x\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l1\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":1}],\"todoSections\":[{\"changeId\":\"c\",\"changedAt\":20,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec0\",\"listId\":\"l1\",\"name\":\"S\",\"sortOrder\":0},{\"changeId\":\"T:odd\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec1\",\"listId\":\"l0\",\"name\":\"S\",\"sortOrder\":1}],\"todos\":[{\"changeId\":\"R:0d2cd729f7ecc2d5a40f256942001e52\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t0\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t1\",\"kind\":\"ORDINARY\",\"listId\":\"l0\",\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":30,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"T:odd\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t2\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":10,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t3\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":20,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"}],\"tombstones\":[{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"diaryEntries#v0\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:abccbee0223c1eeab15a20f302f48d9d\",\"deletedAt\":40,\"rowKey\":\"noteTopics#topic0\",\"table\":\"noteTopics\"},{\"changeId\":\"T:gone\",\"deletedAt\":40,\"rowKey\":\"notes#a0\",\"table\":\"notes\"},{\"changeId\":\"T:gone\",\"deletedAt\":20,\"rowKey\":\"notes#ci0\",\"table\":\"notes\"},{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"valuations#d0\",\"table\":\"valuations\"}],\"valuations\":[{\"accountId\":\"a1\",\"at\":9,\"changeId\":\"R:7fc557b38f7e2dbd99a55267a4bcfe96\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v0\",\"snapshotId\":null,\"value\":0},{\"accountId\":\"a0\",\"at\":30,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v1\",\"snapshotId\":null,\"value\":1},{\"accountId\":\"a1\",\"at\":10,\"changeId\":\"a\",\"changedAt\":30,\"createdAt\":1,\"id\":\"v2\",\"snapshotId\":null,\"value\":2}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
-      "resultHash": "b1104f747de35cfea5693e2aaeafe6d7c6a0306ff563c193ea2969c37e2f03f2",
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":30,\"baselineCost\":null,\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a0\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":9,\"baselineCost\":null,\"changeId\":\"R:561518f0b439429360a2556678ac0374\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a1\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":39,\"baselineCost\":null,\"changeId\":\"R:0a8714d96204aaa0f363b068f6148426\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a2\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[{\"changeId\":\"R:repair\",\"changedAt\":30,\"done\":false,\"id\":\"ci0\",\"text\":\"x\",\"todoId\":\"t3\"},{\"changeId\":\"R:repair\",\"changedAt\":30,\"done\":true,\"id\":\"ci1\",\"text\":\"x\",\"todoId\":\"t0\"},{\"changeId\":\"c\",\"changedAt\":40,\"done\":true,\"id\":\"ci2\",\"text\":\"x\",\"todoId\":\"t0\"}],\"countdowns\":[{\"changeId\":\"a\",\"changedAt\":10,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c0\",\"pinned\":false,\"stateAt\":40,\"stateId\":\"sa\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false},{\"changeId\":\"a\",\"changedAt\":30,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c1\",\"pinned\":true,\"stateAt\":20,\"stateId\":\"sb\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false}],\"diaryDrafts\":[{\"changeId\":\"R:b19480fe11e8e30820d2167f535c9815\",\"changedAt\":10,\"createdAt\":10,\"date\":\"2026-10-21\",\"diaryId\":\"d1\",\"id\":\"syncLose:diaryEntries#d1:legacy:x\",\"reason\":\"同步合并保留败者版本\",\"text\":\"网页\"}],\"diaryEntries\":[{\"body\":\"手机\",\"bodyRev\":0,\"changeId\":\"T:odd\",\"changedAt\":30,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-21\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d0\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":40,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0},{\"body\":\"手机\",\"bodyRev\":0,\"changeId\":\"legacy:x\",\"changedAt\":40,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-20\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d1\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":30,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0}],\"exportedAt\":0,\"flows\":[{\"amount\":1,\"at\":20,\"changeId\":\"legacy:x\",\"changedAt\":10,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f0\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":40,\"changeId\":\"a\",\"changedAt\":20,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a0\",\"id\":\"f1\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a2\"},{\"amount\":1,\"at\":40,\"changeId\":\"R:repair\",\"changedAt\":10,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f2\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a0\"},{\"amount\":1,\"at\":30,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f3\",\"kind\":\"EXPENSE\",\"toAccountId\":null}],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"R:repair\",\"changedAt\":10,\"colorIndex\":0,\"id\":\"g0\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":0},{\"changeId\":\"c\",\"changedAt\":30,\"colorIndex\":0,\"id\":\"g1\",\"isLiability\":false,\"name\":\"投资\",\"sortOrder\":1}],\"habitChecks\":[{\"changeId\":\"c\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"c\",\"changedAt\":40,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h6\",\"skipped\":false},{\"changeId\":\"a\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h1\",\"skipped\":false},{\"changeId\":\"legacy:x\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"T:odd\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h7\",\"skipped\":false}],\"habits\":[{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h0\",\"label\":\"H\",\"position\":0,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h1\",\"label\":\"H\",\"position\":1,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h2\",\"label\":\"H\",\"position\":2,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h3\",\"label\":\"H\",\"position\":3,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":0,\"color\":0,\"icon\":\"fitness\",\"key\":\"h4\",\"label\":\"H\",\"position\":4,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h5\",\"label\":\"H\",\"position\":5,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:c75bd94203b241f025198a2a5e3c1a22\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h6\",\"label\":\"H\",\"position\":6,\"removedOn\":\"2026-01-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"T:odd\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h7\",\"label\":\"H\",\"position\":7,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h8\",\"label\":\"H\",\"position\":8,\"removedOn\":null}],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[{\"changeId\":\"R:c55a85bc528117641687796bcab237c4\",\"changedAt\":10,\"createdAt\":10,\"id\":\"syncLose:notes#n0:R:repair\",\"noteId\":\"n0\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"},{\"changeId\":\"R:0575b5fdf9d357d841f806babbc1c2d7\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n1:legacy:x\",\"noteId\":\"n1\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"},{\"changeId\":\"R:8a9fc0b6b012563d810ff5dae6d6d15f\",\"changedAt\":10,\"createdAt\":10,\"id\":\"syncLose:notes#n2:a\",\"noteId\":\"n2\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"}],\"noteSources\":[{\"changeId\":\"b\",\"changedAt\":0,\"kind\":\"DAY\",\"noteId\":\"n0\",\"ref\":\"2026-10-20\"},{\"changeId\":\"T:odd\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-20\"},{\"changeId\":\"R:repair\",\"changedAt\":40,\"kind\":\"DAY\",\"noteId\":\"n2\",\"ref\":\"2026-10-20\"}],\"noteTopics\":[{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"id\":\"topic1\",\"name\":\"B\"}],\"notes\":[{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"a\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n0\",\"pinned\":false,\"position\":0,\"reviewedAt\":40,\"stateAt\":30,\"stateId\":\"sb\",\"topicId\":null,\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"c\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n1\",\"pinned\":false,\"position\":1,\"reviewedAt\":30,\"stateAt\":20,\"stateId\":\"sb\",\"topicId\":null,\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n2\",\"pinned\":false,\"position\":2,\"reviewedAt\":20,\"stateAt\":40,\"stateId\":\"sa\",\"topicId\":null,\"updatedAt\":1}],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"a0\",\"changeId\":\"R:967da059c92c82fa35ff86b6f5ecf09e\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v0\"},{\"accountId\":\"a1\",\"changeId\":\"R:967da059c92c82fa35ff86b6f5ecf09e\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v0\"}],\"snapshots\":[{\"at\":0,\"changeId\":\"R:967da059c92c82fa35ff86b6f5ecf09e\",\"changedAt\":40,\"id\":\"s1\"}],\"todoLists\":[{\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l0\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":0},{\"changeId\":\"legacy:x\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l1\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":1}],\"todoSections\":[{\"changeId\":\"c\",\"changedAt\":20,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec0\",\"listId\":\"l1\",\"name\":\"S\",\"sortOrder\":0},{\"changeId\":\"T:odd\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec1\",\"listId\":\"l0\",\"name\":\"S\",\"sortOrder\":1}],\"todos\":[{\"changeId\":\"R:0d2cd729f7ecc2d5a40f256942001e52\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t0\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t1\",\"kind\":\"ORDINARY\",\"listId\":\"l0\",\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":30,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"T:odd\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t2\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":10,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t3\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":20,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"}],\"tombstones\":[{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"diaryEntries#v0\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:abccbee0223c1eeab15a20f302f48d9d\",\"deletedAt\":40,\"rowKey\":\"noteTopics#topic0\",\"table\":\"noteTopics\"},{\"changeId\":\"T:gone\",\"deletedAt\":40,\"rowKey\":\"notes#a0\",\"table\":\"notes\"},{\"changeId\":\"T:gone\",\"deletedAt\":20,\"rowKey\":\"notes#ci0\",\"table\":\"notes\"},{\"changeId\":\"T:80ae1f9d9d770d37675236bd63d396f4\",\"deletedAt\":30,\"rowKey\":\"snapshotItems#s0|a2\",\"table\":\"snapshotItems\"},{\"changeId\":\"T:f48bb2ed911de5401ca686fb49bdf214\",\"deletedAt\":30,\"rowKey\":\"snapshots#s0\",\"table\":\"snapshots\"},{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"valuations#d0\",\"table\":\"valuations\"}],\"valuations\":[{\"accountId\":\"a1\",\"at\":9,\"changeId\":\"R:7fc557b38f7e2dbd99a55267a4bcfe96\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v0\",\"snapshotId\":null,\"value\":0},{\"accountId\":\"a0\",\"at\":30,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v1\",\"snapshotId\":null,\"value\":1},{\"accountId\":\"a1\",\"at\":10,\"changeId\":\"R:b3c78f1720ff7db9ac388a4a5549f605\",\"changedAt\":30,\"createdAt\":1,\"id\":\"v2\",\"snapshotId\":null,\"value\":2}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "0a5e402814b6c5df120873acf783142f9bed5b0c36a3583a298eb598ec77aa8c",
       "adjustments": [
         {
           "rule": "R3",
@@ -4226,6 +5526,11 @@
           "rule": "R6",
           "count": 2,
           "text": "账户期初已前移，以容纳更早的流水"
+        },
+        {
+          "rule": "R8",
+          "count": 1,
+          "text": "自然键重复，保留较新的一版"
         },
         {
           "rule": "archive",
@@ -5549,8 +6854,8 @@
           }
         ]
       },
-      "resultCanonical": "{\"accounts\":[{\"baselineAt\":-1,\"baselineCost\":null,\"changeId\":\"R:207929980f5c113abbf342beda452a00\",\"changedAt\":20,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a0\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":0,\"baselineCost\":null,\"changeId\":\"T:odd\",\"changedAt\":20,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a1\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":-1,\"baselineCost\":null,\"changeId\":\"R:3c7836fbae56b5aa9c90d623515e5b5c\",\"changedAt\":20,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a2\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[{\"changeId\":\"c\",\"changedAt\":20,\"done\":false,\"id\":\"ci0\",\"text\":\"x\",\"todoId\":\"t0\"},{\"changeId\":\"R:repair\",\"changedAt\":40,\"done\":false,\"id\":\"ci1\",\"text\":\"x\",\"todoId\":\"t3\"},{\"changeId\":\"T:odd\",\"changedAt\":30,\"done\":false,\"id\":\"ci2\",\"text\":\"x\",\"todoId\":\"t1\"}],\"countdowns\":[{\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c0\",\"pinned\":false,\"stateAt\":40,\"stateId\":\"R:837ce6fe074a52a706c39276b97e4227\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false},{\"changeId\":\"c\",\"changedAt\":30,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c1\",\"pinned\":true,\"stateAt\":20,\"stateId\":\"sb\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false}],\"diaryDrafts\":[{\"changeId\":\"R:3fc5e52911f83806068279e781575e72\",\"changedAt\":10,\"createdAt\":10,\"date\":\"2026-10-21\",\"diaryId\":\"d0\",\"id\":\"syncLose:diaryEntries#d0:T:odd\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"},{\"changeId\":\"R:23a4b1922a29c97865bc8fda2d0ef59a\",\"changedAt\":30,\"createdAt\":30,\"date\":\"2026-10-20\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d1:b\",\"reason\":\"同步合并保留败者版本\",\"text\":\"网页\"},{\"changeId\":\"R:df238843dc21f28fca2ef03439916e95\",\"changedAt\":20,\"createdAt\":20,\"date\":\"2026-10-21\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d1:legacy:x\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"}],\"diaryEntries\":[{\"body\":\"网页\",\"bodyRev\":0,\"changeId\":\"legacy:x\",\"changedAt\":30,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-20\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d0\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":30,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0}],\"exportedAt\":0,\"flows\":[{\"amount\":1,\"at\":30,\"changeId\":\"c\",\"changedAt\":30,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f0\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":40,\"changeId\":\"T:odd\",\"changedAt\":0,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f1\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":20,\"changeId\":\"c\",\"changedAt\":30,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f2\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a0\"},{\"amount\":1,\"at\":0,\"changeId\":\"R:repair\",\"changedAt\":30,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f3\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a0\"}],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"b\",\"changedAt\":20,\"colorIndex\":0,\"id\":\"g0\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":0},{\"changeId\":\"a\",\"changedAt\":30,\"colorIndex\":0,\"id\":\"g1\",\"isLiability\":false,\"name\":\"投资\",\"sortOrder\":1}],\"habitChecks\":[{\"changeId\":\"R:repair\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h1\",\"skipped\":false},{\"changeId\":\"a\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h4\",\"skipped\":false},{\"changeId\":\"c\",\"changedAt\":40,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h5\",\"skipped\":false},{\"changeId\":\"R:repair\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"T:odd\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h3\",\"skipped\":false}],\"habits\":[{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h0\",\"label\":\"H\",\"position\":0,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h1\",\"label\":\"H\",\"position\":1,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"T:odd\",\"changedAt\":10,\"color\":0,\"icon\":\"fitness\",\"key\":\"h2\",\"label\":\"H\",\"position\":2,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h3\",\"label\":\"H\",\"position\":3,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h4\",\"label\":\"H\",\"position\":4,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h5\",\"label\":\"H\",\"position\":5,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h6\",\"label\":\"H\",\"position\":6,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h7\",\"label\":\"H\",\"position\":7,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:bb9d8df10bd16d513582bb1700856a95\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h8\",\"label\":\"H\",\"position\":8,\"removedOn\":\"2026-01-01\"}],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[{\"changeId\":\"R:da11f6ea0c5ef52debf31dc010d6a576\",\"changedAt\":30,\"createdAt\":30,\"id\":\"syncLose:notes#n0:b\",\"noteId\":\"n0\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"},{\"changeId\":\"R:c1d74509cd2005bee8814b45676ca9d1\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n1:a\",\"noteId\":\"n1\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"},{\"changeId\":\"R:35be0b6b89b211c4eaf0ea726336cd1a\",\"changedAt\":30,\"createdAt\":30,\"id\":\"syncLose:notes#n2:b\",\"noteId\":\"n2\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"}],\"noteSources\":[{\"changeId\":\"c\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n0\",\"ref\":\"2026-10-21\"},{\"changeId\":\"b\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-20\"},{\"changeId\":\"c\",\"changedAt\":20,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-21\"},{\"changeId\":\"legacy:x\",\"changedAt\":40,\"kind\":\"DAY\",\"noteId\":\"n2\",\"ref\":\"2026-10-21\"}],\"noteTopics\":[{\"changeId\":\"c\",\"changedAt\":40,\"createdAt\":1,\"id\":\"topic0\",\"name\":\"B\"},{\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"id\":\"topic1\",\"name\":\"A\"}],\"notes\":[{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n0\",\"pinned\":true,\"position\":0,\"reviewedAt\":40,\"stateAt\":40,\"stateId\":\"sb\",\"topicId\":\"topic0\",\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"b\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n1\",\"pinned\":false,\"position\":1,\"reviewedAt\":40,\"stateAt\":40,\"stateId\":\"sb\",\"topicId\":null,\"updatedAt\":1},{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n2\",\"pinned\":true,\"position\":2,\"reviewedAt\":null,\"stateAt\":10,\"stateId\":\"sb\",\"topicId\":null,\"updatedAt\":1}],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"a2\",\"changeId\":\"a\",\"changedAt\":30,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v0\"},{\"accountId\":\"a0\",\"changeId\":\"b\",\"changedAt\":20,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v1\"},{\"accountId\":\"a2\",\"changeId\":\"c\",\"changedAt\":30,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v0\"}],\"snapshots\":[{\"at\":30,\"changeId\":\"b\",\"changedAt\":40,\"id\":\"s0\"},{\"at\":0,\"changeId\":\"legacy:x\",\"changedAt\":40,\"id\":\"s1\"}],\"todoLists\":[{\"changeId\":\"legacy:x\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l0\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":0},{\"changeId\":\"c\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l1\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":1}],\"todoSections\":[{\"changeId\":\"T:odd\",\"changedAt\":10,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec0\",\"listId\":\"l1\",\"name\":\"S\",\"sortOrder\":0},{\"changeId\":\"R:repair\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec1\",\"listId\":\"l0\",\"name\":\"S\",\"sortOrder\":1}],\"todos\":[{\"changeId\":\"b\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t0\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t1\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:1721dee7001d6d3b9987af10f90530f4\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t2\",\"kind\":\"COMPLETION\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":\"2026-10-21\",\"remindedPeriod\":null,\"repeatSourceId\":\"t2\",\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"a\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t3\",\"kind\":\"COMPLETION\",\"listId\":\"l0\",\"occurrenceCount\":0,\"planDate\":\"2026-10-21\",\"remindedPeriod\":null,\"repeatSourceId\":\"t0\",\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"}],\"tombstones\":[{\"changeId\":\"T:723634c2a9fca148dd0d824d919b04d1\",\"deletedAt\":30,\"rowKey\":\"diaryEntries#d1\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:gone\",\"deletedAt\":0,\"rowKey\":\"flows#n0\",\"table\":\"flows\"},{\"changeId\":\"T:gone\",\"deletedAt\":30,\"rowKey\":\"flows#t0\",\"table\":\"flows\"},{\"changeId\":\"T:gone\",\"deletedAt\":40,\"rowKey\":\"groups#d0\",\"table\":\"groups\"}],\"valuations\":[{\"accountId\":\"a1\",\"at\":0,\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v0\",\"snapshotId\":null,\"value\":0},{\"accountId\":\"a1\",\"at\":10,\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"id\":\"v1\",\"snapshotId\":null,\"value\":1},{\"accountId\":\"a1\",\"at\":30,\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"id\":\"v2\",\"snapshotId\":null,\"value\":2}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
-      "resultHash": "9d2b3d0e04e8bf671bed66454b3ce0fecd5d7b20e0fc96fe817f3ae31eb5e5ac",
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":-1,\"baselineCost\":null,\"changeId\":\"R:207929980f5c113abbf342beda452a00\",\"changedAt\":20,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a0\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":0,\"baselineCost\":null,\"changeId\":\"T:odd\",\"changedAt\":20,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a1\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":-1,\"baselineCost\":null,\"changeId\":\"R:26a75642af27b6ccd1d936ee939eebdf\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a2\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[{\"changeId\":\"c\",\"changedAt\":20,\"done\":false,\"id\":\"ci0\",\"text\":\"x\",\"todoId\":\"t0\"},{\"changeId\":\"R:repair\",\"changedAt\":40,\"done\":false,\"id\":\"ci1\",\"text\":\"x\",\"todoId\":\"t3\"},{\"changeId\":\"T:odd\",\"changedAt\":30,\"done\":false,\"id\":\"ci2\",\"text\":\"x\",\"todoId\":\"t1\"}],\"countdowns\":[{\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c0\",\"pinned\":false,\"stateAt\":40,\"stateId\":\"R:837ce6fe074a52a706c39276b97e4227\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false},{\"changeId\":\"c\",\"changedAt\":30,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c1\",\"pinned\":true,\"stateAt\":20,\"stateId\":\"sb\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false}],\"diaryDrafts\":[{\"changeId\":\"R:3fc5e52911f83806068279e781575e72\",\"changedAt\":10,\"createdAt\":10,\"date\":\"2026-10-21\",\"diaryId\":\"d0\",\"id\":\"syncLose:diaryEntries#d0:T:odd\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"},{\"changeId\":\"R:23a4b1922a29c97865bc8fda2d0ef59a\",\"changedAt\":30,\"createdAt\":30,\"date\":\"2026-10-20\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d1:b\",\"reason\":\"同步合并保留败者版本\",\"text\":\"网页\"},{\"changeId\":\"R:df238843dc21f28fca2ef03439916e95\",\"changedAt\":20,\"createdAt\":20,\"date\":\"2026-10-21\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d1:legacy:x\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"}],\"diaryEntries\":[{\"body\":\"网页\",\"bodyRev\":0,\"changeId\":\"legacy:x\",\"changedAt\":30,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-20\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d0\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":30,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0}],\"exportedAt\":0,\"flows\":[{\"amount\":1,\"at\":30,\"changeId\":\"c\",\"changedAt\":30,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f0\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":40,\"changeId\":\"T:odd\",\"changedAt\":0,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f1\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":20,\"changeId\":\"c\",\"changedAt\":30,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f2\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a0\"},{\"amount\":1,\"at\":0,\"changeId\":\"R:repair\",\"changedAt\":30,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f3\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a0\"}],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"b\",\"changedAt\":20,\"colorIndex\":0,\"id\":\"g0\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":0},{\"changeId\":\"a\",\"changedAt\":30,\"colorIndex\":0,\"id\":\"g1\",\"isLiability\":false,\"name\":\"投资\",\"sortOrder\":1}],\"habitChecks\":[{\"changeId\":\"R:repair\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h1\",\"skipped\":false},{\"changeId\":\"a\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h4\",\"skipped\":false},{\"changeId\":\"c\",\"changedAt\":40,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h5\",\"skipped\":false},{\"changeId\":\"R:repair\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"T:odd\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h3\",\"skipped\":false}],\"habits\":[{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h0\",\"label\":\"H\",\"position\":0,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h1\",\"label\":\"H\",\"position\":1,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"T:odd\",\"changedAt\":10,\"color\":0,\"icon\":\"fitness\",\"key\":\"h2\",\"label\":\"H\",\"position\":2,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h3\",\"label\":\"H\",\"position\":3,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h4\",\"label\":\"H\",\"position\":4,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h5\",\"label\":\"H\",\"position\":5,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h6\",\"label\":\"H\",\"position\":6,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h7\",\"label\":\"H\",\"position\":7,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:bb9d8df10bd16d513582bb1700856a95\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h8\",\"label\":\"H\",\"position\":8,\"removedOn\":\"2026-01-01\"}],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[{\"changeId\":\"R:da11f6ea0c5ef52debf31dc010d6a576\",\"changedAt\":30,\"createdAt\":30,\"id\":\"syncLose:notes#n0:b\",\"noteId\":\"n0\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"},{\"changeId\":\"R:c1d74509cd2005bee8814b45676ca9d1\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n1:a\",\"noteId\":\"n1\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"},{\"changeId\":\"R:35be0b6b89b211c4eaf0ea726336cd1a\",\"changedAt\":30,\"createdAt\":30,\"id\":\"syncLose:notes#n2:b\",\"noteId\":\"n2\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"}],\"noteSources\":[{\"changeId\":\"c\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n0\",\"ref\":\"2026-10-21\"},{\"changeId\":\"b\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-20\"},{\"changeId\":\"c\",\"changedAt\":20,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-21\"},{\"changeId\":\"legacy:x\",\"changedAt\":40,\"kind\":\"DAY\",\"noteId\":\"n2\",\"ref\":\"2026-10-21\"}],\"noteTopics\":[{\"changeId\":\"c\",\"changedAt\":40,\"createdAt\":1,\"id\":\"topic0\",\"name\":\"B\"},{\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"id\":\"topic1\",\"name\":\"A\"}],\"notes\":[{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n0\",\"pinned\":true,\"position\":0,\"reviewedAt\":40,\"stateAt\":40,\"stateId\":\"sb\",\"topicId\":\"topic0\",\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"b\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n1\",\"pinned\":false,\"position\":1,\"reviewedAt\":40,\"stateAt\":40,\"stateId\":\"sb\",\"topicId\":null,\"updatedAt\":1},{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n2\",\"pinned\":true,\"position\":2,\"reviewedAt\":null,\"stateAt\":10,\"stateId\":\"sb\",\"topicId\":null,\"updatedAt\":1}],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"a2\",\"changeId\":\"R:016964bbd76d8b982096e48a653e44bd\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v0\"},{\"accountId\":\"a0\",\"changeId\":\"R:4d3c5cd38335fb23dba9ce5b384c534a\",\"changedAt\":30,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v1\"},{\"accountId\":\"a2\",\"changeId\":\"R:a84687a55274be171c14152993d78cb1\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v0\"}],\"snapshots\":[{\"at\":30,\"changeId\":\"R:016964bbd76d8b982096e48a653e44bd\",\"changedAt\":40,\"id\":\"s0\"},{\"at\":0,\"changeId\":\"R:a84687a55274be171c14152993d78cb1\",\"changedAt\":40,\"id\":\"s1\"}],\"todoLists\":[{\"changeId\":\"legacy:x\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l0\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":0},{\"changeId\":\"c\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l1\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":1}],\"todoSections\":[{\"changeId\":\"T:odd\",\"changedAt\":10,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec0\",\"listId\":\"l1\",\"name\":\"S\",\"sortOrder\":0},{\"changeId\":\"R:repair\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec1\",\"listId\":\"l0\",\"name\":\"S\",\"sortOrder\":1}],\"todos\":[{\"changeId\":\"b\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t0\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t1\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:1721dee7001d6d3b9987af10f90530f4\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t2\",\"kind\":\"COMPLETION\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":\"2026-10-21\",\"remindedPeriod\":null,\"repeatSourceId\":\"t2\",\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"a\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t3\",\"kind\":\"COMPLETION\",\"listId\":\"l0\",\"occurrenceCount\":0,\"planDate\":\"2026-10-21\",\"remindedPeriod\":null,\"repeatSourceId\":\"t0\",\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"}],\"tombstones\":[{\"changeId\":\"T:723634c2a9fca148dd0d824d919b04d1\",\"deletedAt\":30,\"rowKey\":\"diaryEntries#d1\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:gone\",\"deletedAt\":0,\"rowKey\":\"flows#n0\",\"table\":\"flows\"},{\"changeId\":\"T:gone\",\"deletedAt\":30,\"rowKey\":\"flows#t0\",\"table\":\"flows\"},{\"changeId\":\"T:gone\",\"deletedAt\":40,\"rowKey\":\"groups#d0\",\"table\":\"groups\"}],\"valuations\":[{\"accountId\":\"a2\",\"at\":10,\"changeId\":\"R:a84687a55274be171c14152993d78cb1\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v0\",\"snapshotId\":null,\"value\":0},{\"accountId\":\"a1\",\"at\":10,\"changeId\":\"R:4d3c5cd38335fb23dba9ce5b384c534a\",\"changedAt\":30,\"createdAt\":1,\"id\":\"v1\",\"snapshotId\":null,\"value\":1},{\"accountId\":\"a1\",\"at\":30,\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"id\":\"v2\",\"snapshotId\":null,\"value\":2}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "144101fcb6189ef39f692d9032f1602e3ac06465c0b3198ae3629c18f6c7d3ed",
       "adjustments": [
         {
           "rule": "R2",
@@ -6894,8 +8199,8 @@
           }
         ]
       },
-      "resultCanonical": "{\"accounts\":[{\"baselineAt\":-1,\"baselineCost\":null,\"changeId\":\"R:e2c84d407c4cdc44f5ada92b9b549f54\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a0\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":39,\"baselineCost\":null,\"changeId\":\"R:97f432c8c03d207955114d6e1dfc11fe\",\"changedAt\":30,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a1\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":19,\"baselineCost\":null,\"changeId\":\"R:f656926ed81affdab4a057e787c639ae\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a2\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[{\"changeId\":\"legacy:x\",\"changedAt\":40,\"done\":false,\"id\":\"ci0\",\"text\":\"x\",\"todoId\":\"t2\"},{\"changeId\":\"b\",\"changedAt\":20,\"done\":true,\"id\":\"ci1\",\"text\":\"x\",\"todoId\":\"t0\"},{\"changeId\":\"legacy:x\",\"changedAt\":40,\"done\":false,\"id\":\"ci2\",\"text\":\"x\",\"todoId\":\"t3\"}],\"countdowns\":[{\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c0\",\"pinned\":true,\"stateAt\":30,\"stateId\":\"sa\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false},{\"changeId\":\"c\",\"changedAt\":20,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c1\",\"pinned\":false,\"stateAt\":30,\"stateId\":\"sb\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false}],\"diaryDrafts\":[{\"changeId\":\"R:265aa9e66fa03e67c4a002e2915673ab\",\"changedAt\":0,\"createdAt\":0,\"date\":\"2026-10-20\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d0:R:repair\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"},{\"changeId\":\"R:060784e8b0910424c83e1210ea18c528\",\"changedAt\":30,\"createdAt\":30,\"date\":\"2026-10-21\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d0:a\",\"reason\":\"同步合并保留败者版本\",\"text\":\"网页\"},{\"changeId\":\"R:cc73ae2f13a2eb773752ffd336053e84\",\"changedAt\":20,\"createdAt\":20,\"date\":\"2026-10-21\",\"diaryId\":\"d1\",\"id\":\"syncLose:diaryEntries#d1:T:odd\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"}],\"diaryEntries\":[{\"body\":\"网页\",\"bodyRev\":0,\"changeId\":\"T:odd\",\"changedAt\":40,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-21\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d1\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":20,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0}],\"exportedAt\":0,\"flows\":[{\"amount\":1,\"at\":0,\"changeId\":\"a\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a0\",\"id\":\"f0\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":40,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f1\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":20,\"changeId\":\"c\",\"changedAt\":30,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f2\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":0,\"changeId\":\"T:odd\",\"changedAt\":20,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a0\",\"id\":\"f3\",\"kind\":\"EXPENSE\",\"toAccountId\":null}],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"legacy:x\",\"changedAt\":20,\"colorIndex\":0,\"id\":\"g0\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":0},{\"changeId\":\"legacy:x\",\"changedAt\":10,\"colorIndex\":0,\"id\":\"g1\",\"isLiability\":false,\"name\":\"投资\",\"sortOrder\":1}],\"habitChecks\":[{\"changeId\":\"R:repair\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h5\",\"skipped\":false},{\"changeId\":\"c\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h1\",\"skipped\":false},{\"changeId\":\"legacy:x\",\"changedAt\":10,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"T:odd\",\"changedAt\":10,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h4\",\"skipped\":false},{\"changeId\":\"b\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h5\",\"skipped\":false},{\"changeId\":\"T:odd\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h7\",\"skipped\":false}],\"habits\":[{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h0\",\"label\":\"H\",\"position\":0,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"T:odd\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h1\",\"label\":\"H\",\"position\":1,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h2\",\"label\":\"H\",\"position\":2,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h3\",\"label\":\"H\",\"position\":3,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h4\",\"label\":\"H\",\"position\":4,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h5\",\"label\":\"H\",\"position\":5,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h6\",\"label\":\"H\",\"position\":6,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:46c9bd54ee055d56e83d2e77e9388fc8\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h7\",\"label\":\"H\",\"position\":7,\"removedOn\":\"2026-01-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h8\",\"label\":\"H\",\"position\":8,\"removedOn\":null}],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[{\"changeId\":\"R:da11f6ea0c5ef52debf31dc010d6a576\",\"changedAt\":20,\"createdAt\":20,\"id\":\"syncLose:notes#n0:b\",\"noteId\":\"n0\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"},{\"changeId\":\"R:c1d74509cd2005bee8814b45676ca9d1\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n1:a\",\"noteId\":\"n1\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"},{\"changeId\":\"R:35be0b6b89b211c4eaf0ea726336cd1a\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n2:b\",\"noteId\":\"n2\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"}],\"noteSources\":[{\"changeId\":\"legacy:x\",\"changedAt\":0,\"kind\":\"DAY\",\"noteId\":\"n0\",\"ref\":\"2026-10-20\"},{\"changeId\":\"T:odd\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-20\"},{\"changeId\":\"legacy:x\",\"changedAt\":20,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-21\"},{\"changeId\":\"T:odd\",\"changedAt\":40,\"kind\":\"DAY\",\"noteId\":\"n2\",\"ref\":\"2026-10-21\"}],\"noteTopics\":[{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"id\":\"topic0\",\"name\":\"A\"},{\"changeId\":\"a\",\"changedAt\":40,\"createdAt\":1,\"id\":\"topic1\",\"name\":\"B\"}],\"notes\":[{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"c\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n0\",\"pinned\":false,\"position\":0,\"reviewedAt\":30,\"stateAt\":20,\"stateId\":\"sb\",\"topicId\":\"topic1\",\"updatedAt\":1},{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"b\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n1\",\"pinned\":true,\"position\":1,\"reviewedAt\":null,\"stateAt\":10,\"stateId\":\"sb\",\"topicId\":\"topic1\",\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"c\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n2\",\"pinned\":true,\"position\":2,\"reviewedAt\":20,\"stateAt\":30,\"stateId\":\"sa\",\"topicId\":null,\"updatedAt\":1}],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"a0\",\"changeId\":\"b\",\"changedAt\":10,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v1\"},{\"accountId\":\"a1\",\"changeId\":\"c\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v0\"},{\"accountId\":\"a0\",\"changeId\":\"R:repair\",\"changedAt\":20,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v0\"}],\"snapshots\":[{\"at\":20,\"changeId\":\"T:odd\",\"changedAt\":20,\"id\":\"s0\"},{\"at\":10,\"changeId\":\"a\",\"changedAt\":20,\"id\":\"s1\"}],\"todoLists\":[{\"changeId\":\"c\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l0\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":0},{\"changeId\":\"R:repair\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l1\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":1}],\"todoSections\":[{\"changeId\":\"c\",\"changedAt\":30,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec0\",\"listId\":\"l0\",\"name\":\"S\",\"sortOrder\":0},{\"changeId\":\"c\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec1\",\"listId\":\"l1\",\"name\":\"S\",\"sortOrder\":1}],\"todos\":[{\"changeId\":\"R:7ddb09a5e042136f9311f3375cf69a69\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t0\",\"kind\":\"COMPLETION\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":\"2026-10-20\",\"remindedPeriod\":null,\"repeatSourceId\":\"t1\",\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"b\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t1\",\"kind\":\"COMPLETION\",\"listId\":\"l1\",\"occurrenceCount\":0,\"planDate\":\"2026-10-21\",\"remindedPeriod\":null,\"repeatSourceId\":\"t3\",\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":30,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:918d82f42d5105a90ced368ebd86c401\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t2\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":30,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"T:odd\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t3\",\"kind\":\"COMPLETION\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":\"2026-10-21\",\"remindedPeriod\":null,\"repeatSourceId\":\"t0\",\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":10,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"}],\"tombstones\":[{\"changeId\":\"T:gone\",\"deletedAt\":20,\"rowKey\":\"accounts#n0\",\"table\":\"accounts\"},{\"changeId\":\"T:33dc707b8b239f97954e1568b0fd0024\",\"deletedAt\":30,\"rowKey\":\"diaryEntries#d0\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"todos#f0\",\"table\":\"todos\"},{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"valuations#a0\",\"table\":\"valuations\"}],\"valuations\":[{\"accountId\":\"a0\",\"at\":20,\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"id\":\"v0\",\"snapshotId\":null,\"value\":0},{\"accountId\":\"a0\",\"at\":30,\"changeId\":\"legacy:x\",\"changedAt\":20,\"createdAt\":1,\"id\":\"v1\",\"snapshotId\":null,\"value\":1},{\"accountId\":\"a0\",\"at\":-1,\"changeId\":\"R:2773258387b5dc92e25db322e3f90148\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v2\",\"snapshotId\":null,\"value\":2}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
-      "resultHash": "55a6f21581020650f5ac30e4303293ed2e3aebc9cc0ea9a82f4c789cb1a8e49f",
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":-1,\"baselineCost\":null,\"changeId\":\"R:719f8cb47bfdcde7dbe15addee48099a\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a0\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":39,\"baselineCost\":null,\"changeId\":\"R:97f432c8c03d207955114d6e1dfc11fe\",\"changedAt\":30,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a1\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":19,\"baselineCost\":null,\"changeId\":\"R:f656926ed81affdab4a057e787c639ae\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a2\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[{\"changeId\":\"legacy:x\",\"changedAt\":40,\"done\":false,\"id\":\"ci0\",\"text\":\"x\",\"todoId\":\"t2\"},{\"changeId\":\"b\",\"changedAt\":20,\"done\":true,\"id\":\"ci1\",\"text\":\"x\",\"todoId\":\"t0\"},{\"changeId\":\"legacy:x\",\"changedAt\":40,\"done\":false,\"id\":\"ci2\",\"text\":\"x\",\"todoId\":\"t3\"}],\"countdowns\":[{\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c0\",\"pinned\":true,\"stateAt\":30,\"stateId\":\"sa\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false},{\"changeId\":\"c\",\"changedAt\":20,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c1\",\"pinned\":false,\"stateAt\":30,\"stateId\":\"sb\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false}],\"diaryDrafts\":[{\"changeId\":\"R:265aa9e66fa03e67c4a002e2915673ab\",\"changedAt\":0,\"createdAt\":0,\"date\":\"2026-10-20\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d0:R:repair\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"},{\"changeId\":\"R:060784e8b0910424c83e1210ea18c528\",\"changedAt\":30,\"createdAt\":30,\"date\":\"2026-10-21\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d0:a\",\"reason\":\"同步合并保留败者版本\",\"text\":\"网页\"},{\"changeId\":\"R:cc73ae2f13a2eb773752ffd336053e84\",\"changedAt\":20,\"createdAt\":20,\"date\":\"2026-10-21\",\"diaryId\":\"d1\",\"id\":\"syncLose:diaryEntries#d1:T:odd\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"}],\"diaryEntries\":[{\"body\":\"网页\",\"bodyRev\":0,\"changeId\":\"T:odd\",\"changedAt\":40,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-21\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d1\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":20,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0}],\"exportedAt\":0,\"flows\":[{\"amount\":1,\"at\":0,\"changeId\":\"a\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a0\",\"id\":\"f0\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":40,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f1\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":20,\"changeId\":\"c\",\"changedAt\":30,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f2\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":0,\"changeId\":\"T:odd\",\"changedAt\":20,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a0\",\"id\":\"f3\",\"kind\":\"EXPENSE\",\"toAccountId\":null}],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"legacy:x\",\"changedAt\":20,\"colorIndex\":0,\"id\":\"g0\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":0},{\"changeId\":\"legacy:x\",\"changedAt\":10,\"colorIndex\":0,\"id\":\"g1\",\"isLiability\":false,\"name\":\"投资\",\"sortOrder\":1}],\"habitChecks\":[{\"changeId\":\"R:repair\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h5\",\"skipped\":false},{\"changeId\":\"c\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h1\",\"skipped\":false},{\"changeId\":\"legacy:x\",\"changedAt\":10,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"T:odd\",\"changedAt\":10,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h4\",\"skipped\":false},{\"changeId\":\"b\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h5\",\"skipped\":false},{\"changeId\":\"T:odd\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h7\",\"skipped\":false}],\"habits\":[{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h0\",\"label\":\"H\",\"position\":0,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"T:odd\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h1\",\"label\":\"H\",\"position\":1,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h2\",\"label\":\"H\",\"position\":2,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h3\",\"label\":\"H\",\"position\":3,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h4\",\"label\":\"H\",\"position\":4,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h5\",\"label\":\"H\",\"position\":5,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h6\",\"label\":\"H\",\"position\":6,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:46c9bd54ee055d56e83d2e77e9388fc8\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h7\",\"label\":\"H\",\"position\":7,\"removedOn\":\"2026-01-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h8\",\"label\":\"H\",\"position\":8,\"removedOn\":null}],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[{\"changeId\":\"R:da11f6ea0c5ef52debf31dc010d6a576\",\"changedAt\":20,\"createdAt\":20,\"id\":\"syncLose:notes#n0:b\",\"noteId\":\"n0\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"},{\"changeId\":\"R:c1d74509cd2005bee8814b45676ca9d1\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n1:a\",\"noteId\":\"n1\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"},{\"changeId\":\"R:35be0b6b89b211c4eaf0ea726336cd1a\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n2:b\",\"noteId\":\"n2\",\"reason\":\"同步合并保留败者版本\",\"text\":\"乙\"}],\"noteSources\":[{\"changeId\":\"legacy:x\",\"changedAt\":0,\"kind\":\"DAY\",\"noteId\":\"n0\",\"ref\":\"2026-10-20\"},{\"changeId\":\"T:odd\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-20\"},{\"changeId\":\"legacy:x\",\"changedAt\":20,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-21\"},{\"changeId\":\"T:odd\",\"changedAt\":40,\"kind\":\"DAY\",\"noteId\":\"n2\",\"ref\":\"2026-10-21\"}],\"noteTopics\":[{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"id\":\"topic0\",\"name\":\"A\"},{\"changeId\":\"a\",\"changedAt\":40,\"createdAt\":1,\"id\":\"topic1\",\"name\":\"B\"}],\"notes\":[{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"c\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n0\",\"pinned\":false,\"position\":0,\"reviewedAt\":30,\"stateAt\":20,\"stateId\":\"sb\",\"topicId\":\"topic1\",\"updatedAt\":1},{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"b\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n1\",\"pinned\":true,\"position\":1,\"reviewedAt\":null,\"stateAt\":10,\"stateId\":\"sb\",\"topicId\":\"topic1\",\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"c\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n2\",\"pinned\":true,\"position\":2,\"reviewedAt\":20,\"stateAt\":30,\"stateId\":\"sa\",\"topicId\":null,\"updatedAt\":1}],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"a0\",\"changeId\":\"R:bd681b355018aeb9bb3ab0d7f46f6b51\",\"changedAt\":20,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v1\"},{\"accountId\":\"a1\",\"changeId\":\"R:60979011533eb268e68c58e2fb419a6f\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v1\"}],\"snapshots\":[{\"at\":10,\"changeId\":\"R:60979011533eb268e68c58e2fb419a6f\",\"changedAt\":40,\"id\":\"s0\"}],\"todoLists\":[{\"changeId\":\"c\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l0\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":0},{\"changeId\":\"R:repair\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l1\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":1}],\"todoSections\":[{\"changeId\":\"c\",\"changedAt\":30,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec0\",\"listId\":\"l0\",\"name\":\"S\",\"sortOrder\":0},{\"changeId\":\"c\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec1\",\"listId\":\"l1\",\"name\":\"S\",\"sortOrder\":1}],\"todos\":[{\"changeId\":\"R:7ddb09a5e042136f9311f3375cf69a69\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t0\",\"kind\":\"COMPLETION\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":\"2026-10-20\",\"remindedPeriod\":null,\"repeatSourceId\":\"t1\",\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"b\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t1\",\"kind\":\"COMPLETION\",\"listId\":\"l1\",\"occurrenceCount\":0,\"planDate\":\"2026-10-21\",\"remindedPeriod\":null,\"repeatSourceId\":\"t3\",\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":30,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:918d82f42d5105a90ced368ebd86c401\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t2\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":30,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"T:odd\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t3\",\"kind\":\"COMPLETION\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":\"2026-10-21\",\"remindedPeriod\":null,\"repeatSourceId\":\"t0\",\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":10,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"}],\"tombstones\":[{\"changeId\":\"T:gone\",\"deletedAt\":20,\"rowKey\":\"accounts#n0\",\"table\":\"accounts\"},{\"changeId\":\"T:33dc707b8b239f97954e1568b0fd0024\",\"deletedAt\":30,\"rowKey\":\"diaryEntries#d0\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:b73c37b1241a5c95b3cd34c3872732c1\",\"deletedAt\":30,\"rowKey\":\"snapshotItems#s1|a0\",\"table\":\"snapshotItems\"},{\"changeId\":\"T:bd8029be900e625f2a96ad6dfd84f977\",\"deletedAt\":30,\"rowKey\":\"snapshots#s1\",\"table\":\"snapshots\"},{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"todos#f0\",\"table\":\"todos\"},{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"valuations#a0\",\"table\":\"valuations\"}],\"valuations\":[{\"accountId\":\"a0\",\"at\":20,\"changeId\":\"R:60979011533eb268e68c58e2fb419a6f\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v0\",\"snapshotId\":null,\"value\":0},{\"accountId\":\"a0\",\"at\":30,\"changeId\":\"R:60979011533eb268e68c58e2fb419a6f\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v1\",\"snapshotId\":null,\"value\":1},{\"accountId\":\"a0\",\"at\":-1,\"changeId\":\"R:2773258387b5dc92e25db322e3f90148\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v2\",\"snapshotId\":null,\"value\":2}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "124f924a0816a88f78f8eef69ea642c0fe0f8038ab33b48a8fa561416d8d0c3f",
       "adjustments": [
         {
           "rule": "R3",
@@ -6911,6 +8216,11 @@
           "rule": "R6",
           "count": 3,
           "text": "账户期初已前移，以容纳更早的流水"
+        },
+        {
+          "rule": "R8",
+          "count": 1,
+          "text": "自然键重复，保留较新的一版"
         },
         {
           "rule": "archive",
@@ -8234,8 +9544,8 @@
           }
         ]
       },
-      "resultCanonical": "{\"accounts\":[{\"baselineAt\":29,\"baselineCost\":null,\"changeId\":\"R:9ad21861f6a29b6de052c5db7d1c9f84\",\"changedAt\":30,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a0\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":10,\"baselineCost\":null,\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a1\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":0,\"baselineCost\":null,\"changeId\":\"c\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a2\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[{\"changeId\":\"b\",\"changedAt\":30,\"done\":false,\"id\":\"ci0\",\"text\":\"x\",\"todoId\":\"t2\"},{\"changeId\":\"legacy:x\",\"changedAt\":10,\"done\":false,\"id\":\"ci1\",\"text\":\"x\",\"todoId\":\"t1\"},{\"changeId\":\"b\",\"changedAt\":30,\"done\":false,\"id\":\"ci2\",\"text\":\"x\",\"todoId\":\"t0\"}],\"countdowns\":[{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c0\",\"pinned\":false,\"stateAt\":40,\"stateId\":\"sa\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false},{\"changeId\":\"R:repair\",\"changedAt\":20,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c1\",\"pinned\":true,\"stateAt\":20,\"stateId\":\"sa\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false}],\"diaryDrafts\":[{\"changeId\":\"R:e7441caa16f25ec9a2ab64a7ad601e57\",\"changedAt\":0,\"createdAt\":0,\"date\":\"2026-10-20\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d1:R:repair\",\"reason\":\"同步合并保留败者版本\",\"text\":\"网页\"}],\"diaryEntries\":[{\"body\":\"手机\",\"bodyRev\":0,\"changeId\":\"a\",\"changedAt\":30,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-20\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d0\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":10,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0}],\"exportedAt\":0,\"flows\":[{\"amount\":1,\"at\":30,\"changeId\":\"R:repair\",\"changedAt\":0,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f0\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a0\"},{\"amount\":1,\"at\":30,\"changeId\":\"R:repair\",\"changedAt\":30,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f1\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a0\"},{\"amount\":1,\"at\":40,\"changeId\":\"b\",\"changedAt\":20,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f2\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a1\"},{\"amount\":1,\"at\":40,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f3\",\"kind\":\"EXPENSE\",\"toAccountId\":null}],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"R:repair\",\"changedAt\":30,\"colorIndex\":0,\"id\":\"g0\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":0},{\"changeId\":\"R:repair\",\"changedAt\":0,\"colorIndex\":0,\"id\":\"g1\",\"isLiability\":false,\"name\":\"投资\",\"sortOrder\":1}],\"habitChecks\":[{\"changeId\":\"a\",\"changedAt\":0,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h0\",\"skipped\":false},{\"changeId\":\"b\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h1\",\"skipped\":false},{\"changeId\":\"legacy:x\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"legacy:x\",\"changedAt\":10,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h4\",\"skipped\":false},{\"changeId\":\"c\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h5\",\"skipped\":false},{\"changeId\":\"legacy:x\",\"changedAt\":40,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h7\",\"skipped\":false}],\"habits\":[{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h0\",\"label\":\"H\",\"position\":0,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h1\",\"label\":\"H\",\"position\":1,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":10,\"color\":0,\"icon\":\"fitness\",\"key\":\"h2\",\"label\":\"H\",\"position\":2,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h3\",\"label\":\"H\",\"position\":3,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":0,\"color\":0,\"icon\":\"fitness\",\"key\":\"h4\",\"label\":\"H\",\"position\":4,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"T:odd\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h5\",\"label\":\"H\",\"position\":5,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h6\",\"label\":\"H\",\"position\":6,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h7\",\"label\":\"H\",\"position\":7,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h8\",\"label\":\"H\",\"position\":8,\"removedOn\":\"2026-02-01\"}],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[{\"changeId\":\"R:aaa5ebb6313953c72195fa5e87c62ed6\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n0:T:odd\",\"noteId\":\"n0\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"},{\"changeId\":\"R:1c72c4aafc761c1325beea909adb144b\",\"changedAt\":10,\"createdAt\":10,\"id\":\"syncLose:notes#n1:T:odd\",\"noteId\":\"n1\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"},{\"changeId\":\"R:85304ffcac31b8d3c252f1bf847485da\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n2:R:repair\",\"noteId\":\"n2\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"}],\"noteSources\":[{\"changeId\":\"legacy:x\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n0\",\"ref\":\"2026-10-21\"},{\"changeId\":\"R:repair\",\"changedAt\":40,\"kind\":\"DAY\",\"noteId\":\"n2\",\"ref\":\"2026-10-21\"}],\"noteTopics\":[{\"changeId\":\"b\",\"changedAt\":20,\"createdAt\":1,\"id\":\"topic0\",\"name\":\"A\"},{\"changeId\":\"legacy:x\",\"changedAt\":20,\"createdAt\":1,\"id\":\"topic1\",\"name\":\"B\"}],\"notes\":[{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"R:repair\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n0\",\"pinned\":false,\"position\":0,\"reviewedAt\":40,\"stateAt\":10,\"stateId\":\"sa\",\"topicId\":\"topic0\",\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n1\",\"pinned\":false,\"position\":1,\"reviewedAt\":30,\"stateAt\":10,\"stateId\":\"sa\",\"topicId\":\"topic1\",\"updatedAt\":1},{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"legacy:x\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n2\",\"pinned\":true,\"position\":2,\"reviewedAt\":0,\"stateAt\":30,\"stateId\":\"sa\",\"topicId\":null,\"updatedAt\":1}],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"a2\",\"changeId\":\"R:repair\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v0\"},{\"accountId\":\"a0\",\"changeId\":\"T:odd\",\"changedAt\":10,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v2\"}],\"snapshots\":[{\"at\":20,\"changeId\":\"T:odd\",\"changedAt\":40,\"id\":\"s0\"},{\"at\":0,\"changeId\":\"c\",\"changedAt\":30,\"id\":\"s1\"}],\"todoLists\":[{\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l0\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":0},{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l1\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":1}],\"todoSections\":[{\"changeId\":\"a\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec0\",\"listId\":\"l0\",\"name\":\"S\",\"sortOrder\":0},{\"changeId\":\"b\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec1\",\"listId\":\"l1\",\"name\":\"S\",\"sortOrder\":1}],\"todos\":[{\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t0\",\"kind\":\"ORDINARY\",\"listId\":\"l0\",\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:repair\",\"changedAt\":0,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t1\",\"kind\":\"ORDINARY\",\"listId\":\"l1\",\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:3acdad34944bed44b057a18726a24a4c\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t2\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"a\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t3\",\"kind\":\"ORDINARY\",\"listId\":\"l1\",\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":20,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"}],\"tombstones\":[{\"changeId\":\"T:gone\",\"deletedAt\":0,\"rowKey\":\"diaryEntries#c0\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:87caf36ea40314d323a0d9d4f136bbc3\",\"deletedAt\":10,\"rowKey\":\"diaryEntries#d1\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"flows#g0\",\"table\":\"flows\"},{\"changeId\":\"T:gone\",\"deletedAt\":40,\"rowKey\":\"notes#c0\",\"table\":\"notes\"}],\"valuations\":[{\"accountId\":\"a1\",\"at\":40,\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v0\",\"snapshotId\":null,\"value\":0},{\"accountId\":\"a2\",\"at\":20,\"changeId\":\"b\",\"changedAt\":10,\"createdAt\":1,\"id\":\"v1\",\"snapshotId\":null,\"value\":1},{\"accountId\":\"a1\",\"at\":10,\"changeId\":\"c\",\"changedAt\":10,\"createdAt\":1,\"id\":\"v2\",\"snapshotId\":null,\"value\":2}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
-      "resultHash": "befe9b65388c55ca69377f9318a7cd8aa9021dc5e49def047ac90292587467d1",
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":29,\"baselineCost\":null,\"changeId\":\"R:145bbed0b4623ce3598613e3e4cca739\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a0\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":10,\"baselineCost\":null,\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a1\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":0,\"baselineCost\":null,\"changeId\":\"c\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g1\",\"id\":\"a2\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[{\"changeId\":\"b\",\"changedAt\":30,\"done\":false,\"id\":\"ci0\",\"text\":\"x\",\"todoId\":\"t2\"},{\"changeId\":\"legacy:x\",\"changedAt\":10,\"done\":false,\"id\":\"ci1\",\"text\":\"x\",\"todoId\":\"t1\"},{\"changeId\":\"b\",\"changedAt\":30,\"done\":false,\"id\":\"ci2\",\"text\":\"x\",\"todoId\":\"t0\"}],\"countdowns\":[{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c0\",\"pinned\":false,\"stateAt\":40,\"stateId\":\"sa\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false},{\"changeId\":\"R:repair\",\"changedAt\":20,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c1\",\"pinned\":true,\"stateAt\":20,\"stateId\":\"sa\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false}],\"diaryDrafts\":[{\"changeId\":\"R:e7441caa16f25ec9a2ab64a7ad601e57\",\"changedAt\":0,\"createdAt\":0,\"date\":\"2026-10-20\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d1:R:repair\",\"reason\":\"同步合并保留败者版本\",\"text\":\"网页\"}],\"diaryEntries\":[{\"body\":\"手机\",\"bodyRev\":0,\"changeId\":\"a\",\"changedAt\":30,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-20\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d0\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":10,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0}],\"exportedAt\":0,\"flows\":[{\"amount\":1,\"at\":30,\"changeId\":\"R:repair\",\"changedAt\":0,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f0\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a0\"},{\"amount\":1,\"at\":30,\"changeId\":\"R:repair\",\"changedAt\":30,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f1\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a0\"},{\"amount\":1,\"at\":40,\"changeId\":\"b\",\"changedAt\":20,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f2\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a1\"},{\"amount\":1,\"at\":40,\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f3\",\"kind\":\"EXPENSE\",\"toAccountId\":null}],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"R:repair\",\"changedAt\":30,\"colorIndex\":0,\"id\":\"g0\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":0},{\"changeId\":\"R:repair\",\"changedAt\":0,\"colorIndex\":0,\"id\":\"g1\",\"isLiability\":false,\"name\":\"投资\",\"sortOrder\":1}],\"habitChecks\":[{\"changeId\":\"a\",\"changedAt\":0,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h0\",\"skipped\":false},{\"changeId\":\"b\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h1\",\"skipped\":false},{\"changeId\":\"legacy:x\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"legacy:x\",\"changedAt\":10,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h4\",\"skipped\":false},{\"changeId\":\"c\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h5\",\"skipped\":false},{\"changeId\":\"legacy:x\",\"changedAt\":40,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h7\",\"skipped\":false}],\"habits\":[{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h0\",\"label\":\"H\",\"position\":0,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h1\",\"label\":\"H\",\"position\":1,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":10,\"color\":0,\"icon\":\"fitness\",\"key\":\"h2\",\"label\":\"H\",\"position\":2,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h3\",\"label\":\"H\",\"position\":3,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":0,\"color\":0,\"icon\":\"fitness\",\"key\":\"h4\",\"label\":\"H\",\"position\":4,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"T:odd\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h5\",\"label\":\"H\",\"position\":5,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h6\",\"label\":\"H\",\"position\":6,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h7\",\"label\":\"H\",\"position\":7,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"c\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h8\",\"label\":\"H\",\"position\":8,\"removedOn\":\"2026-02-01\"}],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[{\"changeId\":\"R:aaa5ebb6313953c72195fa5e87c62ed6\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n0:T:odd\",\"noteId\":\"n0\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"},{\"changeId\":\"R:1c72c4aafc761c1325beea909adb144b\",\"changedAt\":10,\"createdAt\":10,\"id\":\"syncLose:notes#n1:T:odd\",\"noteId\":\"n1\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"},{\"changeId\":\"R:85304ffcac31b8d3c252f1bf847485da\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n2:R:repair\",\"noteId\":\"n2\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"}],\"noteSources\":[{\"changeId\":\"legacy:x\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n0\",\"ref\":\"2026-10-21\"},{\"changeId\":\"R:repair\",\"changedAt\":40,\"kind\":\"DAY\",\"noteId\":\"n2\",\"ref\":\"2026-10-21\"}],\"noteTopics\":[{\"changeId\":\"b\",\"changedAt\":20,\"createdAt\":1,\"id\":\"topic0\",\"name\":\"A\"},{\"changeId\":\"legacy:x\",\"changedAt\":20,\"createdAt\":1,\"id\":\"topic1\",\"name\":\"B\"}],\"notes\":[{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"R:repair\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n0\",\"pinned\":false,\"position\":0,\"reviewedAt\":40,\"stateAt\":10,\"stateId\":\"sa\",\"topicId\":\"topic0\",\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n1\",\"pinned\":false,\"position\":1,\"reviewedAt\":30,\"stateAt\":10,\"stateId\":\"sa\",\"topicId\":\"topic1\",\"updatedAt\":1},{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"legacy:x\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n2\",\"pinned\":true,\"position\":2,\"reviewedAt\":0,\"stateAt\":30,\"stateId\":\"sa\",\"topicId\":null,\"updatedAt\":1}],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"a2\",\"changeId\":\"R:5d62363b80a588ecff566ae7e7ed0803\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v1\"},{\"accountId\":\"a0\",\"changeId\":\"R:6603a5b3843f80720b11be55629dd7e8\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v2\"}],\"snapshots\":[{\"at\":20,\"changeId\":\"R:5d62363b80a588ecff566ae7e7ed0803\",\"changedAt\":40,\"id\":\"s0\"},{\"at\":0,\"changeId\":\"R:6603a5b3843f80720b11be55629dd7e8\",\"changedAt\":40,\"id\":\"s1\"}],\"todoLists\":[{\"changeId\":\"T:odd\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l0\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":0},{\"changeId\":\"T:odd\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l1\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":1}],\"todoSections\":[{\"changeId\":\"a\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec0\",\"listId\":\"l0\",\"name\":\"S\",\"sortOrder\":0},{\"changeId\":\"b\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec1\",\"listId\":\"l1\",\"name\":\"S\",\"sortOrder\":1}],\"todos\":[{\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t0\",\"kind\":\"ORDINARY\",\"listId\":\"l0\",\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:repair\",\"changedAt\":0,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t1\",\"kind\":\"ORDINARY\",\"listId\":\"l1\",\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:3acdad34944bed44b057a18726a24a4c\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t2\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"a\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t3\",\"kind\":\"ORDINARY\",\"listId\":\"l1\",\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":20,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"}],\"tombstones\":[{\"changeId\":\"T:gone\",\"deletedAt\":0,\"rowKey\":\"diaryEntries#c0\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:87caf36ea40314d323a0d9d4f136bbc3\",\"deletedAt\":10,\"rowKey\":\"diaryEntries#d1\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"flows#g0\",\"table\":\"flows\"},{\"changeId\":\"T:gone\",\"deletedAt\":40,\"rowKey\":\"notes#c0\",\"table\":\"notes\"}],\"valuations\":[{\"accountId\":\"a1\",\"at\":40,\"changeId\":\"R:6603a5b3843f80720b11be55629dd7e8\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v0\",\"snapshotId\":null,\"value\":0},{\"accountId\":\"a2\",\"at\":20,\"changeId\":\"R:5d62363b80a588ecff566ae7e7ed0803\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v1\",\"snapshotId\":null,\"value\":1},{\"accountId\":\"a0\",\"at\":30,\"changeId\":\"R:6603a5b3843f80720b11be55629dd7e8\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v2\",\"snapshotId\":null,\"value\":2}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "6f943f3b0f292c43bd66e4c419a9e2b8698e4f6787157ed0e51e794bbfa2d951",
       "adjustments": [
         {
           "rule": "R5",
@@ -8249,7 +9559,7 @@
         },
         {
           "rule": "R7",
-          "count": 2,
+          "count": 4,
           "text": "有流水与估值同刻，未计入余额"
         },
         {
@@ -9574,8 +10884,8 @@
           }
         ]
       },
-      "resultCanonical": "{\"accounts\":[{\"baselineAt\":-1,\"baselineCost\":null,\"changeId\":\"R:ef9ed0f1df8917675b5c3f225bf1dfe6\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a0\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":-1,\"baselineCost\":null,\"changeId\":\"R:528b4b684725324e92dacb555823bd9b\",\"changedAt\":30,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a1\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":9,\"baselineCost\":null,\"changeId\":\"R:15323f7235a3768e86bc094b84ef06e6\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a2\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[{\"changeId\":\"b\",\"changedAt\":20,\"done\":true,\"id\":\"ci0\",\"text\":\"x\",\"todoId\":\"t2\"},{\"changeId\":\"a\",\"changedAt\":30,\"done\":false,\"id\":\"ci1\",\"text\":\"x\",\"todoId\":\"t0\"},{\"changeId\":\"c\",\"changedAt\":30,\"done\":true,\"id\":\"ci2\",\"text\":\"x\",\"todoId\":\"t2\"}],\"countdowns\":[{\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c0\",\"pinned\":true,\"stateAt\":40,\"stateId\":\"sb\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false},{\"changeId\":\"b\",\"changedAt\":40,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c1\",\"pinned\":false,\"stateAt\":40,\"stateId\":\"R:939978c76139f56c74c14146b82e24ab\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false}],\"diaryDrafts\":[{\"changeId\":\"R:315a72dfd77eb525a06efd66f76e26dd\",\"changedAt\":30,\"createdAt\":30,\"date\":\"2026-10-20\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d0:c\",\"reason\":\"同步合并保留败者版本\",\"text\":\"网页\"},{\"changeId\":\"R:798cf93d082e5ce8f7e5840c5e34b927\",\"changedAt\":0,\"createdAt\":0,\"date\":\"2026-10-20\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d0:legacy:x\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"},{\"changeId\":\"R:d04244bb9edf94de57505bef64ca7020\",\"changedAt\":30,\"createdAt\":30,\"date\":\"2026-10-21\",\"diaryId\":\"d1\",\"id\":\"syncLose:diaryEntries#d1:b\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"}],\"diaryEntries\":[{\"body\":\"手机\",\"bodyRev\":0,\"changeId\":\"b\",\"changedAt\":40,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-20\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d1\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":30,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0}],\"exportedAt\":0,\"flows\":[{\"amount\":1,\"at\":0,\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a0\",\"id\":\"f0\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a1\"},{\"amount\":1,\"at\":20,\"changeId\":\"b\",\"changedAt\":20,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f1\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":20,\"changeId\":\"b\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a0\",\"id\":\"f2\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a2\"},{\"amount\":1,\"at\":10,\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f3\",\"kind\":\"EXPENSE\",\"toAccountId\":null}],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"b\",\"changedAt\":30,\"colorIndex\":0,\"id\":\"g0\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":0},{\"changeId\":\"c\",\"changedAt\":30,\"colorIndex\":0,\"id\":\"g1\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":1}],\"habitChecks\":[{\"changeId\":\"legacy:x\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"a\",\"changedAt\":40,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h4\",\"skipped\":false},{\"changeId\":\"c\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h5\",\"skipped\":false},{\"changeId\":\"a\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h6\",\"skipped\":false},{\"changeId\":\"R:repair\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h1\",\"skipped\":false},{\"changeId\":\"b\",\"changedAt\":0,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h7\",\"skipped\":false}],\"habits\":[{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h0\",\"label\":\"H\",\"position\":0,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h1\",\"label\":\"H\",\"position\":1,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h2\",\"label\":\"H\",\"position\":2,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":10,\"color\":0,\"icon\":\"fitness\",\"key\":\"h3\",\"label\":\"H\",\"position\":3,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h4\",\"label\":\"H\",\"position\":4,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"T:odd\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h5\",\"label\":\"H\",\"position\":5,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h6\",\"label\":\"H\",\"position\":6,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":0,\"color\":0,\"icon\":\"fitness\",\"key\":\"h7\",\"label\":\"H\",\"position\":7,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h8\",\"label\":\"H\",\"position\":8,\"removedOn\":\"2026-02-01\"}],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[{\"changeId\":\"R:24edbff0ff3cc949ff6e82dbdbad3781\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n0:a\",\"noteId\":\"n0\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"},{\"changeId\":\"R:85304ffcac31b8d3c252f1bf847485da\",\"changedAt\":20,\"createdAt\":20,\"id\":\"syncLose:notes#n2:R:repair\",\"noteId\":\"n2\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"}],\"noteSources\":[{\"changeId\":\"c\",\"changedAt\":20,\"kind\":\"DAY\",\"noteId\":\"n0\",\"ref\":\"2026-10-21\"},{\"changeId\":\"legacy:x\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-21\"},{\"changeId\":\"a\",\"changedAt\":10,\"kind\":\"DAY\",\"noteId\":\"n2\",\"ref\":\"2026-10-21\"}],\"noteTopics\":[{\"changeId\":\"c\",\"changedAt\":30,\"createdAt\":1,\"id\":\"topic1\",\"name\":\"B\"}],\"notes\":[{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"a\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n0\",\"pinned\":false,\"position\":0,\"reviewedAt\":10,\"stateAt\":40,\"stateId\":\"sa\",\"topicId\":null,\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"c\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n1\",\"pinned\":true,\"position\":1,\"reviewedAt\":null,\"stateAt\":30,\"stateId\":\"sb\",\"topicId\":null,\"updatedAt\":1},{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"R:d742e2b7700d4446bc27fcc962dca6cd\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n2\",\"pinned\":true,\"position\":2,\"reviewedAt\":null,\"stateAt\":20,\"stateId\":\"sa\",\"topicId\":\"topic1\",\"updatedAt\":1}],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"a0\",\"changeId\":\"T:odd\",\"changedAt\":10,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v1\"},{\"accountId\":\"a1\",\"changeId\":\"a\",\"changedAt\":10,\"included\":true,\"snapshotId\":\"s0\",\"valuationId\":\"v0\"},{\"accountId\":\"a1\",\"changeId\":\"a\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v1\"},{\"accountId\":\"a2\",\"changeId\":\"c\",\"changedAt\":0,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v2\"}],\"snapshots\":[{\"at\":10,\"changeId\":\"a\",\"changedAt\":20,\"id\":\"s0\"},{\"at\":40,\"changeId\":\"a\",\"changedAt\":10,\"id\":\"s1\"}],\"todoLists\":[{\"changeId\":\"a\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l0\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":0},{\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l1\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":1}],\"todoSections\":[{\"changeId\":\"R:repair\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec0\",\"listId\":\"l0\",\"name\":\"S\",\"sortOrder\":0},{\"changeId\":\"a\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec1\",\"listId\":\"l1\",\"name\":\"S\",\"sortOrder\":1}],\"todos\":[{\"changeId\":\"a\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t0\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"a\",\"changedAt\":0,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t1\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":20,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:repair\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t2\",\"kind\":\"ORDINARY\",\"listId\":\"l0\",\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:bef7e4f66828d088f7211c564f3fcfce\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t3\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":10,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"}],\"tombstones\":[{\"changeId\":\"T:gone\",\"deletedAt\":20,\"rowKey\":\"checklistItems#d0\",\"table\":\"checklistItems\"},{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"countdowns#d0\",\"table\":\"countdowns\"},{\"changeId\":\"T:c3210b625945508f872a1a4599cb5eff\",\"deletedAt\":30,\"rowKey\":\"diaryEntries#d0\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:gone\",\"deletedAt\":40,\"rowKey\":\"groups#t0\",\"table\":\"groups\"},{\"changeId\":\"T:686dcf789f4192e06fc63e5111a8746e\",\"deletedAt\":10,\"rowKey\":\"noteTopics#topic0\",\"table\":\"noteTopics\"},{\"changeId\":\"T:gone\",\"deletedAt\":30,\"rowKey\":\"notes#ci0\",\"table\":\"notes\"}],\"valuations\":[{\"accountId\":\"a0\",\"at\":30,\"changeId\":\"T:odd\",\"changedAt\":20,\"createdAt\":1,\"id\":\"v0\",\"snapshotId\":null,\"value\":0},{\"accountId\":\"a2\",\"at\":9,\"changeId\":\"R:6c56827c7982eb91e820790c8d4d6ac8\",\"changedAt\":20,\"createdAt\":1,\"id\":\"v1\",\"snapshotId\":null,\"value\":1},{\"accountId\":\"a2\",\"at\":20,\"changeId\":\"c\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v2\",\"snapshotId\":null,\"value\":2}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
-      "resultHash": "f5bf35b158f8c1b99f085367b38e11e150d7df0a377c2ef59e4fb367ab5852cc",
+      "resultCanonical": "{\"accounts\":[{\"baselineAt\":-1,\"baselineCost\":null,\"changeId\":\"R:7fb3a9b028718a834552ab40a577d567\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a0\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":-1,\"baselineCost\":null,\"changeId\":\"R:528b4b684725324e92dacb555823bd9b\",\"changedAt\":30,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a1\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"},{\"baselineAt\":9,\"baselineCost\":null,\"changeId\":\"R:6ba319df07c150f57006b4840e91269a\",\"changedAt\":40,\"createdAt\":1,\"groupId\":\"g0\",\"id\":\"a2\",\"includeInTotal\":true,\"isDisabled\":false,\"kind\":\"NORMAL\",\"name\":\"银行\"}],\"bodyMeasurements\":[],\"checklistItems\":[{\"changeId\":\"b\",\"changedAt\":20,\"done\":true,\"id\":\"ci0\",\"text\":\"x\",\"todoId\":\"t2\"},{\"changeId\":\"a\",\"changedAt\":30,\"done\":false,\"id\":\"ci1\",\"text\":\"x\",\"todoId\":\"t0\"},{\"changeId\":\"c\",\"changedAt\":30,\"done\":true,\"id\":\"ci2\",\"text\":\"x\",\"todoId\":\"t2\"}],\"countdowns\":[{\"changeId\":\"legacy:x\",\"changedAt\":40,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c0\",\"pinned\":true,\"stateAt\":40,\"stateId\":\"sb\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false},{\"changeId\":\"b\",\"changedAt\":40,\"createdAt\":1,\"date\":\"2026-01-01\",\"id\":\"c1\",\"pinned\":false,\"stateAt\":40,\"stateId\":\"R:939978c76139f56c74c14146b82e24ab\",\"title\":\"C\",\"updatedAt\":1,\"yearly\":false}],\"diaryDrafts\":[{\"changeId\":\"R:315a72dfd77eb525a06efd66f76e26dd\",\"changedAt\":30,\"createdAt\":30,\"date\":\"2026-10-20\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d0:c\",\"reason\":\"同步合并保留败者版本\",\"text\":\"网页\"},{\"changeId\":\"R:798cf93d082e5ce8f7e5840c5e34b927\",\"changedAt\":0,\"createdAt\":0,\"date\":\"2026-10-20\",\"diaryId\":null,\"id\":\"syncLose:diaryEntries#d0:legacy:x\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"},{\"changeId\":\"R:d04244bb9edf94de57505bef64ca7020\",\"changedAt\":30,\"createdAt\":30,\"date\":\"2026-10-21\",\"diaryId\":\"d1\",\"id\":\"syncLose:diaryEntries#d1:b\",\"reason\":\"同步合并保留败者版本\",\"text\":\"手机\"}],\"diaryEntries\":[{\"body\":\"手机\",\"bodyRev\":0,\"changeId\":\"b\",\"changedAt\":40,\"city\":null,\"createdAt\":1,\"date\":\"2026-10-20\",\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"d1\",\"lat\":null,\"lon\":null,\"mood\":null,\"stateAt\":30,\"stateId\":\"sa\",\"tempMax\":null,\"tempMin\":null,\"updatedAt\":1,\"weatherAt\":null,\"weatherCode\":null,\"weatherRev\":0}],\"exportedAt\":0,\"flows\":[{\"amount\":1,\"at\":0,\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a0\",\"id\":\"f0\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a1\"},{\"amount\":1,\"at\":20,\"changeId\":\"b\",\"changedAt\":20,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a1\",\"id\":\"f1\",\"kind\":\"EXPENSE\",\"toAccountId\":null},{\"amount\":1,\"at\":20,\"changeId\":\"b\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a0\",\"id\":\"f2\",\"kind\":\"EXPENSE\",\"toAccountId\":\"a2\"},{\"amount\":1,\"at\":10,\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"fee\":0,\"feeOn\":\"FROM\",\"fromAccountId\":\"a2\",\"id\":\"f3\",\"kind\":\"EXPENSE\",\"toAccountId\":null}],\"foodEntries\":[],\"formatVersion\":16,\"groups\":[{\"changeId\":\"b\",\"changedAt\":30,\"colorIndex\":0,\"id\":\"g0\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":0},{\"changeId\":\"c\",\"changedAt\":30,\"colorIndex\":0,\"id\":\"g1\",\"isLiability\":false,\"name\":\"现金\",\"sortOrder\":1}],\"habitChecks\":[{\"changeId\":\"legacy:x\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h2\",\"skipped\":false},{\"changeId\":\"a\",\"changedAt\":40,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h4\",\"skipped\":false},{\"changeId\":\"c\",\"changedAt\":20,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h5\",\"skipped\":false},{\"changeId\":\"a\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-20\",\"habit\":\"h6\",\"skipped\":false},{\"changeId\":\"R:repair\",\"changedAt\":30,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h1\",\"skipped\":false},{\"changeId\":\"b\",\"changedAt\":0,\"checkedAt\":1,\"date\":\"2026-10-21\",\"habit\":\"h7\",\"skipped\":false}],\"habits\":[{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h0\",\"label\":\"H\",\"position\":0,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h1\",\"label\":\"H\",\"position\":1,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h2\",\"label\":\"H\",\"position\":2,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"a\",\"changedAt\":10,\"color\":0,\"icon\":\"fitness\",\"key\":\"h3\",\"label\":\"H\",\"position\":3,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":40,\"color\":0,\"icon\":\"fitness\",\"key\":\"h4\",\"label\":\"H\",\"position\":4,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"T:odd\",\"changedAt\":30,\"color\":0,\"icon\":\"fitness\",\"key\":\"h5\",\"label\":\"H\",\"position\":5,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"b\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h6\",\"label\":\"H\",\"position\":6,\"removedOn\":\"2026-02-01\"},{\"addedOn\":\"2026-01-01\",\"changeId\":\"R:repair\",\"changedAt\":0,\"color\":0,\"icon\":\"fitness\",\"key\":\"h7\",\"label\":\"H\",\"position\":7,\"removedOn\":null},{\"addedOn\":\"2026-01-01\",\"changeId\":\"legacy:x\",\"changedAt\":20,\"color\":0,\"icon\":\"fitness\",\"key\":\"h8\",\"label\":\"H\",\"position\":8,\"removedOn\":\"2026-02-01\"}],\"healthProfile\":null,\"netWorthGoal\":null,\"netWorthGoalAt\":0,\"netWorthGoalChangeId\":\"\",\"noteDrafts\":[{\"changeId\":\"R:24edbff0ff3cc949ff6e82dbdbad3781\",\"changedAt\":0,\"createdAt\":0,\"id\":\"syncLose:notes#n0:a\",\"noteId\":\"n0\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"},{\"changeId\":\"R:85304ffcac31b8d3c252f1bf847485da\",\"changedAt\":20,\"createdAt\":20,\"id\":\"syncLose:notes#n2:R:repair\",\"noteId\":\"n2\",\"reason\":\"同步合并保留败者版本\",\"text\":\"甲\"}],\"noteSources\":[{\"changeId\":\"c\",\"changedAt\":20,\"kind\":\"DAY\",\"noteId\":\"n0\",\"ref\":\"2026-10-21\"},{\"changeId\":\"legacy:x\",\"changedAt\":30,\"kind\":\"DAY\",\"noteId\":\"n1\",\"ref\":\"2026-10-21\"},{\"changeId\":\"a\",\"changedAt\":10,\"kind\":\"DAY\",\"noteId\":\"n2\",\"ref\":\"2026-10-21\"}],\"noteTopics\":[{\"changeId\":\"c\",\"changedAt\":30,\"createdAt\":1,\"id\":\"topic1\",\"name\":\"B\"}],\"notes\":[{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"a\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n0\",\"pinned\":false,\"position\":0,\"reviewedAt\":10,\"stateAt\":40,\"stateId\":\"sa\",\"topicId\":null,\"updatedAt\":1},{\"body\":\"乙\",\"bodyRev\":0,\"changeId\":\"c\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n1\",\"pinned\":true,\"position\":1,\"reviewedAt\":null,\"stateAt\":30,\"stateId\":\"sb\",\"topicId\":null,\"updatedAt\":1},{\"body\":\"甲\",\"bodyRev\":0,\"changeId\":\"R:d742e2b7700d4446bc27fcc962dca6cd\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"n2\",\"pinned\":true,\"position\":2,\"reviewedAt\":null,\"stateAt\":20,\"stateId\":\"sa\",\"topicId\":\"topic1\",\"updatedAt\":1}],\"schemaVersion\":15,\"snapshotItems\":[{\"accountId\":\"a1\",\"changeId\":\"R:5472d7b8c431754ac68b42e2bc05d083\",\"changedAt\":40,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v1\"},{\"accountId\":\"a2\",\"changeId\":\"R:844422269050f6766f4b0ad004f75a22\",\"changedAt\":20,\"included\":true,\"snapshotId\":\"s1\",\"valuationId\":\"v2\"}],\"snapshots\":[{\"at\":40,\"changeId\":\"R:5472d7b8c431754ac68b42e2bc05d083\",\"changedAt\":40,\"id\":\"s1\"}],\"todoLists\":[{\"changeId\":\"a\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l0\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":0},{\"changeId\":\"R:repair\",\"changedAt\":40,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"l1\",\"name\":\"L\",\"notes\":\"\",\"sortOrder\":1}],\"todoSections\":[{\"changeId\":\"R:repair\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec0\",\"listId\":\"l0\",\"name\":\"S\",\"sortOrder\":0},{\"changeId\":\"a\",\"changedAt\":40,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"sec1\",\"listId\":\"l1\",\"name\":\"S\",\"sortOrder\":1}],\"todos\":[{\"changeId\":\"a\",\"changedAt\":30,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t0\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"a\",\"changedAt\":0,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t1\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":20,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:repair\",\"changedAt\":20,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t2\",\"kind\":\"ORDINARY\",\"listId\":\"l0\",\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":40,\"stateId\":\"sb\",\"stateSeq\":0,\"title\":\"T\"},{\"changeId\":\"R:bef7e4f66828d088f7211c564f3fcfce\",\"changedAt\":10,\"createdAt\":1,\"deleteBatch\":null,\"deletedAt\":null,\"id\":\"t3\",\"kind\":\"ORDINARY\",\"listId\":null,\"occurrenceCount\":0,\"planDate\":null,\"remindedPeriod\":null,\"repeatSourceId\":null,\"revision\":0,\"sectionId\":null,\"snoozeAt\":null,\"stateAt\":10,\"stateId\":\"sa\",\"stateSeq\":0,\"title\":\"T\"}],\"tombstones\":[{\"changeId\":\"T:gone\",\"deletedAt\":20,\"rowKey\":\"checklistItems#d0\",\"table\":\"checklistItems\"},{\"changeId\":\"T:gone\",\"deletedAt\":10,\"rowKey\":\"countdowns#d0\",\"table\":\"countdowns\"},{\"changeId\":\"T:c3210b625945508f872a1a4599cb5eff\",\"deletedAt\":30,\"rowKey\":\"diaryEntries#d0\",\"table\":\"diaryEntries\"},{\"changeId\":\"T:gone\",\"deletedAt\":40,\"rowKey\":\"groups#t0\",\"table\":\"groups\"},{\"changeId\":\"T:686dcf789f4192e06fc63e5111a8746e\",\"deletedAt\":10,\"rowKey\":\"noteTopics#topic0\",\"table\":\"noteTopics\"},{\"changeId\":\"T:gone\",\"deletedAt\":30,\"rowKey\":\"notes#ci0\",\"table\":\"notes\"},{\"changeId\":\"T:3982371afb8b07ba4ad913eb13a03da8\",\"deletedAt\":20,\"rowKey\":\"snapshotItems#s0|a0\",\"table\":\"snapshotItems\"},{\"changeId\":\"T:fcad9f072e2ece5c4657747f8d92b220\",\"deletedAt\":20,\"rowKey\":\"snapshotItems#s0|a1\",\"table\":\"snapshotItems\"},{\"changeId\":\"T:c575fc8eaea591a5334cc39522099bfa\",\"deletedAt\":20,\"rowKey\":\"snapshots#s0\",\"table\":\"snapshots\"}],\"valuations\":[{\"accountId\":\"a2\",\"at\":10,\"changeId\":\"R:141d827fd2517994fa2bf91ddb0d8a56\",\"changedAt\":20,\"createdAt\":1,\"id\":\"v0\",\"snapshotId\":null,\"value\":0},{\"accountId\":\"a2\",\"at\":9,\"changeId\":\"R:2c188bf416bfcd58043bc57bfbce7f52\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v1\",\"snapshotId\":null,\"value\":1},{\"accountId\":\"a2\",\"at\":20,\"changeId\":\"c\",\"changedAt\":40,\"createdAt\":1,\"id\":\"v2\",\"snapshotId\":null,\"value\":2}],\"weeklyDrafts\":[],\"weeklyReviews\":[]}",
+      "resultHash": "ab2a248ddc75db939433d64943ccefc2327373b83ea03c6e0d307bc03b5a1499",
       "adjustments": [
         {
           "rule": "R2",
@@ -9594,8 +10904,13 @@
         },
         {
           "rule": "R7",
-          "count": 1,
+          "count": 2,
           "text": "有流水与估值同刻，未计入余额"
+        },
+        {
+          "rule": "R8",
+          "count": 1,
+          "text": "自然键重复，保留较新的一版"
         },
         {
           "rule": "archive",

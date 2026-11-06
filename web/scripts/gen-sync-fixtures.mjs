@@ -8,7 +8,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonicalJson, contentHash, rowKeyFields } from '../public/canonical.js';
+import { canonicalJson, contentHash, rowKey, rowKeyFields } from '../public/canonical.js';
 import { merge } from '../public/merge.js';
 import { rng, side } from '../test/helpers/random-side.mjs';
 
@@ -112,8 +112,8 @@ async function add(name, a, b) {
   // the idempotence check instead of the fixture carrying a third copy of the file.
   cases.push({
     name,
-    a,
-    b,
+    a: structuredClone(a),
+    b: structuredClone(b),
     resultCanonical: canonical,
     resultHash: await contentHash(data),
     adjustments,
@@ -368,6 +368,58 @@ async function add(name, a, b) {
   const newer = structuredClone(b);
   newer.healthProfile = { height: 180, changedAt: 21, changeId: 'new' };
   await add('newer health profile clears its tombstone', a, newer);
+}
+// Legacy stocktake writers did not advance the whole group on a value edit. The shared
+// fixtures also cover replay after repair through the Kotlin and JavaScript implementations.
+{
+  const base = blank();
+  base.groups = [group()];
+  base.accounts = [account()];
+  base.snapshots = [row({ id: 's', at: 1000 })];
+  base.valuations = [row({ id: 'v', accountId: 'acct', at: 1000, value: 100, snapshotId: 's' })];
+  base.snapshotItems = [row({ snapshotId: 's', accountId: 'acct', valuationId: 'v', included: true })];
+  const dateEdit = structuredClone(base);
+  Object.assign(dateEdit.snapshots[0], { at: 2000, changedAt: 20, changeId: 'date' });
+  Object.assign(dateEdit.valuations[0], { at: 2000, changedAt: 20, changeId: 'date' });
+  const valueEdit = structuredClone(base);
+  Object.assign(valueEdit.valuations[0], { value: 200, changedAt: 30, changeId: 'value' });
+  await add('stocktake date and value edits choose one complete group', dateEdit, valueEdit);
+  Object.assign(dateEdit.snapshots[0], { changedAt: 40 });
+  Object.assign(dateEdit.valuations[0], { changedAt: 40 });
+  await add('a newer stocktake date carries its values and items', dateEdit, valueEdit);
+
+  const deleted = structuredClone(base);
+  let at = 20;
+  for (const table of ['snapshotItems', 'valuations', 'snapshots']) {
+    for (const r of deleted[table]) deleted.tombstones.push({ table, rowKey: rowKey(table, r), deletedAt: at++, changeId: 'T:delete' });
+    deleted[table] = [];
+  }
+  await add('a newer stocktake value revives the complete deleted group', deleted, valueEdit);
+  valueEdit.valuations[0].changedAt = 21;
+  await add('a stocktake deletion orders every child even across adjacent timestamps', deleted, valueEdit);
+  valueEdit.valuations[0].changedAt = 22;
+  await add('a stocktake deletion wins an exact group timestamp tie', deleted, valueEdit);
+
+  const duplicate = structuredClone(base);
+  Object.assign(duplicate.snapshots[0], { changedAt: 30, changeId: 'new' });
+  Object.assign(duplicate.valuations[0], { changedAt: 30, changeId: 'new' });
+  duplicate.snapshots.push(row({ id: 's', at: 2000, changedAt: 5, changeId: 'older-duplicate' }));
+  await add('repeated snapshot keys fold to the newest parent before grouping', duplicate, base);
+}
+
+for (const [table, draftTable, fields] of [
+  ['notes', 'noteDrafts', {}],
+  ['diaryEntries', 'diaryDrafts', { date: '2026-10-20' }],
+  ['weeklyReviews', 'weeklyDrafts', { weekStart: '2026-10-19' }],
+]) {
+  const a = blank(), b = blank();
+  a[table] = [row({ id: 'text', body: 'old', ...fields, changedAt: 10, changeId: 'old' })];
+  b[table] = [row({ id: 'text', body: 'new', ...fields, changedAt: 20, changeId: 'new' })];
+  const conflicted = (await merge(a, b)).data;
+  const draft = conflicted[draftTable][0];
+  conflicted[draftTable] = [];
+  conflicted.tombstones.push({ table: draftTable, rowKey: rowKey(draftTable, draft), deletedAt: 30, changeId: 'T:discard' });
+  await add(`a discarded ${draftTable} archive stays deleted on an old-body replay`, conflicted, a);
 }
 await add('two empty files merge to an empty file', blank(), blank());
 

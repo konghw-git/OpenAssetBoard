@@ -499,9 +499,11 @@ class AccountManager(
     }
 
     /** Loads the retained versions for the history sheet. */
-    suspend fun loadRevisions() {
+    suspend fun loadRevisions() = mutex.withLock {
         val p = currentProfile()
-        if (p.accountId == null) return
+        if (p.accountId == null) return@withLock
+        // History shares token rotation with sync, logout and password changes. Refresh tokens
+        // are single-use; overlapping these operations would revoke this device's session.
         _state.update { it.copy(historyBusy = true, error = null) }
         try {
             ensureAccess(p)
@@ -510,8 +512,9 @@ class AccountManager(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _state.update { it.copy(historyBusy = false) }
             handle(e)
+        } finally {
+            _state.update { it.copy(historyBusy = false) }
         }
     }
 
