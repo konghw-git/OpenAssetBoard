@@ -13,7 +13,10 @@ import com.assetboard.ui.notes.NoteEditorState
 import com.assetboard.ui.notes.NoteFormatBar
 import com.assetboard.ui.theme.AssetBoardTheme
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithTag
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,8 +25,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * The format bar wraps instead of scrolling: every button is on screen at phone width across two
- * or three rows, and the wide screen holds them all on one.
+ * Frequent actions occupy one row; the rest stay reachable behind an explicit expansion.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -50,14 +52,17 @@ class NoteToolbarTest {
 
     private fun topOf(label: String) = compose.onNodeWithContentDescription(label).fetchSemanticsNode().boundsInRoot.top
 
-    @Test fun everyButtonIsReachableWithoutScrolling() {
+    @Test fun everyButtonIsReachableAfterExpanding() {
         show()
+        compose.onNodeWithContentDescription("更多工具").performClick()
         buttons.forEach { compose.onNodeWithContentDescription(it).assertExists() }
     }
 
-    @Test fun theButtonsWrapIntoSeveralRowsOnAPhone() {
+    @Test fun primaryActionsOccupyOneRowOnAPhone() {
         show()
-        assertNotEquals("undo starts a row of its own up top", topOf("撤销"), topOf("润色"))
+        assertEquals("primary actions fit one compact row", topOf("撤销"), topOf("润色"))
+        val height = compose.onNodeWithTag("note-format-bar").fetchSemanticsNode().boundsInRoot.height
+        assertTrue("toolbar is at most 56dp", height <= 56 * compose.activity.resources.displayMetrics.density)
     }
 
     @Test
@@ -65,6 +70,20 @@ class NoteToolbarTest {
     fun theButtonsSitOnOneRowOnAWideScreen() {
         show()
         assertEquals("one row on a wide screen", topOf("撤销"), topOf("润色"))
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun outlineAndAiActionsRemainVisibleOnASmallPhone() {
+        compose.setContent {
+            AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) {
+                NoteFormatBar(remember { NoteEditorState {} }, onOutline = {})
+            }
+        }
+        listOf("撤销", "二级标题", "加粗", "待办清单", "AI排版", "润色", "大纲", "更多工具").forEach {
+            compose.onNodeWithContentDescription(it).assertIsDisplayed()
+            assertEquals(topOf("撤销"), topOf(it))
+        }
     }
 
     @Test fun aLongPressSaysWhatTheButtonDoes() {

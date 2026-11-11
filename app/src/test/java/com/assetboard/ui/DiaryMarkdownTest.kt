@@ -79,6 +79,8 @@ class DiaryMarkdownTest {
     @Test fun theToolbarFormatsAndTheBackButtonStepsBack() {
         show("买牛奶")
         compose.onAllNodes(hasSetTextAction())[0].performClick()
+        waitForDescription("更多工具")
+        compose.onNodeWithContentDescription("更多工具").performClick()
         waitForDescription("一级标题")
         compose.onNodeWithContentDescription("一级标题").performClick()
         compose.onAllNodes(hasSetTextAction())[0].assertTextContains("# 买牛奶")

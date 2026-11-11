@@ -87,6 +87,7 @@ class NoteEditorTest {
         waitForDescription("待办清单")
         compose.onNodeWithContentDescription("待办清单").performClick()
         compose.onNode(hasSetTextAction()).assertTextContains("- [ ] 买牛奶")
+        compose.onNodeWithContentDescription("更多工具").performClick()
         compose.onNodeWithContentDescription("分割线").performClick()
         compose.onNode(hasSetTextAction()).assertTextContains("- [ ] 买牛奶\n---\n")
     }
@@ -112,6 +113,7 @@ class NoteEditorTest {
         waitForDescription("撤销")
         compose.onNodeWithContentDescription("撤销").performClick()
         compose.onNode(hasSetTextAction()).assertTextContains("买牛奶")
+        compose.onNodeWithContentDescription("更多工具").performClick()
         waitForDescription("重做")
         compose.onNodeWithContentDescription("重做").performClick()
         compose.onNode(hasSetTextAction()).assertTextContains("买牛奶和鸡蛋")

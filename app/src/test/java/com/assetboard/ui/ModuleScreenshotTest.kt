@@ -144,6 +144,14 @@ class ModuleScreenshotTest {
     /** The habits load apart from the todos; a shot taken before them shows an empty panel. */
     private val habitsShown: () -> Boolean = { compose.onAllNodes(hasText("吃补剂")).fetchSemanticsNodes().isNotEmpty() }
 
+    /**
+     * The weather request runs off the page's threads; Robolectric has no fix, so it ends asking
+     * for a city. Waiting keeps the initial Idle state (which looks like a failure) out of the shot.
+     */
+    private val weatherSettled: () -> Boolean = {
+        compose.onAllNodes(hasText("定位不可用 · 选城市")).fetchSemanticsNodes().isNotEmpty()
+    }
+
     @Test fun todoHome() {
         val d = demo()
         shot("20-todo-home", d.c, until = habitsShown) { TodoHomeScreen({}, {}) }
@@ -330,12 +338,12 @@ class ModuleScreenshotTest {
 
     @Test fun diary() {
         val d = demo()
-        shot("30-diary", d.c) { DiaryScreen(null, {}, {}, {}, {}) }
+        shot("30-diary", d.c, until = weatherSettled) { DiaryScreen(null, {}, {}, {}, {}) }
     }
 
     @Test fun diaryDark() {
         val d = demo()
-        shot("32-diary-dark", d.c, dark = true) { DiaryScreen(null, {}, {}, {}, {}) }
+        shot("32-diary-dark", d.c, dark = true, until = weatherSettled) { DiaryScreen(null, {}, {}, {}, {}) }
     }
 
     @Test fun diaryCalendar() {

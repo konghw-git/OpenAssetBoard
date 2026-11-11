@@ -118,6 +118,9 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
     /** The AI pass running right now, if any: its buttons stay busy meanwhile. */
     val aiBusy = MutableStateFlow<AiAction?>(null)
     val aiPreview = MutableStateFlow("")
+    private var aiJob: kotlinx.coroutines.Job? = null
+
+    fun cancelAi() { aiJob?.cancel() }
 
     /**
      * One AI pass over [text]: [start, end) when a selection is meant, the whole body otherwise.
@@ -134,7 +137,7 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
         val session = _session.value ?: return
         aiPreview.value = ""
         aiBusy.value = kind
-        launchBound {
+        aiJob = launchBound {
             try {
                 val out = AiEdit.editText({ system, user ->
                     aiPreview.value = ""
@@ -146,8 +149,15 @@ class NoteViewModel(private val container: AppContainer, private val handle: Sav
                 }, kind, DocKind.NOTE, text, range)
                 if (_session.value !== session || session.text.value != text) {
                     messages.tryEmit("文本已改动，AI 的结果没有应用")
+                } else if (out == text.substring(range)) {
+                    messages.tryEmit("未应用新的改动，原文已保留")
                 } else {
                     apply(AiEdit.replace(text, range.first, range.last + 1, out))
+                    messages.tryEmit(when {
+                        kind == AiAction.POLISH -> "已润色，可在工具栏撤销"
+                        range.first == 0 && range.last == text.lastIndex -> "已排版，大纲已同步更新"
+                        else -> "已排版选中内容"
+                    })
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

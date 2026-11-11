@@ -74,6 +74,10 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     /** The running pass and its unsaved, cumulative preview. */
     val aiBusy = MutableStateFlow<AiAction?>(null)
     val aiPreview = MutableStateFlow("")
+    val aiStatus = MutableStateFlow("正在读取当天记录…")
+    private var aiJob: Job? = null
+
+    fun cancelAi() { aiJob?.cancel() }
     private val diary = container.diary
     private val _date = MutableStateFlow(AppClock.today())
     val date: StateFlow<LocalDate> = _date.asStateFlow()
@@ -281,7 +285,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     /** AI 润色: only the wording, on the selection or the whole body. */
     fun aiPolish(selStart: Int = -1, selEnd: Int = -1) = aiEdit(AiAction.POLISH, selStart, selEnd)
 
-    /** 生成日记: a fresh body for the day, written from its records — the model may pull more. */
+    /** Generate or update the day from its records and the latest editor text. */
     fun aiGenerate() = aiEdit(AiAction.GENERATE, -1, -1)
 
     /**
@@ -301,13 +305,14 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
         }
         aiPreview.value = ""
         aiBusy.value = kind
-        launchBound {
+        aiStatus.value = if (kind == AiAction.GENERATE) "正在读取当天记录…" else "正在整理文字…"
+        aiJob = launchBound {
             try {
                 suspend fun preview(partial: String) {
                     if (_session.value === s && s.text.value == before) aiPreview.value = partial
                     else aiPreview.value = ""
                 }
-                val out = if (kind == AiAction.GENERATE) generate(::preview) else {
+                val out = if (kind == AiAction.GENERATE) generate(s.date, before, ::preview) else {
                     AiEdit.editText({ system, user ->
                         preview("")
                         container.ai.stream(system, user) { preview(AiEdit.stripFrame(AiEdit.unwrap(it))) }
@@ -323,15 +328,16 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
                     messages.tryEmit("文本已改动，AI 的结果没有应用")
                     return@launchBound
                 }
+                check(out.isNotBlank()) { "AI 没有返回正文，原文已保留" }
                 val after = AiEdit.replace(before, range.first, range.last + 1, out).text
                 if (after == before) {
                     val last = lastTidied?.takeIf { it.session === s && it.after == before }
-                    if (last != null) tidied.tryEmit(last) else messages.tryEmit(unchangedText(kind))
+                    if (last != null) tidied.tryEmit(last) else messages.tryEmit(if (kind == AiAction.GENERATE && before.isNotBlank()) "没有新的内容需要补充" else unchangedText(kind))
                     return@launchBound
                 }
                 s.onInput(after)
                 saveScope.launch { s.saveNow() }
-                val t = Tidied(s, before, after, noticeText(kind))
+                val t = Tidied(s, before, after, if (kind == AiAction.GENERATE && before.isNotBlank()) "已更新这篇日记" else noticeText(kind))
                 lastTidied = t
                 tidied.tryEmit(t)
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -349,11 +355,19 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
      * The diary agent: seed it with the day read fresh from the database and let it call the data
      * tools (everything but the notes) for whatever else it wants before writing.
      */
-    private suspend fun generate(onText: suspend (String) -> Unit): String {
-        val date = _date.value
+    private suspend fun generate(date: LocalDate, before: String, onText: suspend (String) -> Unit): String {
         val tools = dayTools.tools(date)
         val system = AiEdit.DIARY_SYSTEM + "\n\n你可以调用以下工具查数据：\n" + AiAgent.toolsDoc(tools)
-        val seed = AiEdit.daySummary(dayTools.dayFacts(date)) + "\n\n写这一天的日记。"
+        val seed = buildString {
+            append(AiEdit.diaryUser(dayTools.dayFacts(date), before))
+            // Small, local day records avoid several model round trips before the first word.
+            val daily = mapOf("health" to "身体记录", "food" to "饮食记录", "bills" to "收支记录")
+            for (tool in tools) daily[tool.name]?.let { label ->
+                append("\n\n【当天$label】\n")
+                append(tool.run(emptyMap()))
+            }
+        }
+        aiStatus.value = if (before.isBlank()) "正在构思这一天的日记…" else "正在结合原文与当天记录…"
         return AiAgent.run(
             chat = { history: List<AiAgent.Turn> ->
                 onText("")
@@ -362,6 +376,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
                 }
             },
             tools = tools,
+            onTool = { aiStatus.value = "正在补充相关记录…" },
             seed = seed,
         )
     }
@@ -385,7 +400,7 @@ class DiaryViewModel(private val container: AppContainer) : ActionViewModel(cont
     private fun noticeText(kind: AiAction) = when (kind) {
         AiAction.FORMAT -> "已排版：标点、空行和段落都理好了"
         AiAction.POLISH -> "已润色"
-        AiAction.GENERATE -> "已生成今天的日记"
+        AiAction.GENERATE -> "已生成这篇日记"
     }
 
     private fun failedLabel(kind: AiAction) = when (kind) {

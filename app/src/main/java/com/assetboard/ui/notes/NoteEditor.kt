@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,11 +38,12 @@ import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.FormatQuote
 import androidx.compose.material.icons.outlined.HorizontalRule
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.Redo
 import androidx.compose.material.icons.outlined.Spellcheck
 import androidx.compose.material.icons.outlined.Toc
 import androidx.compose.material.icons.outlined.Undo
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -70,6 +70,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -225,77 +226,59 @@ private fun EditorFooter(
 }
 
 
-/**
- * The formatting bar, pinned above the keyboard while writing. On a wide screen the buttons
- * shrink until every one fits on a single row; on a narrow one the groups wrap into two or three
- * rows on their own, so no button hides behind a horizontal scroll. The last group is the AI
- * passes (排版 and 润色), which act on the selection when there is one and the whole body
- * otherwise; while one runs, its button shows the wait and both stay quiet. A long press on any
- * button shows what it does.
- */
+/** Frequent actions stay in one row; less-used formats expand only when requested. */
 @Composable
 fun NoteFormatBar(
     state: NoteEditorState,
     modifier: Modifier = Modifier,
     onAi: (AiAction) -> Unit = {},
     aiBusy: AiAction? = null,
+    onOutline: (() -> Unit)? = null,
 ) {
-    val doc = state.document()
-    val line = state.currentLine(doc)
-    BoxWithConstraints(modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp), glass, elevation = 12.dp)) {
-        val wide = maxWidth >= 600.dp
-        val buttonSize = if (wide) ((maxWidth - 72.dp) / 18).coerceIn(34.dp, 42.dp) else 42.dp
-        FlowRow(
-            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            BarGroup {
-                FormatButton(Icons.Outlined.Undo, "撤销", "撤销上一步", active = false, enabled = state.canUndo, size = buttonSize) { state.undo() }
-                FormatButton(Icons.Outlined.Redo, "重做", "重做被撤销的一步", active = false, enabled = state.canRedo, size = buttonSize) { state.redo() }
-            }
-            BarGroup {
-                BarDivider()
-                HeadingButton("H1", "一级标题", "一级标题", line.kind == Kind.HEADING && line.level == 1, buttonSize) { state.format(Format.H1) }
-                HeadingButton("H2", "二级标题", "二级标题", line.kind == Kind.HEADING && line.level == 2, buttonSize) { state.format(Format.H2) }
-                HeadingButton("H3", "三级标题", "三级标题", line.kind == Kind.HEADING && line.level == 3, buttonSize) { state.format(Format.H3) }
-            }
-            BarGroup {
-                BarDivider()
-                FormatButton(Icons.Outlined.CheckBox, "待办清单", "待办清单：可勾选的待办", line.kind == Kind.CHECKLIST, size = buttonSize) { state.format(Format.CHECKLIST) }
-                FormatButton(Icons.Outlined.FormatListBulleted, "无序列表", "无序列表", line.kind == Kind.BULLET, size = buttonSize) { state.format(Format.BULLET) }
-                FormatButton(Icons.Outlined.FormatListNumbered, "有序列表", "有序列表", line.kind == Kind.NUMBERED, size = buttonSize) { state.format(Format.NUMBERED) }
-                FormatButton(Icons.Outlined.FormatQuote, "引用", "引用", line.kind == Kind.QUOTE, size = buttonSize) { state.format(Format.QUOTE) }
-                FormatButton(Icons.Outlined.HorizontalRule, "分割线", "分割线", false, size = buttonSize) { state.format(Format.DIVIDER) }
-            }
-            BarGroup {
-                BarDivider()
+    val line = state.currentLine(state.document())
+    var expanded by remember { mutableStateOf(false) }
+    BoxWithConstraints(modifier.fillMaxWidth().testTag("note-format-bar")
+        .glass(RoundedCornerShape(16.dp), glass, elevation = 12.dp)) {
+        val wide = maxWidth >= 680.dp
+        val columns = if (wide) (if (onOutline != null) 19 else 18) else (if (onOutline != null) 8 else 7)
+        val buttonSize = ((maxWidth - 12.dp) / columns).coerceAtMost(48.dp)
+        val secondary: @Composable () -> Unit = {
+            FormatButton(Icons.Outlined.Redo, "重做", "重做被撤销的一步", false, enabled = state.canRedo, size = buttonSize) { state.redo() }
+            HeadingButton("H1", "一级标题", "一级标题", line.kind == Kind.HEADING && line.level == 1, buttonSize) { state.format(Format.H1) }
+            HeadingButton("H3", "三级标题", "三级标题", line.kind == Kind.HEADING && line.level == 3, buttonSize) { state.format(Format.H3) }
+            FormatButton(Icons.Outlined.FormatListBulleted, "无序列表", "无序列表", line.kind == Kind.BULLET, size = buttonSize) { state.format(Format.BULLET) }
+            FormatButton(Icons.Outlined.FormatListNumbered, "有序列表", "有序列表", line.kind == Kind.NUMBERED, size = buttonSize) { state.format(Format.NUMBERED) }
+            FormatButton(Icons.Outlined.FormatQuote, "引用", "引用", line.kind == Kind.QUOTE, size = buttonSize) { state.format(Format.QUOTE) }
+            FormatButton(Icons.Outlined.HorizontalRule, "分割线", "分割线", false, size = buttonSize) { state.format(Format.DIVIDER) }
+            FormatButton(Icons.Filled.FormatItalic, "斜体", "斜体", false, size = buttonSize) { state.format(Format.ITALIC) }
+            FormatButton(Icons.Filled.FormatStrikethrough, "删除线", "删除线", false, size = buttonSize) { state.format(Format.STRIKE) }
+            FormatButton(Icons.Outlined.Code, "行内代码", "行内代码", false, size = buttonSize) { state.format(Format.CODE) }
+            FormatButton(Icons.Outlined.FormatIndentIncrease, "增加缩进", "增加缩进", false, size = buttonSize) { state.format(Format.INDENT) }
+            FormatButton(Icons.Outlined.FormatIndentDecrease, "减少缩进", "减少缩进", false, size = buttonSize) { state.format(Format.OUTDENT) }
+        }
+        Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                FormatButton(Icons.Outlined.Undo, "撤销", "撤销上一步", false, enabled = state.canUndo, size = buttonSize) { state.undo() }
+                HeadingButton("H2", "二级标题", "二级标题：将当前段落加入大纲", line.kind == Kind.HEADING && line.level == 2, buttonSize) { state.format(Format.H2) }
                 FormatButton(Icons.Filled.FormatBold, "加粗", "加粗", false, size = buttonSize) { state.format(Format.BOLD) }
-                FormatButton(Icons.Filled.FormatItalic, "斜体", "斜体", false, size = buttonSize) { state.format(Format.ITALIC) }
-                FormatButton(Icons.Filled.FormatStrikethrough, "删除线", "删除线", false, size = buttonSize) { state.format(Format.STRIKE) }
-                FormatButton(Icons.Outlined.Code, "行内代码", "行内代码", false, size = buttonSize) { state.format(Format.CODE) }
+                FormatButton(Icons.Outlined.CheckBox, "待办清单", "待办清单：可勾选的待办", line.kind == Kind.CHECKLIST, size = buttonSize) { state.format(Format.CHECKLIST) }
+                AiButton(Icons.Outlined.AutoFixHigh, "AI排版", "AI排版：保留正文，整理结构；笔记全文可补充小标题用于大纲，选区只整理选中内容", AiAction.FORMAT, aiBusy, buttonSize) { onAi(AiAction.FORMAT) }
+                AiButton(Icons.Outlined.Spellcheck, "润色", "润色：保留原意与结构，让表达更自然；选中文字时只润色选区", AiAction.POLISH, aiBusy, buttonSize) { onAi(AiAction.POLISH) }
+                onOutline?.let { FormatButton(Icons.Outlined.Toc, "大纲", "大纲：按标题跳转，也可以用 AI 整理全文结构", false, size = buttonSize, onClick = it) }
+                if (wide) secondary() else FormatButton(
+                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.MoreHoriz,
+                    if (expanded) "收起工具" else "更多工具", "展开或收起其他格式工具", expanded, size = buttonSize,
+                ) { expanded = !expanded }
             }
-            BarGroup {
-                BarDivider()
-                FormatButton(Icons.Outlined.FormatIndentIncrease, "增加缩进", "增加缩进", false, size = buttonSize) { state.format(Format.INDENT) }
-                FormatButton(Icons.Outlined.FormatIndentDecrease, "减少缩进", "减少缩进", false, size = buttonSize) { state.format(Format.OUTDENT) }
-            }
-            BarGroup {
-                BarDivider()
-                AiButton(Icons.Outlined.AutoFixHigh, "AI排版", "AI排版：只整理标点、空行和段落，不改字句；选中文字时只排版选中部分", AiAction.FORMAT, aiBusy, buttonSize) { onAi(AiAction.FORMAT) }
-                AiButton(Icons.Outlined.Spellcheck, "润色", "润色：让表达更通顺自然，原意不变；选中文字时只润色选中部分", AiAction.POLISH, aiBusy, buttonSize) { onAi(AiAction.POLISH) }
+            if (!wide && expanded) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { secondary() }
             }
         }
     }
 }
 
 private typealias Format = NoteMarkdownEdit.Format
-
-/** One group of buttons; a wrap moves the whole group, so its divider never starts a row. */
-@Composable
-private fun BarGroup(content: @Composable RowScope.() -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, content = content)
-}
 
 /**
  * A bar button: a tap runs it, a long press says what it does. The tip is a small surface above
@@ -389,7 +372,7 @@ private fun FormatButton(
     }
 }
 
-/** An AI pass: its own button, which spins instead of its icon while that pass runs. */
+/** The preview owns progress; toolbar actions stay disabled while a pass runs. */
 @Composable
 private fun AiButton(
     icon: ImageVector,
@@ -404,21 +387,9 @@ private fun AiButton(
     val running = busy == kind
     TooltippedButton(tip, enabled = busy == null, size = size, onClick = onClick) {
         Box(Modifier.semantics { contentDescription = label }) {
-            if (running) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = cs.primary)
-            } else {
-                Icon(icon, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(21.dp))
-            }
+            Icon(icon, null, tint = if (running) cs.primary else cs.onSurfaceVariant.copy(alpha = if (busy == null) 1f else 0.4f), modifier = Modifier.size(21.dp))
         }
     }
-}
-
-@Composable
-private fun BarDivider() {
-    Box(
-        Modifier.padding(horizontal = 4.dp).width(1.dp).height(22.dp)
-            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
-    )
 }
 
 /** The outline's way in while reading: a small glass pill above the tab bar's spot. */
@@ -444,7 +415,13 @@ fun NoteOutlinePill(onClick: () -> Unit) {
 
 /** The document's structure: its headings, and a way to the first unfinished task. */
 @Composable
-fun NoteOutlineSheet(doc: NoteMarkdown.Doc, onJump: (Int) -> Unit, onDismiss: () -> Unit) {
+fun NoteOutlineSheet(
+    doc: NoteMarkdown.Doc,
+    onJump: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    onOrganize: (() -> Unit)? = null,
+    aiBusy: Boolean = false,
+) {
     val cs = MaterialTheme.colorScheme
     GlassSheet(onDismissRequest = onDismiss) {
         Column(
@@ -467,6 +444,13 @@ fun NoteOutlineSheet(doc: NoteMarkdown.Doc, onJump: (Int) -> Unit, onDismiss: ()
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Outlined.Toc, null, tint = cs.primary, modifier = Modifier.size(22.dp))
+                }
+            }
+            if (onOrganize != null) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("整理标题后，点小标题即可跳转正文。", style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    TextButton(onClick = onOrganize, enabled = doc.text.isNotBlank() && !aiBusy) { Text("AI整理大纲") }
                 }
             }
             Spacer(Modifier.height(14.dp))
@@ -557,7 +541,7 @@ private fun EmptyOutline() {
         Spacer(Modifier.height(10.dp))
         Text("还没有小标题", style = MaterialTheme.typography.titleMedium)
         Text(
-            "在正文里用 #、##、### 起一行，就会出现在这里。",
+            "用 AI 整理全文结构，或在工具栏设置标题。短笔记也可以直接阅读，无需强行分节。",
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
             textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, start = 16.dp, end = 16.dp),
         )

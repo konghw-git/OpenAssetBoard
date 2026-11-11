@@ -1,5 +1,6 @@
 package com.assetboard.ui.diary
 
+import androidx.compose.ui.layout.onSizeChanged
 import com.assetboard.ui.notes.AiStreamPreview
 import com.assetboard.domain.AppClock
 import androidx.compose.runtime.CompositionLocalProvider
@@ -24,7 +25,6 @@ import com.assetboard.domain.Mood
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
@@ -36,7 +36,6 @@ import android.content.ClipboardManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.material3.LinearProgressIndicator
 import com.assetboard.ui.components.TabHeader
 import com.assetboard.ui.components.HeaderAction
 import com.assetboard.ui.components.SettingsAction
@@ -326,8 +325,11 @@ fun DiaryScreen(
         extractingSelection = true
         extracting = date to picked
     }
+    var toolbarHeight by remember { mutableStateOf(56.dp) }
+    val toolbarDensity = LocalDensity.current
     val aiBusy by vm.aiBusy.collectAsStateWithLifecycle()
     val aiPreview by vm.aiPreview.collectAsStateWithLifecycle()
+    val aiStatus by vm.aiStatus.collectAsStateWithLifecycle()
     // The AI passes act on the selection when there is one, the whole body otherwise.
     val runAi: (AiAction) -> Unit = { kind ->
         val sel = editorState.value.selection
@@ -337,21 +339,20 @@ fun DiaryScreen(
             AiAction.GENERATE -> vm.aiGenerate()
         }
     }
-    // 生成日记 fills an empty day (never tomorrow's) from the day card's records.
-    val canGenerate = body.isBlank() && sessionStatus == DiarySession.Status.READY && !date.isAfter(today)
+    // The same action creates or updates the day from its records and current editor text.
+    val canGenerate = aiBusy == null && sessionStatus == DiarySession.Status.READY && !date.isAfter(today)
     val ambient = rememberAmbient()
     Box(Modifier.fillMaxSize().ambient(ambient)) {
     CompositionLocalProvider(LocalAmbient provides ambient) {
     Scaffold(
         containerColor = Color.Transparent,
-        snackbarHost = { GlassSnackbarHost(snackbar, Modifier.padding(bottom = TabPageBottomInset)) },
+        snackbarHost = { GlassSnackbarHost(snackbar, Modifier.imePadding().padding(bottom = TabPageBottomInset + if (editing) toolbarHeight + 16.dp else 0.dp)) },
         topBar = {
             TabHeader("日记", streakText(streak)) {
                 AnimatedContent(editing, transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.9f)) togetherWith fadeOut() }, label = "actions") { on ->
                     if (on) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (canGenerate) HeaderAction(Icons.Outlined.AutoAwesome, "AI生成日记", { runAi(AiAction.GENERATE) })
-                            if (body.isNotBlank()) HeaderAction(Icons.Outlined.AutoFixHigh, "AI排版", { runAi(AiAction.FORMAT) })
+                            if (canGenerate) HeaderAction(Icons.Outlined.AutoAwesome, if (body.isBlank()) "AI生成日记" else "AI更新日记", { runAi(AiAction.GENERATE) })
                             Row(
                                 Modifier.height(42.dp).clip(RoundedCornerShape(50)).background(Brush.linearGradient(listOf(AppTheme.extra.heroEnd, AppTheme.extra.heroStart))).clickable(onClick = done).padding(horizontal = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -364,8 +365,7 @@ fun DiaryScreen(
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             HeaderAction(Icons.Outlined.Search, "搜索", onSearch)
-                            if (canGenerate) HeaderAction(Icons.Outlined.AutoAwesome, "AI生成日记", { runAi(AiAction.GENERATE) })
-                            if (body.isNotBlank() && sessionStatus == DiarySession.Status.READY) HeaderAction(Icons.Outlined.AutoFixHigh, "AI排版", { runAi(AiAction.FORMAT) })
+                            if (canGenerate) HeaderAction(Icons.Outlined.AutoAwesome, if (body.isBlank()) "AI生成日记" else "AI更新日记", { runAi(AiAction.GENERATE) })
                             // From the session, not the entry: a save started by 完成 may not have landed yet.
                             if (entry != null && body.isNotBlank()) HeaderAction(Icons.Outlined.Lightbulb, "提炼到笔记", { extractingSelection = false; extracting = date to body })
                             // Nothing to delete while the text cannot be saved: the trash would keep the old body.
@@ -398,10 +398,7 @@ fun DiaryScreen(
                     onJump = { jump = true },
                     onCalendar = { onCalendar(date) },
                 )
-                // An AI pass in flight: a slim bar under the header, where its button was tapped.
-                AnimatedVisibility(visible = aiBusy != null, Modifier.fillMaxWidth()) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth().height(3.dp))
-                }
+                AiStreamPreview(aiBusy != null, aiPreview, aiStatus, vm::cancelAi)
             }
             // Stepping a day slides the new page in from the side it lies on: a later day from the right.
             val lastDate = remember { arrayOf(date) }
@@ -417,10 +414,9 @@ fun DiaryScreen(
                         alpha = 1f - abs(shift.value) * 0.85f
                     }
                     .verticalScrollWithIndicator(rememberScrollState()).padding(horizontal = 16.dp)
-                    .padding(top = 12.dp + with(LocalDensity.current) { pull.pulled.toDp() }, bottom = 48.dp),
+                    .padding(top = 12.dp + with(LocalDensity.current) { pull.pulled.toDp() }, bottom = if (editing) TabPageBottomInset + toolbarHeight + 16.dp else 48.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                AiStreamPreview(aiBusy != null, aiPreview)
                 // Part of the page, above the text, so it scrolls away with it; put away while writing.
                 if (!editing) {
                     DayCard(
@@ -477,7 +473,8 @@ fun DiaryScreen(
                 ) {
                     ExtractSelectionButton(text?.count { !it.isWhitespace() } ?: 0) { text?.let(extractSelection) }
                 }
-                NoteFormatBar(editorState, onAi = runAi, aiBusy = aiBusy)
+                NoteFormatBar(editorState, onAi = runAi, aiBusy = aiBusy,
+                    modifier = Modifier.onSizeChanged { toolbarHeight = with(toolbarDensity) { it.height.toDp() } })
             }
         }
     }

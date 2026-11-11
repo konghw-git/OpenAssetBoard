@@ -9,6 +9,26 @@ import java.time.LocalDate
 
 class AiEditTest {
 
+    @Test fun noteFormattingBuildsAnOutlineWithoutRewritingTheBody() = runBlocking {
+        val before = "旅行记录\n\n上午去了公园。\n\n晚上读了书。"
+        val after = "# 旅行记录\n\n## 上午\n\n上午去了公园。\n\n## 晚上\n\n晚上读了书。"
+        assertEquals(after, AiEdit.edit({ _, _ -> after }, AiAction.FORMAT, DocKind.NOTE, before))
+    }
+
+    @Test fun formattingCannotChangeTaskStateLinksOrCode() = runBlocking {
+        for ((before, after) in listOf(
+            "- [ ] 买牛奶" to "- [x] 买牛奶",
+            "[资料](https://example.com/a-b)" to "[资料](https://example.com/ab)",
+            "`a + b`" to "`a - b`",
+        )) assertEquals(before, AiEdit.edit({ _, _ -> after }, AiAction.FORMAT, DocKind.NOTE, before))
+    }
+
+    @Test fun addedHeadingsDoNotPermitDeletedOrRewrittenParagraphs() = runBlocking {
+        val before = "旅行记录\n\n上午去了公园。\n\n晚上读了书。"
+        val bad = "# 旅行记录\n\n## 上午\n\n上午去了商场。"
+        assertEquals(before, AiEdit.edit({ _, _ -> bad }, AiAction.FORMAT, DocKind.NOTE, before))
+    }
+
     @Test fun eachPromptDoesOnlyItsOwnJob() {
         assertTrue(AiEdit.FORMAT_SYSTEM_NOTE.contains("只做排版"))
         assertTrue(AiEdit.FORMAT_SYSTEM_NOTE.contains("不增删改写"))

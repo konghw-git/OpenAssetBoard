@@ -4,6 +4,11 @@ import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import kotlinx.coroutines.CompletableDeferred
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -100,6 +105,73 @@ class DiaryAiGenerateTest {
         assertTrue("timed out waiting for $text", shown(text))
     }
 
+    @Test fun existingDiaryOffersUpdateAndSendsTheLatestEditorText() {
+        val (_, ai) = show()
+        compose.onAllNodes(hasSetTextAction())[0].performTextReplacement("我今天有一点疲惫，想早点休息。")
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithContentDescription("AI更新日记").performClick()
+        awaitShown("今天是个好日子。")
+        assertTrue(ai.lastUser.contains("我今天有一点疲惫，想早点休息。"))
+        assertTrue(ai.lastUser.contains("日期："))
+        assertTrue(ai.lastUser.contains("更新"))
+    }
+
+    @Test fun streamingShowsOnlyOneProgressIndicatorAndCanBeStopped() {
+        val release = CompletableDeferred<Unit>()
+        val ai = object : AiGateway {
+            override suspend fun complete(system: String, user: String): String = error("Expected streaming")
+            override suspend fun streamChat(system: String, history: List<ChatTurn>, onText: suspend (String) -> Unit): String {
+                release.await()
+                return "尚未完成的内容"
+            }
+        }
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext(), ai)
+        c.settings.setBool(c.settings.networkEnabled, false)
+        compose.setContent {
+            CompositionLocalProvider(LocalContainer provides c) {
+                AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) { DiaryScreen(null, {}, {}, {}, {}) }
+            }
+        }
+        compose.waitUntil(10_000) { shown("今天过得怎么样？") }
+        compose.onNodeWithContentDescription("AI生成日记").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).fetchSemanticsNodes().isNotEmpty()
+        }
+        assertEquals(1, compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).fetchSemanticsNodes().size)
+        compose.onNodeWithText("停止").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("停止")).fetchSemanticsNodes().isEmpty() }
+        assertTrue(shown("今天过得怎么样？"))
+        release.complete(Unit)
+    }
+
+    @Test fun streamedProseIsVisibleBeforeCompletionAndStoppingKeepsTheOriginal() {
+        val release = CompletableDeferred<Unit>()
+        val ai = object : AiGateway {
+            override suspend fun complete(system: String, user: String): String = error("Expected streaming")
+            override suspend fun streamChat(system: String, history: List<ChatTurn>, onText: suspend (String) -> Unit): String {
+                onText("　　早上在公园散步，")
+                release.await()
+                return "　　早上在公园散步，晚上读书。"
+            }
+        }
+        val c = TestContainers.open(ApplicationProvider.getApplicationContext(), ai)
+        c.settings.setBool(c.settings.networkEnabled, false)
+        compose.setContent {
+            CompositionLocalProvider(LocalContainer provides c) {
+                AssetBoardTheme(ThemeMode.LIGHT, upIsRed = true) { DiaryScreen(null, {}, {}, {}, {}) }
+            }
+        }
+        compose.waitUntil(10_000) { shown("今天过得怎么样？") }
+        compose.onNodeWithContentDescription("AI生成日记").performClick()
+        compose.waitUntil(5_000) { shown("早上在公园散步") }
+        assertTrue(shown("今天过得怎么样？"))
+        assertEquals(0, compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).fetchSemanticsNodes().size)
+        compose.onNodeWithText("停止").performClick()
+        compose.waitUntil(5_000) { !shown("早上在公园散步") }
+        assertTrue(shown("今天过得怎么样？"))
+        release.complete(Unit)
+    }
+
     @Test fun anEmptyDayIsFilledFromTheDaysRecords() {
         val (_, ai) = show()
         assertTrue(
@@ -147,10 +219,13 @@ class DiaryAiGenerateTest {
             c.habits.toggle(com.assetboard.domain.Habit.DEFAULTS.first())
             val id = c.todos.create(com.assetboard.data.TodoDraft("买牛奶", planDate = java.time.LocalDate.now()))
             c.todos.complete(id, null)
+            c.health.save(com.assetboard.data.MeasurementDraft(null, java.time.LocalDate.now(), 64_500, null, "晨起称重"))
         }
         compose.onNodeWithContentDescription("AI生成日记").performClick()
         awaitShown("今天是个好日子。")
         assertTrue("habits reach the prompt", ai.lastUser.contains("每日指标"))
         assertTrue("the freshly done todo reaches the prompt", ai.lastUser.contains("买牛奶"))
+        assertTrue("day measurements reach the first request without a model tool round trip", ai.lastUser.contains("64.5kg"))
+        assertTrue(ai.lastUser.contains("晨起称重"))
     }
 }

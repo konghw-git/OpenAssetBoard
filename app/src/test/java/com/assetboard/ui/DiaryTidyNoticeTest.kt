@@ -79,6 +79,7 @@ class DiaryTidyNoticeTest {
         }
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("下午改论文", substring = true)).fetchSemanticsNodes().isNotEmpty() }
         compose.mainClock.autoAdvance = false
+        compose.onAllNodes(hasSetTextAction())[0].performClick()
         compose.mainClock.advanceTimeBy(1_000)
         return c
     }

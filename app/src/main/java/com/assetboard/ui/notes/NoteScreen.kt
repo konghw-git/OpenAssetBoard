@@ -68,6 +68,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -125,6 +127,8 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
         val v = editorState.value
         vm.aiEdit(kind, v.text, v.selection.start, v.selection.end) { editorState.apply(it) }
     }
+    var toolbarHeight by remember { mutableStateOf(56.dp) }
+    val toolbarDensity = LocalDensity.current
     val scroll = rememberScrollState()
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -162,7 +166,7 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
     val exists = note != null && note?.deletedAt == null
     val topicId = if (exists) note?.topicId else pendingTopic
     GlassScaffold(
-        snackbarHost = { GlassSnackbarHost(snackbar) },
+        snackbarHost = { GlassSnackbarHost(snackbar, Modifier.imePadding().padding(bottom = if (editing) toolbarHeight + 16.dp else 0.dp)) },
         topBar = {
             Row(
                 Modifier.fillMaxWidth().statusBarsPadding().padding(start = 12.dp, end = 16.dp, top = 10.dp, bottom = 8.dp),
@@ -200,36 +204,39 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
             return@GlassScaffold
         }
         Box(Modifier.fillMaxSize().padding(padding)) {
-            Column(
-                Modifier.fillMaxSize().imePadding().verticalScrollWithIndicator(scroll)
-                    .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = if (editing) 112.dp else 80.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                com.assetboard.ui.notes.AiStreamPreview(aiBusy != null, aiPreview)
-                session?.let { s ->
-                    NoteEditor(s, editorState, autoFocus = noteId == null, scrollState = scroll, onFocus = { editing = it })
-                }
-                if (sources.isNotEmpty()) {
-                    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("摘自", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            sources.forEach { src ->
-                                val d = runCatching { LocalDate.parse(src.ref) }.getOrNull() ?: return@forEach
-                                when (src.kind) {
-                                    SourceRef.DAY -> SourceChip(d) { leave(NoteViewModel.Leave.Diary(d)) }
-                                    // The week page goes on top of this one: nothing here is left behind.
-                                    SourceRef.WEEK -> WeekSourceChip(d) { onOpenWeek(d) }
+            Column(Modifier.fillMaxSize().imePadding()) {
+                AiStreamPreview(aiBusy != null, aiPreview, onCancel = vm::cancelAi,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                Column(
+                    Modifier.weight(1f).verticalScrollWithIndicator(scroll)
+                        .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = if (editing) toolbarHeight + 24.dp else 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    session?.let { s ->
+                        NoteEditor(s, editorState, autoFocus = noteId == null, scrollState = scroll, onFocus = { editing = it })
+                    }
+                    if (sources.isNotEmpty()) {
+                        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("摘自", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                sources.forEach { src ->
+                                    val d = runCatching { LocalDate.parse(src.ref) }.getOrNull() ?: return@forEach
+                                    when (src.kind) {
+                                        SourceRef.DAY -> SourceChip(d) { leave(NoteViewModel.Leave.Diary(d)) }
+                                        // The week page goes on top of this one: nothing here is left behind.
+                                        SourceRef.WEEK -> WeekSourceChip(d) { onOpenWeek(d) }
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                note?.takeIf { exists }?.let { n ->
-                    Text(
-                        "创建于 ${Dates.date(n.createdAt)} · 更新于 ${whenLabel(n.updatedAt)}",
-                        style = MaterialTheme.typography.labelMedium, color = cs.outline,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
+                    note?.takeIf { exists }?.let { n ->
+                        Text(
+                            "创建于 ${Dates.date(n.createdAt)} · 更新于 ${whenLabel(n.updatedAt)}",
+                            style = MaterialTheme.typography.labelMedium, color = cs.outline,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
                 }
             }
             AnimatedVisibility(
@@ -240,7 +247,8 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
                 enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 },
                 exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { it / 2 },
             ) {
-                NoteFormatBar(editorState, onAi = runAi, aiBusy = aiBusy)
+                NoteFormatBar(editorState, onAi = runAi, aiBusy = aiBusy, onOutline = { outline = true },
+                    modifier = Modifier.onSizeChanged { toolbarHeight = with(toolbarDensity) { it.height.toDp() } })
             }
             AnimatedVisibility(
                 visible = !editing,
@@ -259,6 +267,12 @@ fun NoteScreen(onBack: () -> Unit, onOpenDiary: (LocalDate) -> Unit, onOpenWeek:
             doc = editorState.document(),
             onJump = { offset -> outline = false; editorState.jumpTo?.invoke(offset) },
             onDismiss = { outline = false },
+            aiBusy = aiBusy != null,
+            onOrganize = {
+                outline = false
+                val text = editorState.value.text
+                vm.aiEdit(AiAction.FORMAT, text, 0, text.length) { editorState.apply(it) }
+            },
         )
     }
 

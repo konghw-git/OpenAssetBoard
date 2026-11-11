@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.6] - 2026-11-11
+
+### Changed
+
+- Generate an empty diary or update an existing one using the latest editor text and fresh daily
+  records, including measurements, food and bills. Preserve personal details and avoid repeating
+  events in the writing instructions.
+- Keep AI output visible above the editor with a live preview, character count and Stop action.
+  Use one preparation indicator; unfinished output never replaces the saved text.
+- Collapse diary and note formatting bars to one row of frequent actions on phones. More tools
+  expand on demand; editor padding and undo notices follow the toolbar's actual height.
+- Connect note formatting to the outline: organize headings from either the toolbar or the outline
+  sheet, navigate while editing, and undo the completed pass in one step. Formatting can insert
+  short headings while retaining the original body; selections keep their surrounding structure.
+
+### Fixed
+
+- Reject formatting or polishing that changes links, code or checklist completion states.
+- Remove the duplicate diary progress bars and keep streaming output in view on long documents.
+
 ## [1.4.5] - 2026-11-06
 
 ### Changed

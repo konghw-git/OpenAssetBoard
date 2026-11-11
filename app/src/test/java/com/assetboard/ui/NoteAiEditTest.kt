@@ -18,6 +18,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.assetboard.AppContainer
 import com.assetboard.CloseTestContainers
 import com.assetboard.TestContainers
+import com.assetboard.domain.AiEdit
 import com.assetboard.data.ai.AiGateway
 import com.assetboard.data.NoteText
 import com.assetboard.data.ThemeMode
@@ -79,6 +80,33 @@ class NoteAiEditTest {
 
     private fun field() = compose.onNode(hasSetTextAction())
     private fun shown(text: String) = compose.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty()
+
+    @Test fun outlineOrganizesTheWholeNoteEvenWithASelectionAndCanUndo() {
+        val before = "旅行记录\n\n上午去了公园。\n\n晚上读了书。"
+        val after = "# 旅行记录\n\n## 上午\n\n上午去了公园。\n\n## 晚上\n\n晚上读了书。"
+        var target = ""
+        val ai = object : AiGateway {
+            override suspend fun complete(system: String, user: String): String {
+                target = AiEdit.targetOf(user)
+                return after
+            }
+        }
+        show(before, ai)
+        field().performClick()
+        field().performTextInputSelection(TextRange(6, 13))
+        compose.onNodeWithContentDescription("大纲").performClick()
+        compose.onNodeWithText("AI整理大纲").performClick()
+        compose.waitUntil(5_000) { shown("## 上午") }
+        assertEquals(before, target)
+        field().assertTextContains(after, substring = false)
+        compose.onNodeWithContentDescription("大纲").performClick()
+        compose.onNodeWithText("3 个小标题", substring = true).assertExists()
+        compose.onNodeWithText("上午", substring = false).assertExists()
+        compose.onNodeWithText("上午", substring = false).performClick()
+        field().performClick()
+        compose.onNodeWithContentDescription("撤销").performClick()
+        field().assertTextContains(before, substring = false)
+    }
 
     @Test fun aPartialReplyIsRenderedBeforeTheFinalEditAndStillUndoesAsOneStep() {
         val release = CompletableDeferred<Unit>()

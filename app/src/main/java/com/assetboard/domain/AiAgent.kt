@@ -52,6 +52,7 @@ object AiAgent {
         chat: suspend (history: List<Turn>) -> String,
         tools: List<Tool>,
         seed: String,
+        onTool: suspend (String) -> Unit = {},
     ): String {
         val byName = tools.associateBy { it.name }
         val history = mutableListOf(Turn("user", seed))
@@ -59,6 +60,7 @@ object AiAgent {
             val reply = AiEdit.unwrap(chat(history))
             val call = parseCall(reply) ?: return reply
             history += Turn("assistant", reply)
+            onTool(call.name)
             val tool = byName[call.name]
             val result = if (tool == null) {
                 "没有这个工具。可用工具：${tools.joinToString("、") { it.name }}"

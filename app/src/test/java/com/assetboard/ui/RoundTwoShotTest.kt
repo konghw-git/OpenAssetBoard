@@ -123,9 +123,13 @@ class RoundTwoShotTest {
         diaryDay(c, today, "早上六点半起床,跑了五公里.\n\n\n  上午把实验数据又过了一遍(第三组有问题),下午重新跑了一遍...\n晚上和朋友吃了火锅!")
         runBlocking(c.gate.bound()) { c.diary.setMood(today, 4) }
         set(c) { DiaryScreen(null, {}, {}, {}, {}) }
+        // Robolectric has no location fix: wait for the request to end, not the initial Idle state.
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("定位不可用 · 选城市")).fetchSemanticsNodes().isNotEmpty() }
         shot("50-diary-mood")
         // The clock stands still: waiting would run the 撤销's few seconds out before the shot.
         compose.mainClock.autoAdvance = false
+        compose.onNode(hasSetTextAction()).performClick()
+        compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithContentDescription("AI排版").performClick()
         compose.mainClock.advanceTimeBy(600)
         compose.onNodeWithText("撤销").assertExists()
